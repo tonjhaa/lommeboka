@@ -951,6 +951,12 @@ export const useEconomyStore = create<EconomyState>()(
       importData: (json) => {
         try {
           const data = JSON.parse(json)
+          // Migrer enabledTabs fremover: legg til tabs som ble lagt til etter at dataen ble lagret
+          const prefs = data.userPreferences as { enabledTabs?: string[]; onboardingCompleted?: boolean } | null
+          if (prefs?.enabledTabs && !prefs.enabledTabs.includes('partner')) {
+            prefs.enabledTabs = [...prefs.enabledTabs, 'partner']
+          }
+          const defaultPartnerVeikart = get().partnerVeikart
           set({
             profile: data.profile ?? null,
             budgetTemplate: data.budgetTemplate ?? DEFAULT_TEMPLATE,
@@ -973,6 +979,10 @@ export const useEconomyStore = create<EconomyState>()(
             fondPortfolio: data.fondPortfolio ?? DEFAULT_FOND_PORTFOLIO,
             budgetOverrides: data.budgetOverrides ?? {},
             userPreferences: data.userPreferences ?? null,
+            savingsOverrides: data.savingsOverrides ?? {},
+            partnerVeikart: data.partnerVeikart ?? defaultPartnerVeikart,
+            savingsPlanTarget: data.savingsPlanTarget ?? 0,
+            savingsPlanHorizon: data.savingsPlanHorizon ?? 48,
           })
         } catch {
           console.error('[EconomyStore] importData: ugyldig JSON')
