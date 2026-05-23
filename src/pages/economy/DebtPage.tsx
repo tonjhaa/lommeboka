@@ -180,7 +180,7 @@ export function DebtPage() {
                   </div>
                   {isConfirming && (
                     <div className="mt-2 p-3 rounded-md bg-muted/40 border border-border space-y-2">
-                      <p className="text-xs font-medium">Hva vil du gjøre med {debt.creditor}?</p>
+                      <p className="text-xs font-medium">Når ble {debt.creditor} nedbetalt?</p>
                       <div className="flex items-center gap-2">
                         <Input
                           type="date"
@@ -195,16 +195,6 @@ export function DebtPage() {
                         >
                           <CheckCircle2 className="h-3 w-3 mr-1" />
                           Marker som nedbetalt
-                        </Button>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={() => { removeDebt(debt.id); setConfirmDeleteFor(null) }}
-                        >
-                          Slett permanent
                         </Button>
                         <Button
                           variant="ghost"
