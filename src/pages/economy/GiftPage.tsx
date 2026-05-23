@@ -844,7 +844,7 @@ function RecipientsTab() {
         recipients={recipients}
         settings={settings}
         weightRules={weightRules}
-        onSave={(ev) => { addEvent(ev); setSpecialEventRecipient(null) }}
+        onSave={(ev) => { addEvent({ ...ev, id: ev.id || crypto.randomUUID() }); setSpecialEventRecipient(null) }}
         onClose={() => setSpecialEventRecipient(null)}
       />
     </div>

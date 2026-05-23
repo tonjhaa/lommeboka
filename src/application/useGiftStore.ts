@@ -115,12 +115,17 @@ export const useGiftStore = create<GiftState>()(
     }),
     {
       name: 'lommeboka-gaver-v1',
-      version: 2,
+      version: 3,
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Record<string, unknown>
         if (version < 2) {
           // Ny beregningsmodell: flat takst per relasjon — nullstill weightRules
           return { ...state, weightRules: DEFAULT_WEIGHT_RULES }
+        }
+        if (version < 3) {
+          // Fiks hendelser med tom id (skapt av bug i spesiell-hendelse-modal)
+          const events = (state.events as GiftEvent[] | undefined) ?? []
+          return { ...state, events: events.map((e) => e.id ? e : { ...e, id: crypto.randomUUID() }) }
         }
         return state
       },
