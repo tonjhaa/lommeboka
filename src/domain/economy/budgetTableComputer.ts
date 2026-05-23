@@ -552,10 +552,24 @@ export function computeBudgetTable(
   // ================================================================
   const gjeldRows: BudgetRow[] = []
   for (const debt of debts) {
-    gjeldRows.push(mkRow(`debt-${debt.id}`, debt.creditor, uniform12(
-      (m) => budgetVal(`debt-${debt.id}`, m, -(debt.monthlyPayment + debt.termFee)),
-      () => null,
-    )))
+    if (debt.status === 'nedbetalt') {
+      if (!debt.paidOffDate) continue
+      const paidMonth = debt.paidOffDate.substring(0, 7)
+      if (paidMonth < `${year}-01`) continue  // nedbetalt før dette budsjettåret
+      gjeldRows.push(mkRow(`debt-${debt.id}`, debt.creditor, uniform12(
+        (m) => {
+          const monthKey = `${year}-${String(m).padStart(2, '0')}`
+          if (monthKey > paidMonth) return 0
+          return budgetVal(`debt-${debt.id}`, m, -(debt.monthlyPayment + debt.termFee))
+        },
+        () => null,
+      )))
+    } else {
+      gjeldRows.push(mkRow(`debt-${debt.id}`, debt.creditor, uniform12(
+        (m) => budgetVal(`debt-${debt.id}`, m, -(debt.monthlyPayment + debt.termFee)),
+        () => null,
+      )))
+    }
   }
 
   // ================================================================
