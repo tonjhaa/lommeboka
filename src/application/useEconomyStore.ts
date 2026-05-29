@@ -161,6 +161,8 @@ export interface EconomyState {
   updateLonnsoppgjor: (id: string, updates: Partial<LonnsoppgjorRecord>) => void
   removeLonnsoppgjor: (id: string) => void
   deriveLonnsoppgjorFromSlips: () => void
+  bookEtterbetaling: (recordId: string, etterbetalingDate: string) => void
+  removeEtterbetalingBooking: (recordId: string) => void
 
   addTemporaryPay: (entry: TemporaryPayEntry) => void
   updateTemporaryPay: (id: string, updates: Partial<TemporaryPayEntry>) => void
@@ -762,6 +764,71 @@ export const useEconomyStore = create<EconomyState>()(
           ].sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate)),
         }))
       },
+
+      bookEtterbetaling: (recordId, etterbetalingDate) =>
+        set((s) => {
+          const record = s.lonnsoppgjor.find((r) => r.id === recordId)
+          if (!record || record.forrigeMaanedslonn <= 0) return s
+
+          const effDate = new Date(record.effectiveDate)
+          const payDate = new Date(etterbetalingDate)
+          const months =
+            (payDate.getFullYear() * 12 + payDate.getMonth()) -
+            (effDate.getFullYear() * 12 + effDate.getMonth())
+          if (months <= 0) return s
+
+          const diff = record.maanedslonn - record.forrigeMaanedslonn
+          const amount = Math.round(diff * months)
+
+          const payMonth = payDate.getMonth() + 1   // 1-12
+          const payYear = payDate.getFullYear()
+
+          const budgetLineId = crypto.randomUUID()
+          const newLine: import('@/types/economy').BudgetLine = {
+            id: budgetLineId,
+            label: `Etterbetaling lønn ${payYear}`,
+            category: 'annen_inntekt',
+            amount,
+            isRecurring: false,
+            source: 'manual',
+            isLocked: false,
+            isVariable: false,
+            specificMonth: payMonth,
+            specificYear: payYear,
+          }
+
+          return {
+            budgetTemplate: {
+              ...s.budgetTemplate,
+              lines: [...s.budgetTemplate.lines, newLine],
+            },
+            lonnsoppgjor: s.lonnsoppgjor.map((r) =>
+              r.id === recordId
+                ? { ...r, etterbetalingDate, etterbetalingBudgetLineId: budgetLineId }
+                : r
+            ),
+          }
+        }),
+
+      removeEtterbetalingBooking: (recordId) =>
+        set((s) => {
+          const record = s.lonnsoppgjor.find((r) => r.id === recordId)
+          if (!record?.etterbetalingBudgetLineId) return s
+
+          return {
+            budgetTemplate: {
+              ...s.budgetTemplate,
+              lines: s.budgetTemplate.lines.filter(
+                (l) => l.id !== record.etterbetalingBudgetLineId
+              ),
+            },
+            lonnsoppgjor: s.lonnsoppgjor.map((r) =>
+              r.id === recordId
+                ? { ...r, etterbetalingDate: undefined, etterbetalingBudgetLineId: undefined }
+                : r
+            ),
+          }
+        }),
 
       // --- Midlertidig lønn ---
       addTemporaryPay: (entry) => set((s) => ({ temporaryPayEntries: [...s.temporaryPayEntries, entry] })),

@@ -397,6 +397,9 @@ export const usePartnerStore = create<EconomyState>()(
         // Partner slips not yet imported — noop
       },
 
+      bookEtterbetaling: () => {},
+      removeEtterbetalingBooking: () => {},
+
       // ── Midlertidig lønn ───────────────────────────────────────────────────
       temporaryPayEntries: [] as TemporaryPayEntry[],
 

@@ -28,7 +28,7 @@ const MONTH_NAMES = [
  *  months = antall måneder fra ikrafttredelse (inkl.) til utbetaling (ekskl.)
  *  Returnerer null hvis data mangler eller er ugyldig.
  *  Brukes i Task 4 (UI-komponenten). */
-function calcEtterbetaling(
+export function calcEtterbetaling(
   record: LonnsoppgjorRecord,
   etterbetalingDate: string,
 ): { months: number; amount: number } | null {
