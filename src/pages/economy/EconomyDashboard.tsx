@@ -281,12 +281,15 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
     })
   }
   if (juneForecast) {
-    const juneFirst = new Date(now.getFullYear(), 5, 24)
-    if (juneFirst < now) juneFirst.setFullYear(now.getFullYear() + 1)
-    const days = Math.ceil((juneFirst.getTime() - now.getTime()) / 86400000)
+    const junePayday = new Date(now.getFullYear(), 5, payDay)
+    if (junePayday < now) junePayday.setFullYear(now.getFullYear() + 1)
+    const isNextPaycheck = nextPayday.getMonth() === 5 // juni = 5
+    const days = Math.ceil((junePayday.getTime() - now.getTime()) / 86400000)
     chips.push({
       icon: '🏖️',
-      text: `${days} dager til feriepenger (${Math.round(juneForecast.nettoJuni).toLocaleString('no-NO')} kr)`,
+      text: isNextPaycheck
+        ? `Feriepenger inngår i neste lønn (${Math.round(juneForecast.nettoJuni).toLocaleString('no-NO')} kr)`
+        : `${days} dager til feriepenger (${Math.round(juneForecast.nettoJuni).toLocaleString('no-NO')} kr)`,
     })
   }
   if (savingsGoals.length > 0) {
