@@ -660,6 +660,7 @@ function LonnsoppgjorSection({
     htaTillegg: 0,
     notes: '',
     source: 'forventet' as LonnsoppgjorRecord['source'],
+    pct: '',
   })
   const [editForm, setEditForm] = useState<Partial<LonnsoppgjorRecord>>({})
 
@@ -679,7 +680,7 @@ function LonnsoppgjorSection({
       source: form.source,
     })
     setAdding(false)
-    setForm({ year: currentYear, effectiveDate: `${currentYear}-05-01`, maanedslonn: 0, htaTillegg: 0, notes: '', source: 'forventet' })
+    setForm({ year: currentYear, effectiveDate: `${currentYear}-05-01`, maanedslonn: 0, htaTillegg: 0, notes: '', source: 'forventet', pct: '' })
   }
 
   function startEdit(r: LonnsoppgjorRecord) {
@@ -761,13 +762,34 @@ function LonnsoppgjorSection({
               />
             </div>
             <div className="space-y-0.5">
-              <Label className="text-xs">Ny grunnlønn/mnd (kr)</Label>
+              <Label className="text-xs">% økning i grunnlønn</Label>
+              <Input
+                type="number"
+                className="h-7 text-xs w-24"
+                placeholder="f.eks. 4.2"
+                step="0.01"
+                value={form.pct}
+                onChange={(e) => {
+                  const pct = e.target.value
+                  const prev = sorted.filter((r) => r.effectiveDate < form.effectiveDate).at(-1)
+                  if (pct && prev && prev.maanedslonn > 0) {
+                    const prevBase = prev.maanedslonn - (prev.htaTillegg ?? 0)
+                    const newBase = Math.round(prevBase * (1 + parseFloat(pct) / 100))
+                    setForm((f) => ({ ...f, pct, maanedslonn: newBase + (f.htaTillegg ?? 0) }))
+                  } else {
+                    setForm((f) => ({ ...f, pct }))
+                  }
+                }}
+              />
+            </div>
+            <div className="space-y-0.5">
+              <Label className="text-xs">Ny totallønn/mnd (kr)</Label>
               <Input
                 type="number"
                 className="h-7 text-xs w-36"
                 placeholder="f.eks. 62000"
                 value={form.maanedslonn || ''}
-                onChange={(e) => setForm((f) => ({ ...f, maanedslonn: parseInt(e.target.value) || 0 }))}
+                onChange={(e) => setForm((f) => ({ ...f, maanedslonn: parseInt(e.target.value) || 0, pct: '' }))}
               />
             </div>
             <div className="space-y-0.5">
@@ -796,7 +818,7 @@ function LonnsoppgjorSection({
             </p>
           )}
           <div className="flex gap-2">
-            <Button size="sm" className="h-7 text-xs" onClick={handleAdd} disabled={form.maanedslonn <= 0}>Lagre</Button>
+            <Button size="sm" className="h-7 text-xs" onClick={handleAdd} disabled={form.maanedslonn <= 0 && !form.pct}>Lagre</Button>
             <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAdding(false)}>Avbryt</Button>
           </div>
         </div>
