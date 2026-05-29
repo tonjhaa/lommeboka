@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { AlertTriangle, FileText, ExternalLink, Table2, Plus, Trash2, TrendingUp, Pencil, Check, X, RefreshCw, ChevronDown, ChevronUp, Calculator } from 'lucide-react'
 import { SalaryWaterfallHero } from '@/components/economy/widgets/SalaryWaterfallHero'
 import { SalaryGrowthChart } from '@/components/economy/charts/SalaryGrowthChart'
@@ -556,6 +556,9 @@ function EtterbetalingPanel({
   onRemove: (recordId: string) => void
 }) {
   const [date, setDate] = useState(record.etterbetalingDate ?? '')
+  useEffect(() => {
+    setDate(record.etterbetalingDate ?? '')
+  }, [record.etterbetalingDate])
   const preview = date ? calcEtterbetaling(record, date) : null
   const isBooked = !!record.etterbetalingBudgetLineId
 
@@ -837,9 +840,8 @@ function LonnsoppgjorSection({
                 const isForventet = r.source === 'forventet'
 
                 return (
-                  <>
+                  <React.Fragment key={r.id}>
                   <tr
-                    key={r.id}
                     className={`${!isForventet ? 'border-b border-border/40' : ''} ${isForventet ? 'opacity-70' : ''}`}
                   >
                     <td className="py-1.5 pr-3 font-medium">{r.year}{isForventet && ' *'}</td>
@@ -949,7 +951,7 @@ function LonnsoppgjorSection({
                     </td>
                   </tr>
                   {r.source === 'forventet' && (
-                    <tr key={`${r.id}-etterbetaling`} className="border-b border-border/40">
+                    <tr className="border-b border-border/40">
                       <td colSpan={10} className="pb-2 px-0">
                         <EtterbetalingPanel
                           record={r}
@@ -959,7 +961,7 @@ function LonnsoppgjorSection({
                       </td>
                     </tr>
                   )}
-                  </>
+                  </React.Fragment>
                 )
               })}
             </tbody>

@@ -675,7 +675,19 @@ export const useEconomyStore = create<EconomyState>()(
       updateLonnsoppgjor: (id, updates) =>
         set((s) => ({ lonnsoppgjor: s.lonnsoppgjor.map((r) => (r.id === id ? { ...r, ...updates } : r)) })),
       removeLonnsoppgjor: (id) =>
-        set((s) => ({ lonnsoppgjor: s.lonnsoppgjor.filter((r) => r.id !== id) })),
+        set((s) => {
+          const target = s.lonnsoppgjor.find((r) => r.id === id)
+          const linesToDrop = target?.etterbetalingBudgetLineId
+            ? new Set([target.etterbetalingBudgetLineId])
+            : new Set<string>()
+          return {
+            lonnsoppgjor: s.lonnsoppgjor.filter((r) => r.id !== id),
+            budgetTemplate: {
+              ...s.budgetTemplate,
+              lines: s.budgetTemplate.lines.filter((l) => !linesToDrop.has(l.id)),
+            },
+          }
+        }),
       deriveLonnsoppgjorFromSlips: () => {
         const { monthHistory } = get()
         const slips = monthHistory
@@ -768,7 +780,7 @@ export const useEconomyStore = create<EconomyState>()(
       bookEtterbetaling: (recordId, etterbetalingDate) =>
         set((s) => {
           const record = s.lonnsoppgjor.find((r) => r.id === recordId)
-          if (!record || record.forrigeMaanedslonn <= 0) return s
+          if (!record || record.forrigeMaanedslonn <= 0 || record.etterbetalingBudgetLineId) return s
 
           const effDate = new Date(record.effectiveDate)
           const payDate = new Date(etterbetalingDate)
