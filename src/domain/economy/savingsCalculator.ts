@@ -138,8 +138,8 @@ export function computeETA(account: SavingsAccount, targetBalance: number): stri
 // ------------------------------------------------------------
 
 /** Henter gjeldende rentesats for en dato fra rateHistory */
-function getCurrentRateForDate(rateHistory: RateHistoryEntry[], date: Date): number {
-  if (rateHistory.length === 0) return 0
+function getCurrentRateForDate(rateHistory: RateHistoryEntry[] | undefined, date: Date): number {
+  if (!rateHistory?.length) return 0
   const sorted = [...rateHistory].sort(
     (a, b) => new Date(a.fromDate).getTime() - new Date(b.fromDate).getTime()
   )
