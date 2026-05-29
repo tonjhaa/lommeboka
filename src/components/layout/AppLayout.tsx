@@ -1,14 +1,16 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { Header } from './Header'
 import { Sidebar } from './Sidebar'
 import { cn } from '@/lib/utils'
+import { LegalModal } from '@/pages/LegalPage'
 
 interface AppLayoutProps {
   children: React.ReactNode
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
+  const [legal, setLegal] = useState<'privacy' | 'terms' | null>(null)
   const theme = useAppStore((s) => s.theme)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen)
@@ -64,6 +66,17 @@ export function AppLayout({ children }: AppLayoutProps) {
           {children}
         </main>
       </div>
+
+      <footer className="shrink-0 flex justify-end gap-3 px-4 py-1 border-t border-border/40">
+        <button onClick={() => setLegal('privacy')} className="text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+          Personvern
+        </button>
+        <button onClick={() => setLegal('terms')} className="text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+          Vilkår
+        </button>
+      </footer>
+
+      {legal && <LegalModal initialTab={legal} onClose={() => setLegal(null)} />}
     </div>
   )
 }

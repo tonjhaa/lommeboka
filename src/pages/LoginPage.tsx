@@ -4,6 +4,7 @@ import {
   BarChart3, ShieldCheck, Zap,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
+import { LegalModal } from '@/pages/LegalPage'
 
 // ------------------------------------------------------------
 // Feature highlights
@@ -164,6 +165,8 @@ function AuthForm() {
 // ------------------------------------------------------------
 
 export function LoginPage() {
+  const [legal, setLegal] = useState<'privacy' | 'terms' | null>(null)
+
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-background">
 
@@ -214,7 +217,10 @@ export function LoginPage() {
 
         {/* Footer */}
         <p className="text-xs text-muted-foreground mt-8 lg:mt-0">
-          Data lagres kryptert og privat — ingen tall i kildekoden.
+          Data lagres kryptert og privat — ingen tall i kildekoden.{' '}
+          <button onClick={() => setLegal('privacy')} className="underline hover:text-foreground transition-colors">Personvern</button>
+          {' · '}
+          <button onClick={() => setLegal('terms')} className="underline hover:text-foreground transition-colors">Vilkår</button>
         </p>
       </div>
 
@@ -223,6 +229,7 @@ export function LoginPage() {
         <AuthForm />
       </div>
 
+      {legal && <LegalModal initialTab={legal} onClose={() => setLegal(null)} />}
     </div>
   )
 }
