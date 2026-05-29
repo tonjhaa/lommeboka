@@ -134,6 +134,8 @@ export function SalaryPage() {
     updateLonnsoppgjor,
     removeLonnsoppgjor,
     deriveLonnsoppgjorFromSlips,
+    bookEtterbetaling,
+    removeEtterbetalingBooking,
   } = useActiveEconomyStore()
 
   const [editingProfile, setEditingProfile] = useState(false)
@@ -321,6 +323,8 @@ export function SalaryPage() {
               onUpdate={updateLonnsoppgjor}
               onRemove={removeLonnsoppgjor}
               onDerive={deriveLonnsoppgjorFromSlips}
+              onBookEtterbetaling={bookEtterbetaling}
+              onRemoveEtterbetalingBooking={removeEtterbetalingBooking}
             />
           </CardContent>
         </Card>
@@ -539,6 +543,88 @@ function SlipDetailModal({ record, onClose }: { record: MonthRecord; onClose: ()
 }
 
 // ------------------------------------------------------------
+// ETTERBETALING-PANEL
+// ------------------------------------------------------------
+
+function EtterbetalingPanel({
+  record,
+  onBook,
+  onRemove,
+}: {
+  record: LonnsoppgjorRecord
+  onBook: (recordId: string, date: string) => void
+  onRemove: (recordId: string) => void
+}) {
+  const [date, setDate] = useState(record.etterbetalingDate ?? '')
+  const preview = date ? calcEtterbetaling(record, date) : null
+  const isBooked = !!record.etterbetalingBudgetLineId
+
+  return (
+    <div className="mt-2 border-t border-border/50 pt-2 space-y-2">
+      <p className="text-xs font-medium text-muted-foreground">Etterbetaling</p>
+
+      {isBooked ? (
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">
+            Bokført for{' '}
+            {new Date(record.etterbetalingDate!).toLocaleDateString('no-NO', { month: 'long', year: 'numeric' })}
+            {preview && (
+              <span className="ml-1 font-medium text-foreground">
+                — {preview.amount.toLocaleString('no-NO')} kr ({preview.months} mnd)
+              </span>
+            )}
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-xs text-destructive hover:text-destructive"
+            onClick={() => { onRemove(record.id); setDate('') }}
+          >
+            Fjern
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="space-y-0.5">
+            <Label className="text-xs">Forventet utbetalingsdato</Label>
+            <Input
+              type="date"
+              className="h-7 text-xs w-36"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </div>
+          {preview && (
+            <div className="text-xs text-muted-foreground pb-1">
+              ≈{' '}
+              <span className="font-medium text-foreground">
+                {preview.amount.toLocaleString('no-NO')} kr
+              </span>
+              {' '}({preview.months} mnd × {(record.maanedslonn - record.forrigeMaanedslonn).toLocaleString('no-NO')} kr/mnd)
+            </div>
+          )}
+          {preview && (
+            <Button
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => onBook(record.id, date)}
+            >
+              Legg i budsjett
+            </Button>
+          )}
+        </div>
+      )}
+
+      {date && !preview && record.forrigeMaanedslonn <= 0 && (
+        <p className="text-xs text-muted-foreground">
+          Fyll inn forrige månedslønn for å beregne etterbetaling.
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ------------------------------------------------------------
 // LØNNSOPPGJØR-SEKSJON
 // ------------------------------------------------------------
 
@@ -549,6 +635,8 @@ function LonnsoppgjorSection({
   onUpdate,
   onRemove,
   onDerive,
+  onBookEtterbetaling,
+  onRemoveEtterbetalingBooking,
 }: {
   records: LonnsoppgjorRecord[]
   hasSlips: boolean
@@ -556,6 +644,8 @@ function LonnsoppgjorSection({
   onUpdate: (id: string, updates: Partial<LonnsoppgjorRecord>) => void
   onRemove: (id: string) => void
   onDerive: () => void
+  onBookEtterbetaling: (recordId: string, etterbetalingDate: string) => void
+  onRemoveEtterbetalingBooking: (recordId: string) => void
 }) {
   const currentYear = new Date().getFullYear()
   const [adding, setAdding] = useState(false)
@@ -747,9 +837,10 @@ function LonnsoppgjorSection({
                 const isForventet = r.source === 'forventet'
 
                 return (
+                  <>
                   <tr
                     key={r.id}
-                    className={`border-b border-border/40 ${isForventet ? 'opacity-70' : ''}`}
+                    className={`${!isForventet ? 'border-b border-border/40' : ''} ${isForventet ? 'opacity-70' : ''}`}
                   >
                     <td className="py-1.5 pr-3 font-medium">{r.year}{isForventet && ' *'}</td>
                     <td className="py-1.5 pr-3 text-muted-foreground">
@@ -857,6 +948,18 @@ function LonnsoppgjorSection({
                       </div>
                     </td>
                   </tr>
+                  {r.source === 'forventet' && (
+                    <tr key={`${r.id}-etterbetaling`} className="border-b border-border/40">
+                      <td colSpan={10} className="pb-2 px-0">
+                        <EtterbetalingPanel
+                          record={r}
+                          onBook={onBookEtterbetaling}
+                          onRemove={onRemoveEtterbetalingBooking}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                  </>
                 )
               })}
             </tbody>
