@@ -138,24 +138,6 @@ function AuthForm() {
         </button>
       </p>
 
-      <div className="mt-6 pt-5 border-t border-border">
-        <button
-          type="button"
-          className="w-full h-9 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
-          onClick={() => {
-            setEmail('demo@lommeboka.com')
-            setPassword('Demo1234!')
-            setMode('login')
-            setError(null)
-            setMessage(null)
-          }}
-        >
-          Prøv med demokonto
-        </button>
-        <p className="text-xs text-muted-foreground text-center mt-2">
-          Ferdig utfylt — klikk «Logg inn» for å utforske appen
-        </p>
-      </div>
     </div>
   )
 }
