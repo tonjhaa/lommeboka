@@ -69,8 +69,8 @@ function PrivacyPolicy() {
         <p>
           Lommeboka er en privat applikasjon drevet av Tonje Hårstad.
           Spørsmål om personvern kan sendes til{' '}
-          <a href="mailto:tonharstad@gmail.com" className="underline hover:text-foreground">
-            tonharstad@gmail.com
+          <a href="mailto:hei@lommeboka.com" className="underline hover:text-foreground">
+            hei@lommeboka.com
           </a>.
         </p>
       </Section>
@@ -127,15 +127,17 @@ function PrivacyPolicy() {
         <p>
           Data lagres så lenge kontoen er aktiv. Du kan slette kontoen og alle
           tilhørende data ved å kontakte{' '}
-          <a href="mailto:tonharstad@gmail.com" className="underline hover:text-foreground">
-            tonharstad@gmail.com
+          <a href="mailto:hei@lommeboka.com" className="underline hover:text-foreground">
+            hei@lommeboka.com
           </a>.
         </p>
       </Section>
 
       <Section title="Dine rettigheter">
         <p>Under GDPR har du rett til innsyn, retting, sletting og dataportabilitet.
-          Send en e-post til adressen over for å benytte deg av disse rettighetene.
+          Send en e-post til{' '}
+          <a href="mailto:hei@lommeboka.com" className="underline hover:text-foreground">hei@lommeboka.com</a>{' '}
+          for å benytte deg av disse rettighetene.
           Du har også rett til å klage til Datatilsynet (datatilsynet.no).
         </p>
       </Section>
