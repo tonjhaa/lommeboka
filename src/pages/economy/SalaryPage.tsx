@@ -1091,6 +1091,18 @@ function LønnshistorikkTabell({
 }) {
   const [viewingSlip, setViewingSlip] = useState<MonthRecord | null>(null)
 
+  // Baseline = siste "normale" måneds netto (filtrerer ut åpenbare outliers som feriepenger og ATF)
+  const allNettos = slips.map((m) => m.slipData?.nettoUtbetalt ?? m.nettoUtbetalt).filter((n) => n > 0)
+  const roughMedian = allNettos.length > 0
+    ? [...allNettos].sort((a, b) => a - b)[Math.floor(allNettos.length / 2)]
+    : 0
+  const normalThreshold = roughMedian * 1.15
+  const baseline = slips.find((m) => {
+    const n = m.slipData?.nettoUtbetalt ?? m.nettoUtbetalt
+    return n > 0 && n <= normalThreshold
+  })
+  const baselineNetto = baseline ? (baseline.slipData?.nettoUtbetalt ?? baseline.nettoUtbetalt) : 0
+
   return (
     <>
       <Card>
@@ -1104,19 +1116,18 @@ function LønnshistorikkTabell({
                 <tr className="text-muted-foreground border-b border-border">
                   <th className="text-left py-1 pr-3 font-normal">Måned</th>
                   <th className="text-right py-1 pr-3 font-normal">Netto</th>
-                  <th className="text-right py-1 pr-3 font-normal">Δ netto</th>
+                  <th className="text-right py-1 pr-3 font-normal">Avvik fra normalt</th>
                   <th className="text-right py-1 pr-3 font-normal">Brutto</th>
                   <th className="text-right py-1 pr-3 font-normal">Skattesats</th>
                   <th className="py-1" />
                 </tr>
               </thead>
               <tbody>
-                {slips.map((m, i) => {
+                {slips.map((m) => {
                   const netto = m.slipData?.nettoUtbetalt ?? m.nettoUtbetalt
                   const brutto = m.slipData?.bruttoSum ?? 0
                   const taxRate = brutto > 0 && m.slipData ? (m.slipData.skattetrekk / brutto) * 100 : null
-                  const prevNetto = slips[i + 1]?.slipData?.nettoUtbetalt ?? slips[i + 1]?.nettoUtbetalt
-                  const delta = prevNetto ? netto - prevNetto : null
+                  const delta = baselineNetto > 0 ? netto - baselineNetto : null
                   return (
                     <tr key={`${m.year}-${m.month}`} className="border-b border-border/40 hover:bg-muted/10">
                       <td className="py-1.5 pr-3 text-muted-foreground">{MONTH_NAMES[m.month]} {m.year}</td>
@@ -1126,6 +1137,8 @@ function LønnshistorikkTabell({
                           <span className={delta > 0 ? 'text-green-400' : 'text-red-400'}>
                             {delta > 0 ? '+' : '−'}{fmtNOK(Math.abs(delta))}
                           </span>
+                        ) : delta !== null ? (
+                          <span className="text-muted-foreground text-[10px]">normalt</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
