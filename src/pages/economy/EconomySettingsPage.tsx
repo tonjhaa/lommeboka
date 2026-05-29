@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { Download, Upload, Trash2, Smartphone, User } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Download, Upload, Trash2, Smartphone, User, ShieldCheck } from 'lucide-react'
+import { useAuthStore } from '@/store/useAuthStore'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -708,7 +709,117 @@ export function EconomySettingsPage() {
       </Section>
 
       <Separator />
+      <MfaSection />
+
+      <Separator />
       <DataSection />
     </div>
+  )
+}
+
+function MfaSection() {
+  const { enrollMfa, confirmMfaEnrollment, unenrollMfa, isMfaEnabled } = useAuthStore()
+  const [enabled, setEnabled] = useState(false)
+  const [enrolling, setEnrolling] = useState(false)
+  const [qrCode, setQrCode] = useState<string | null>(null)
+  const [secret, setSecret] = useState<string | null>(null)
+  const [factorId, setFactorId] = useState<string | null>(null)
+  const [code, setCode] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    isMfaEnabled().then(setEnabled)
+  }, [isMfaEnabled])
+
+  const startEnroll = async () => {
+    setError(null)
+    setLoading(true)
+    const result = await enrollMfa()
+    setLoading(false)
+    if (!result) { setError('Kunne ikke starte oppsett'); return }
+    setQrCode(result.qrCode)
+    setSecret(result.secret)
+    setFactorId(result.factorId)
+    setEnrolling(true)
+  }
+
+  const confirmEnroll = async () => {
+    if (!factorId) return
+    setError(null)
+    setLoading(true)
+    const err = await confirmMfaEnrollment(factorId, code)
+    setLoading(false)
+    if (err) { setError(err); return }
+    setEnabled(true)
+    setEnrolling(false)
+    setQrCode(null)
+    setSecret(null)
+    setCode('')
+  }
+
+  const disable = async () => {
+    setError(null)
+    setLoading(true)
+    const err = await unenrollMfa()
+    setLoading(false)
+    if (err) { setError(err); return }
+    setEnabled(false)
+  }
+
+  return (
+    <Section title="Tofaktorautentisering" description="Beskytt kontoen med en engangskode fra Apple Passord.">
+      {!enrolling && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm">
+            <ShieldCheck className={cn('h-4 w-4', enabled ? 'text-green-500' : 'text-muted-foreground')} />
+            <span>{enabled ? 'Aktivert' : 'Ikke aktivert'}</span>
+          </div>
+          <Button
+            variant={enabled ? 'outline' : 'default'}
+            size="sm"
+            onClick={enabled ? disable : startEnroll}
+            disabled={loading}
+          >
+            {loading ? 'Venter…' : enabled ? 'Deaktiver' : 'Aktiver'}
+          </Button>
+        </div>
+      )}
+
+      {enrolling && qrCode && (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Åpne <strong>Apple Passord</strong> → trykk <strong>+</strong> → skann QR-koden nedenfor.
+          </p>
+          <div className="flex justify-center">
+            <img src={qrCode} alt="QR-kode for tofaktorautentisering" className="w-40 h-40 rounded-lg border border-border" />
+          </div>
+          {secret && (
+            <p className="text-xs text-muted-foreground text-center">
+              Manuell kode: <code className="font-mono bg-muted px-1 rounded">{secret}</code>
+            </p>
+          )}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Bekreft med engangskode</Label>
+            <div className="flex gap-2">
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="123456"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                className="text-sm tracking-widest"
+              />
+              <Button onClick={confirmEnroll} disabled={loading || code.length < 6} size="sm">
+                {loading ? 'Verifiserer…' : 'Bekreft'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </Section>
   )
 }

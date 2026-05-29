@@ -47,13 +47,62 @@ const FEATURES = [
 // Auth form
 // ------------------------------------------------------------
 
+function MfaForm() {
+  const [code, setCode] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const { verifyMfa, loading } = useAuthStore()
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    const err = await verifyMfa(code.replace(/\s/g, ''))
+    if (err) setError(err)
+  }
+
+  return (
+    <div className="w-full max-w-sm">
+      <h2 className="text-xl font-semibold mb-1">Tofaktorautentisering</h2>
+      <p className="text-sm text-muted-foreground mb-6">
+        Åpne Apple Passord og skriv inn engangskoden for Lommeboka.
+      </p>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium" htmlFor="totp">Engangskode</label>
+          <input
+            id="totp"
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            required
+            maxLength={6}
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+            placeholder="123456"
+            className="h-9 rounded-md border bg-background px-3 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <button
+          type="submit"
+          disabled={loading || code.length < 6}
+          className="h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+        >
+          {loading ? 'Verifiserer…' : 'Bekreft'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
 function AuthForm() {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
-  const { signIn, signUp, loading } = useAuthStore()
+  const { signIn, signUp, loading, mfaRequired } = useAuthStore()
+
+  if (mfaRequired) return <MfaForm />
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
