@@ -6,7 +6,7 @@ import type { DebtAccount, RepaymentPlan, RepaymentRow } from '@/types/economy'
 
 /** Henter gjeldende rentesats for en dato fra rateHistory */
 export function getCurrentRate(account: DebtAccount, date: Date = new Date()): number {
-  if (account.rateHistory.length === 0) return 0
+  if (!account.rateHistory?.length) return 0
   const sorted = [...account.rateHistory].sort(
     (a, b) => new Date(a.fromDate).getTime() - new Date(b.fromDate).getTime()
   )
