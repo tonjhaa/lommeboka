@@ -24,6 +24,25 @@ const MONTH_NAMES = [
   'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des',
 ]
 
+/** Beregner etterbetaling i kroner.
+ *  months = antall måneder fra ikrafttredelse (inkl.) til utbetaling (ekskl.)
+ *  Returnerer null hvis data mangler eller er ugyldig.
+ *  Brukes i Task 4 (UI-komponenten). */
+function calcEtterbetaling(
+  record: LonnsoppgjorRecord,
+  etterbetalingDate: string,
+): { months: number; amount: number } | null {
+  if (record.forrigeMaanedslonn <= 0 || record.maanedslonn <= record.forrigeMaanedslonn) return null
+  const effDate = new Date(record.effectiveDate)
+  const payDate = new Date(etterbetalingDate)
+  const months =
+    (payDate.getFullYear() * 12 + payDate.getMonth()) -
+    (effDate.getFullYear() * 12 + effDate.getMonth())
+  if (months <= 0) return null
+  const amount = Math.round((record.maanedslonn - record.forrigeMaanedslonn) * months)
+  return { months, amount }
+}
+
 function getLocalStorageKB(): number {
   try {
     let total = 0
