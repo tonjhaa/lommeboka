@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react'
+import * as Sentry from '@sentry/react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { MainNav } from '@/components/layout/MainNav'
 import { CalculatorPage } from '@/pages/CalculatorPage'
@@ -40,11 +41,26 @@ function PageFallback() {
   )
 }
 
+function SentryTestButton() {
+  return (
+    <button
+      style={{ position: 'fixed', bottom: 8, left: 8, fontSize: 10, opacity: 0.3, zIndex: 9999 }}
+      onClick={() => {
+        Sentry.logger.info('User triggered test error', { action: 'test_error_button_click' })
+        throw new Error('This is your first error!')
+      }}
+    >
+      Sentry test
+    </button>
+  )
+}
+
 function AppContent() {
   const currentView = useAppStore((s) => s.currentView)
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      <SentryTestButton />
       <MainNav />
       <div className="flex-1 overflow-hidden">
         {currentView === 'calculator' && <CalculatorPage />}
