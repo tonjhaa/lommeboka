@@ -402,6 +402,10 @@ export interface LonnsoppgjorRecord {
   htaTillegg: number            // HTA-tillegg inkludert i økningen (0 = ukjent)
   notes: string
   source: 'slip' | 'manual' | 'forventet'
+  /** Forventet utbetalingsdato for etterbetaling (ISO "YYYY-MM-DD") */
+  etterbetalingDate?: string
+  /** ID til BudgetLine i budgetTemplate hvis etterbetalingen er bokført */
+  etterbetalingBudgetLineId?: string
 }
 
 // ------------------------------------------------------------
