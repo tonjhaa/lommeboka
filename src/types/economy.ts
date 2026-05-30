@@ -725,11 +725,11 @@ export interface PartnerVeikart {
 
 /** Samlet ikke-BSU sparing for partner (fra accounts, faller tilbake på legacy-felt) */
 export function partnerNonBsuEquity(p: PartnerVeikart): number {
-  return (p.accounts?.length ?? 0) > 0 ? p.accounts.reduce((s, a) => s + a.balance, 0) : p.equity
+  return (p.accounts?.length ?? 0) > 0 ? p.accounts.reduce((s, a) => s + (a.balance ?? 0), 0) : (p.equity ?? 0)
 }
 
 /** Samlet månedlig sparing eks. BSU for partner */
 export function partnerMonthlySavingsTotal(p: PartnerVeikart): number {
-  return (p.accounts?.length ?? 0) > 0 ? p.accounts.reduce((s, a) => s + a.monthlyContribution, 0) : p.monthlySavings
+  return (p.accounts?.length ?? 0) > 0 ? p.accounts.reduce((s, a) => s + (a.monthlyContribution ?? 0), 0) : (p.monthlySavings ?? 0)
 }
 

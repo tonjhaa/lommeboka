@@ -400,9 +400,9 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
       {/* ── 3. PARTNER-KJØPEKRAFT ── */}
       {partnerVeikart.enabled && (() => {
         const soloMax = veikartData.maxPurchase
-        const combinedEq = veikartData.totalEquity + partnerNonBsuEquity(partnerVeikart)
-        const combinedIncome = veikartData.annualIncome + (partnerVeikart.annualIncome ?? 0)
-        const combinedMax = calcMaxPurchase(combinedEq, combinedIncome, veikartData.existingDebt)
+        const combinedEq = (veikartData.totalEquity ?? 0) + partnerNonBsuEquity(partnerVeikart)
+        const combinedIncome = (veikartData.annualIncome ?? 0) + (partnerVeikart.annualIncome ?? 0)
+        const combinedMax = calcMaxPurchase(combinedEq, combinedIncome, veikartData.existingDebt ?? 0)
         const gain = combinedMax - soloMax
         const pct = soloMax > 0 ? Math.round((gain / soloMax) * 100) : 0
         return (
