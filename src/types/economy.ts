@@ -372,6 +372,10 @@ export interface DebtAccount {
   /** 'nedbetalt' = soft-slettet med dato, vises i historikk men teller ikke i beregninger */
   status?: 'aktiv' | 'nedbetalt'
   paidOffDate?: string  // "YYYY-MM-DD"
+  /** Dag i måneden terminbeløpet forfaller (f.eks. 15 for Lånekassen). Default: 1 */
+  paymentDay?: number
+  /** Bruk daglig renteberegning (rente/365 × faktiske dager) istedenfor månedlig */
+  dailyInterestCalc?: boolean
 }
 
 export interface RepaymentRow {

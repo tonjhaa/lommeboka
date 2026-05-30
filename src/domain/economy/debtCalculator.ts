@@ -37,30 +37,62 @@ export function calculateTotalMonthlyDebtCost(debts: DebtAccount[]): number {
 
 /**
  * Bygger nedbetalingsplan termin for termin.
- * Tar hensyn til rateHistory (renteendringer underveis).
+ * Støtter daglig renteberegning (rente/365 × faktiske dager) for Lånekassen-kompatibilitet.
  */
 export function buildRepaymentPlan(debt: DebtAccount): RepaymentPlan {
   const rows: RepaymentRow[] = []
   let balance = debt.currentBalance
   let totalInterestCost = 0
   let monthNum = 0
-  const startDate = new Date(debt.startDate)
-  const maxMonths = 600 // 50 år som sikkerhetsventil
+  const maxMonths = 600
+
+  const useDailyCalc = debt.dailyInterestCalc ?? false
+  const paymentDay = debt.paymentDay ?? 1
+
+  // Finn neste forfallsdato fra i dag
+  function nextPaymentDate(from: Date): Date {
+    const d = new Date(from)
+    if (d.getDate() < paymentDay) {
+      d.setDate(paymentDay)
+    } else {
+      d.setMonth(d.getMonth() + 1)
+      d.setDate(paymentDay)
+    }
+    return d
+  }
+
+  // Start fra neste forfallsdato
+  let prevDate = nextPaymentDate(new Date())
+  // Dersom prevDate er mer enn 1 mnd frem i tid, bruk debt.startDate som ankerpunkt
+  const startAnchor = new Date(debt.startDate)
+  if (startAnchor > new Date()) {
+    prevDate = nextPaymentDate(startAnchor)
+  }
 
   while (balance > 0.01 && monthNum < maxMonths) {
-    const date = new Date(startDate)
-    date.setMonth(date.getMonth() + monthNum)
+    const currentPaymentDate = new Date(prevDate)
+    currentPaymentDate.setMonth(currentPaymentDate.getMonth() + monthNum)
+    currentPaymentDate.setDate(paymentDay)
 
-    const rate = getCurrentRate(debt, date)
-    const monthlyRate = rate / 100 / 12
+    let interest: number
+    if (useDailyCalc) {
+      const prevPaymentDate = new Date(currentPaymentDate)
+      prevPaymentDate.setMonth(prevPaymentDate.getMonth() - 1)
+      const days = Math.round(
+        (currentPaymentDate.getTime() - prevPaymentDate.getTime()) / (1000 * 60 * 60 * 24)
+      )
+      const rate = getCurrentRate(debt, currentPaymentDate)
+      interest = balance * (rate / 100 / 365) * days
+    } else {
+      const rate = getCurrentRate(debt, currentPaymentDate)
+      interest = balance * (rate / 100 / 12)
+    }
 
-    const interest = balance * monthlyRate
+    const rate = getCurrentRate(debt, currentPaymentDate)
     let principal = debt.monthlyPayment - interest - debt.termFee
 
-    // Betaler mer enn gjenstående
-    if (principal > balance) {
-      principal = balance
-    }
+    if (principal > balance) principal = balance
+    if (principal < 0) principal = 0
 
     balance = Math.max(0, balance - principal)
     totalInterestCost += interest
@@ -77,7 +109,7 @@ export function buildRepaymentPlan(debt: DebtAccount): RepaymentPlan {
     monthNum++
   }
 
-  const payoffDate = new Date(startDate)
+  const payoffDate = new Date(prevDate)
   payoffDate.setMonth(payoffDate.getMonth() + monthNum)
 
   return {

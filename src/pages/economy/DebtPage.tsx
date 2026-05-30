@@ -480,6 +480,8 @@ function AddDebtForm({ onSave, onCancel }: { onSave: (d: DebtAccount) => void; o
     monthlyPayment: 0,
     termFee: 0,
     startDate: new Date().toISOString().split('T')[0],
+    paymentDay: 15,
+    dailyInterestCalc: true,
   })
 
   function f(k: keyof typeof form) {
@@ -551,6 +553,27 @@ function AddDebtForm({ onSave, onCancel }: { onSave: (d: DebtAccount) => void; o
             <Label className="text-xs">Startdato</Label>
             <Input type="date" {...f('startDate')} />
           </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Forfallsdag (dag i mnd)</Label>
+            <Input
+              type="number"
+              min={1} max={31}
+              value={form.paymentDay}
+              onChange={(e) => setForm((f) => ({ ...f, paymentDay: parseInt(e.target.value) || 1 }))}
+            />
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="dailyInterest"
+            checked={form.dailyInterestCalc}
+            onChange={(e) => setForm((f) => ({ ...f, dailyInterestCalc: e.target.checked }))}
+            className="h-3 w-3"
+          />
+          <label htmlFor="dailyInterest" className="text-xs text-muted-foreground">
+            Daglig renteberegning (rente/365 × faktiske dager — bruk for Lånekassen)
+          </label>
         </div>
         <div className="flex gap-2 justify-end">
           <Button variant="outline" size="sm" onClick={onCancel}>Avbryt</Button>
@@ -568,6 +591,8 @@ function AddDebtForm({ onSave, onCancel }: { onSave: (d: DebtAccount) => void; o
                 monthlyPayment: form.monthlyPayment,
                 termFee: form.termFee,
                 startDate: form.startDate,
+                paymentDay: form.paymentDay,
+                dailyInterestCalc: form.dailyInterestCalc,
               })
             }
           >
