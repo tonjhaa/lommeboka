@@ -59,26 +59,37 @@ export function SubscriptionsPage() {
   const inactiveSubscriptions = subscriptions.filter((s) => !s.isActive)
 
   const monthlySubTotal = activeSubscriptions.reduce((s, sub) => s + effectivePrice(sub, currentMonthKey), 0)
+  const yearlySubTotal = monthlySubTotal * 12
   const yearlyInsTotal = insurances
     .filter((i) => i.isActive)
     .reduce((s, ins) => s + (ins.yearlyAmounts[currentYear] ?? 0), 0)
+  const monthlyInsTotal = yearlyInsTotal / 12
 
   return (
     <div className="p-4 space-y-4 overflow-y-auto h-full">
       <h2 className="font-semibold">Abonnement og forsikringer</h2>
 
       {/* Oversikt */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-2">
         <Card>
           <CardContent className="py-3">
-            <p className="text-xs text-muted-foreground">Abonnement/mnd</p>
-            <p className="font-mono font-semibold">{fmtNOK(monthlySubTotal)}</p>
+            <p className="text-xs text-muted-foreground mb-1">Abonnement</p>
+            <p className="font-mono font-semibold text-sm">{fmtNOK(monthlySubTotal)}<span className="text-muted-foreground font-normal">/mnd</span></p>
+            <p className="font-mono text-xs text-muted-foreground">{fmtNOK(yearlySubTotal)}/år</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="py-3">
-            <p className="text-xs text-muted-foreground">Forsikring/år</p>
-            <p className="font-mono font-semibold">{fmtNOK(yearlyInsTotal)}</p>
+            <p className="text-xs text-muted-foreground mb-1">Forsikringer</p>
+            <p className="font-mono font-semibold text-sm">{fmtNOK(Math.round(monthlyInsTotal))}<span className="text-muted-foreground font-normal">/mnd</span></p>
+            <p className="font-mono text-xs text-muted-foreground">{fmtNOK(yearlyInsTotal)}/år</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-3">
+            <p className="text-xs text-muted-foreground mb-1">Totalt</p>
+            <p className="font-mono font-semibold text-sm">{fmtNOK(Math.round(monthlySubTotal + monthlyInsTotal))}<span className="text-muted-foreground font-normal">/mnd</span></p>
+            <p className="font-mono text-xs text-muted-foreground">{fmtNOK(Math.round(yearlySubTotal + yearlyInsTotal))}/år</p>
           </CardContent>
         </Card>
       </div>
@@ -112,6 +123,14 @@ export function SubscriptionsPage() {
         <Card>
           <CardContent className="p-0">
             <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border/50 bg-muted/30">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Abonnement</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Kategori</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Pris</th>
+                  <th />
+                </tr>
+              </thead>
               <tbody>
                 {activeSubscriptions.map((sub) => (
                   <SubscriptionRow
@@ -123,6 +142,7 @@ export function SubscriptionsPage() {
                     onPriceChange={(fromMonth, amount) => updateSubscription(sub.id, {
                       priceChanges: [...(sub.priceChanges ?? []).filter(c => c.fromMonth !== fromMonth), { fromMonth, amount }]
                     })}
+                    onSave={(updates) => updateSubscription(sub.id, updates)}
                   />
                 ))}
               </tbody>
@@ -453,14 +473,17 @@ function SubscriptionRow({
   onToggle,
   onRemove,
   onPriceChange,
+  onSave,
 }: {
   sub: SubscriptionEntry
   currentMonthKey: string
   onToggle: () => void
   onRemove: () => void
   onPriceChange: (fromMonth: string, amount: number) => void
+  onSave?: (updates: Partial<SubscriptionEntry>) => void
 }) {
   const [showPriceForm, setShowPriceForm] = useState(false)
+  const [showEditForm, setShowEditForm] = useState(false)
   const [newPrice, setNewPrice] = useState('')
   const [fromMonth, setFromMonth] = useState(currentMonthKey)
 
@@ -492,14 +515,13 @@ function SubscriptionRow({
     <>
       <tr className="border-b border-border/50 last:border-0">
         <td className="px-3 py-2">
-          <div>
-            <p className="font-medium">{sub.name}</p>
-            <p className="text-xs text-muted-foreground">
-              {SUBSCRIPTION_CATEGORY_LABELS[sub.category]} · {BILLING_CYCLE_LABELS[sub.billingCycle]}
-              {hasHistory && <span className="ml-1 text-amber-400/70">· prisendring</span>}
-            </p>
-            {badge}
-          </div>
+          <p className="font-medium">{sub.name}</p>
+          {badge}
+          {hasHistory && <span className="text-[10px] text-amber-400/70">prisendring</span>}
+        </td>
+        <td className="px-3 py-2 text-xs text-muted-foreground">
+          {SUBSCRIPTION_CATEGORY_LABELS[sub.category]}<br />
+          <span className="text-[10px]">{BILLING_CYCLE_LABELS[sub.billingCycle]}</span>
         </td>
         <td className="px-3 py-2 text-right font-mono">
           <div>{Math.round(currentPrice).toLocaleString('no-NO')} kr/mnd</div>
@@ -509,11 +531,22 @@ function SubscriptionRow({
         </td>
         <td className="px-2 py-2">
           <div className="flex gap-1 justify-end">
+            {onSave && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                onClick={() => { setShowEditForm((v) => !v); setShowPriceForm(false) }}
+                title="Rediger"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
               className="h-6 w-6 p-0 text-muted-foreground hover:text-amber-400"
-              onClick={() => setShowPriceForm((v) => !v)}
+              onClick={() => { setShowPriceForm((v) => !v); setShowEditForm(false) }}
               title="Endre pris"
             >
               <TrendingUp className="h-3.5 w-3.5" />
@@ -540,9 +573,21 @@ function SubscriptionRow({
           </div>
         </td>
       </tr>
+      {showEditForm && onSave && (
+        <tr className="border-b border-border/50 bg-muted/20">
+          <td colSpan={4} className="px-3 py-2">
+            <EditSubscriptionForm
+              sub={sub}
+              currentMonthKey={currentMonthKey}
+              onSave={(updates) => { onSave(updates); setShowEditForm(false) }}
+              onCancel={() => setShowEditForm(false)}
+            />
+          </td>
+        </tr>
+      )}
       {showPriceForm && (
         <tr className="border-b border-border/50 bg-muted/20">
-          <td colSpan={3} className="px-3 py-2">
+          <td colSpan={4} className="px-3 py-2">
             <div className="flex flex-wrap items-end gap-2 text-xs">
               <div className="space-y-0.5">
                 <Label className="text-xs">Ny pris (kr/mnd)</Label>
@@ -586,6 +631,84 @@ function SubscriptionRow({
         </tr>
       )}
     </>
+  )
+}
+
+function EditSubscriptionForm({
+  sub,
+  currentMonthKey,
+  onSave,
+  onCancel,
+}: {
+  sub: SubscriptionEntry
+  currentMonthKey: string
+  onSave: (updates: Partial<SubscriptionEntry>) => void
+  onCancel: () => void
+}) {
+  const [form, setForm] = useState({
+    name: sub.name,
+    category: sub.category,
+    billingCycle: sub.billingCycle,
+    activeUntil: sub.activeUntil ?? '',
+  })
+
+  return (
+    <div className="rounded-md border border-border bg-muted/20 p-3 space-y-3">
+      <p className="text-xs font-medium">Rediger abonnement</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2 space-y-1">
+          <Label className="text-xs">Navn</Label>
+          <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Kategori</Label>
+          <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v as SubscriptionEntry['category'] }))}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {(Object.entries(SUBSCRIPTION_CATEGORY_LABELS) as [SubscriptionEntry['category'], string][]).map(([k, v]) => (
+                <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Fakturering</Label>
+          <Select value={form.billingCycle} onValueChange={(v) => setForm((f) => ({ ...f, billingCycle: v as SubscriptionEntry['billingCycle'] }))}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {(Object.entries(BILLING_CYCLE_LABELS) as [SubscriptionEntry['billingCycle'], string][]).map(([k, v]) => (
+                <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Aktiv t.o.m. (valgfritt)</Label>
+          <Input
+            type="month"
+            className="h-8 text-xs"
+            min={currentMonthKey}
+            value={form.activeUntil}
+            onChange={(e) => setForm((f) => ({ ...f, activeUntil: e.target.value }))}
+          />
+        </div>
+      </div>
+      <div className="flex gap-2 justify-end">
+        <Button variant="outline" size="sm" onClick={onCancel}>Avbryt</Button>
+        <Button
+          size="sm"
+          disabled={!form.name.trim()}
+          onClick={() => onSave({
+            name: form.name.trim(),
+            category: form.category,
+            billingCycle: form.billingCycle,
+            activeUntil: form.activeUntil || undefined,
+          })}
+        >
+          Lagre
+        </Button>
+      </div>
+    </div>
   )
 }
 
