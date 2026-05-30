@@ -497,6 +497,8 @@ export interface SubscriptionEntry {
   defaultMonthly: number
   billingCycle: 'monthly' | 'yearly' | 'variable'
   activeUntil?: string  // YYYY-MM — siste aktive måned. Udefinert = løpende
+  /** Prishistorikk — gjeldende pris avgjøres av siste oppføring ≤ aktuell måned */
+  priceChanges?: { fromMonth: string; amount: number }[]
 }
 
 export interface InsuranceEntry {

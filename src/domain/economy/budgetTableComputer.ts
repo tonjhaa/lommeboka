@@ -86,7 +86,15 @@ function uniform12(budgetFn: (m: number) => number, actualFn: (m: number) => num
 function subMonthAmount(sub: SubscriptionEntry, year: number, month: number): number {
   const key = `${year}-${String(month).padStart(2, '0')}`
   if (sub.activeUntil && key > sub.activeUntil) return 0
-  return sub.monthlyAmounts[key] ?? sub.defaultMonthly
+  if (sub.monthlyAmounts[key] !== undefined) return sub.monthlyAmounts[key]
+  // Finn gjeldende pris fra prishistorikk — siste oppføring ≤ aktuell måned
+  if (sub.priceChanges && sub.priceChanges.length > 0) {
+    const applicable = [...sub.priceChanges]
+      .filter((c) => c.fromMonth <= key)
+      .sort((a, b) => b.fromMonth.localeCompare(a.fromMonth))
+    if (applicable.length > 0) return applicable[0].amount
+  }
+  return sub.defaultMonthly
 }
 
 function insMonthAmount(ins: InsuranceEntry, year: number): number {

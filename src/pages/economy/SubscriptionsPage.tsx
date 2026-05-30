@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type React from 'react'
-import { Plus, Trash2, ToggleLeft, ToggleRight, Pencil, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, ToggleLeft, ToggleRight, Pencil, ChevronDown, ChevronRight, TrendingUp } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -118,6 +118,9 @@ export function SubscriptionsPage() {
                     currentMonthKey={currentMonthKey}
                     onToggle={() => updateSubscription(sub.id, { isActive: false })}
                     onRemove={() => removeSubscription(sub.id)}
+                    onPriceChange={(fromMonth, amount) => updateSubscription(sub.id, {
+                      priceChanges: [...(sub.priceChanges ?? []).filter(c => c.fromMonth !== fromMonth), { fromMonth, amount }]
+                    })}
                   />
                 ))}
               </tbody>
@@ -149,6 +152,9 @@ export function SubscriptionsPage() {
                       currentMonthKey={currentMonthKey}
                       onToggle={() => updateSubscription(sub.id, { activeUntil: undefined })}
                       onRemove={() => removeSubscription(sub.id)}
+                      onPriceChange={(fromMonth, amount) => updateSubscription(sub.id, {
+                        priceChanges: [...(sub.priceChanges ?? []).filter(c => c.fromMonth !== fromMonth), { fromMonth, amount }]
+                      })}
                     />
                   ))}
                 </tbody>
@@ -172,6 +178,9 @@ export function SubscriptionsPage() {
                       currentMonthKey={currentMonthKey}
                       onToggle={() => updateSubscription(sub.id, { isActive: true })}
                       onRemove={() => removeSubscription(sub.id)}
+                      onPriceChange={(fromMonth, amount) => updateSubscription(sub.id, {
+                        priceChanges: [...(sub.priceChanges ?? []).filter(c => c.fromMonth !== fromMonth), { fromMonth, amount }]
+                      })}
                     />
                   ))}
                 </tbody>
@@ -364,19 +373,38 @@ function monthsRemaining(activeUntil: string, currentMonthKey: string): number {
   return (uy - cy) * 12 + (um - cm)
 }
 
+function effectivePrice(sub: SubscriptionEntry, monthKey: string): number {
+  if (sub.monthlyAmounts[monthKey] !== undefined) return sub.monthlyAmounts[monthKey]
+  if (sub.priceChanges && sub.priceChanges.length > 0) {
+    const applicable = [...sub.priceChanges]
+      .filter((c) => c.fromMonth <= monthKey)
+      .sort((a, b) => b.fromMonth.localeCompare(a.fromMonth))
+    if (applicable.length > 0) return applicable[0].amount
+  }
+  return sub.defaultMonthly
+}
+
 function SubscriptionRow({
   sub,
   currentMonthKey,
   onToggle,
   onRemove,
+  onPriceChange,
 }: {
   sub: SubscriptionEntry
   currentMonthKey: string
   onToggle: () => void
   onRemove: () => void
+  onPriceChange: (fromMonth: string, amount: number) => void
 }) {
+  const [showPriceForm, setShowPriceForm] = useState(false)
+  const [newPrice, setNewPrice] = useState('')
+  const [fromMonth, setFromMonth] = useState(currentMonthKey)
+
   const remaining = sub.activeUntil ? monthsRemaining(sub.activeUntil, currentMonthKey) : null
   const isExpired = remaining !== null && remaining < 0
+  const currentPrice = effectivePrice(sub, currentMonthKey)
+  const hasHistory = (sub.priceChanges?.length ?? 0) > 0
 
   let badge: React.ReactNode = null
   if (sub.activeUntil && !isExpired) {
@@ -389,44 +417,108 @@ function SubscriptionRow({
     badge = <span className="text-xs text-muted-foreground">Utløpt {sub.activeUntil}</span>
   }
 
+  function handleSavePrice() {
+    const amount = parseFloat(newPrice)
+    if (!amount || amount <= 0) return
+    onPriceChange(fromMonth, amount)
+    setShowPriceForm(false)
+    setNewPrice('')
+  }
+
   return (
-    <tr className="border-b border-border/50 last:border-0">
-      <td className="px-3 py-2">
-        <div>
-          <p className="font-medium">{sub.name}</p>
-          <p className="text-xs text-muted-foreground">
-            {SUBSCRIPTION_CATEGORY_LABELS[sub.category]} · {BILLING_CYCLE_LABELS[sub.billingCycle]}
-          </p>
-          {badge}
-        </div>
-      </td>
-      <td className="px-3 py-2 text-right font-mono">
-        {Math.round(sub.defaultMonthly).toLocaleString('no-NO')} kr/mnd
-      </td>
-      <td className="px-2 py-2">
-        <div className="flex gap-1 justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0 text-muted-foreground"
-            onClick={onToggle}
-            title={sub.isActive ? 'Deaktiver' : 'Aktiver'}
-          >
-            {sub.isActive
-              ? <ToggleRight className="h-3.5 w-3.5 text-green-500" />
-              : <ToggleLeft className="h-3.5 w-3.5" />}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0 text-muted-foreground hover:text-red-400"
-            onClick={onRemove}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </td>
-    </tr>
+    <>
+      <tr className="border-b border-border/50 last:border-0">
+        <td className="px-3 py-2">
+          <div>
+            <p className="font-medium">{sub.name}</p>
+            <p className="text-xs text-muted-foreground">
+              {SUBSCRIPTION_CATEGORY_LABELS[sub.category]} · {BILLING_CYCLE_LABELS[sub.billingCycle]}
+              {hasHistory && <span className="ml-1 text-amber-400/70">· prisendring</span>}
+            </p>
+            {badge}
+          </div>
+        </td>
+        <td className="px-3 py-2 text-right font-mono">
+          {Math.round(currentPrice).toLocaleString('no-NO')} kr/mnd
+        </td>
+        <td className="px-2 py-2">
+          <div className="flex gap-1 justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 text-muted-foreground hover:text-amber-400"
+              onClick={() => setShowPriceForm((v) => !v)}
+              title="Endre pris"
+            >
+              <TrendingUp className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 text-muted-foreground"
+              onClick={onToggle}
+              title={sub.isActive ? 'Deaktiver' : 'Aktiver'}
+            >
+              {sub.isActive
+                ? <ToggleRight className="h-3.5 w-3.5 text-green-500" />
+                : <ToggleLeft className="h-3.5 w-3.5" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 text-muted-foreground hover:text-red-400"
+              onClick={onRemove}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </td>
+      </tr>
+      {showPriceForm && (
+        <tr className="border-b border-border/50 bg-muted/20">
+          <td colSpan={3} className="px-3 py-2">
+            <div className="flex flex-wrap items-end gap-2 text-xs">
+              <div className="space-y-0.5">
+                <Label className="text-xs">Ny pris (kr/mnd)</Label>
+                <Input
+                  type="number"
+                  className="h-7 w-28 text-xs"
+                  placeholder="f.eks. 159"
+                  value={newPrice}
+                  onChange={(e) => setNewPrice(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-0.5">
+                <Label className="text-xs">Fra og med</Label>
+                <Input
+                  type="month"
+                  className="h-7 w-36 text-xs"
+                  value={fromMonth}
+                  onChange={(e) => setFromMonth(e.target.value)}
+                />
+              </div>
+              <Button size="sm" className="h-7 text-xs" onClick={handleSavePrice} disabled={!newPrice}>
+                Lagre
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowPriceForm(false)}>
+                Avbryt
+              </Button>
+            </div>
+            {(sub.priceChanges?.length ?? 0) > 0 && (
+              <div className="mt-2 space-y-0.5">
+                <p className="text-[10px] text-muted-foreground">Prishistorikk:</p>
+                {[...sub.priceChanges!].sort((a, b) => a.fromMonth.localeCompare(b.fromMonth)).map((c) => (
+                  <p key={c.fromMonth} className="text-[10px] text-muted-foreground font-mono">
+                    {c.fromMonth}: {Math.round(c.amount).toLocaleString('no-NO')} kr/mnd
+                  </p>
+                ))}
+              </div>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
   )
 }
 
