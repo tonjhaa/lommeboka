@@ -231,18 +231,38 @@ export function DebtPage() {
                     </div>
                   )}
 
-                  {/* Rentehistorikk */}
-                  {debt.rateHistory.length > 1 && (
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Rentehistorikk:</p>
-                      {debt.rateHistory.map((r) => (
-                        <div key={r.fromDate} className="text-xs text-muted-foreground flex gap-2">
-                          <span>{r.fromDate}</span>
-                          <span>{r.nominalRate}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {/* Rentehistorikk — linjediagram */}
+                  {(debt.rateHistory?.length ?? 0) > 1 && (() => {
+                    const sorted = [...debt.rateHistory].sort((a, b) => a.fromDate.localeCompare(b.fromDate))
+                    const chartData = sorted.map((r) => ({
+                      label: r.fromDate.slice(0, 7),
+                      rate: r.nominalRate,
+                    }))
+                    const minR = Math.min(...sorted.map((r) => r.nominalRate))
+                    const maxR = Math.max(...sorted.map((r) => r.nominalRate))
+                    return (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-1.5">Rentehistorikk</p>
+                        <ResponsiveContainer width="100%" height={90}>
+                          <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                            <XAxis dataKey="label" tick={{ fontSize: 8 }} interval={Math.floor(chartData.length / 6)} />
+                            <YAxis
+                              domain={[Math.floor(minR * 10) / 10 - 0.2, Math.ceil(maxR * 10) / 10 + 0.2]}
+                              tick={{ fontSize: 8 }}
+                              tickFormatter={(v) => `${v}%`}
+                              width={32}
+                            />
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(215 20.2% 15%)" />
+                            <Tooltip
+                              contentStyle={{ fontSize: 11, background: 'var(--card)', border: '1px solid var(--border)' }}
+                              formatter={(v) => [`${v}%`, 'Rente']}
+                            />
+                            <Line type="monotone" dataKey="rate" stroke="#3b82f6" strokeWidth={1.5} dot={false} activeDot={{ r: 3 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )
+                  })()}
 
                   <div className="flex gap-2">
                     {updatingRateFor === debt.id ? (
@@ -316,37 +336,78 @@ export function DebtPage() {
                     Vis nedbetalingsplan
                   </button>
 
-                  {showAmortFor === debt.id && (
-                    <div className="rounded-md border border-border overflow-hidden">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-border bg-muted/30">
-                            <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Mnd</th>
-                            <th className="px-2 py-1.5 text-right font-medium text-muted-foreground">Terminbeløp</th>
-                            <th className="px-2 py-1.5 text-right font-medium text-muted-foreground">Renter</th>
-                            <th className="px-2 py-1.5 text-right font-medium text-muted-foreground">Avdrag</th>
-                            <th className="px-2 py-1.5 text-right font-medium text-muted-foreground">Saldo</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {plan.rows.slice(0, 24).map((row, i) => {
-                            const d = new Date()
-                            d.setMonth(d.getMonth() + i + 1)
-                            const label = `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
-                            return (
-                              <tr key={i} className="border-b border-border/40 last:border-0">
-                                <td className="px-2 py-1 text-muted-foreground">{label}</td>
-                                <td className="px-2 py-1 text-right font-mono">{fmtNOK(row.payment)}</td>
-                                <td className="px-2 py-1 text-right font-mono text-red-400">{fmtNOK(row.interest)}</td>
-                                <td className="px-2 py-1 text-right font-mono text-green-400">{fmtNOK(row.principal)}</td>
-                                <td className="px-2 py-1 text-right font-mono">{fmtNOK(row.balance)}</td>
+                  {showAmortFor === debt.id && (() => {
+                    const now = new Date()
+                    // Subsampler: vis maks én rad per kvartal for chartet
+                    const step = Math.max(1, Math.floor(plan.rows.length / 60))
+                    const chartData = plan.rows
+                      .filter((_, i) => i % step === 0 || i === plan.rows.length - 1)
+                      .map((row, i, arr) => {
+                        const d = new Date(now)
+                        const origIdx = plan.rows.indexOf(arr[i] === row ? row : plan.rows[i * step])
+                        d.setMonth(d.getMonth() + (origIdx >= 0 ? origIdx : i * step) + 1)
+                        return {
+                          label: `${d.getFullYear()}`,
+                          saldo: Math.round(row.balance / 1000),
+                        }
+                      })
+                    return (
+                      <div className="space-y-3">
+                        {/* Saldokurve til 0 */}
+                        <div>
+                          <p className="text-[10px] text-muted-foreground mb-1">Saldo over tid (tusen kr)</p>
+                          <ResponsiveContainer width="100%" height={100}>
+                            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                              <defs>
+                                <linearGradient id={`debtGrad-${debt.id}`} x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#f97316" stopOpacity={0.25} />
+                                  <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                                </linearGradient>
+                              </defs>
+                              <XAxis dataKey="label" tick={{ fontSize: 8 }} interval={Math.floor(chartData.length / 5)} />
+                              <YAxis tick={{ fontSize: 8 }} tickFormatter={(v) => `${v}k`} width={30} />
+                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(215 20.2% 15%)" />
+                              <Tooltip
+                                contentStyle={{ fontSize: 11, background: 'var(--card)', border: '1px solid var(--border)' }}
+                                formatter={(v) => [`${v} 000 kr`, 'Saldo']}
+                              />
+                              <Area type="monotone" dataKey="saldo" stroke="#f97316" strokeWidth={1.5} fill={`url(#debtGrad-${debt.id})`} dot={false} />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                        {/* Detaljert tabell — alle rader, scrollbar */}
+                        <div className="rounded-md border border-border overflow-hidden max-h-64 overflow-y-auto">
+                          <table className="w-full text-xs">
+                            <thead className="sticky top-0 bg-muted/80">
+                              <tr className="border-b border-border">
+                                <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Mnd</th>
+                                <th className="px-2 py-1.5 text-right font-medium text-muted-foreground">Terminbeløp</th>
+                                <th className="px-2 py-1.5 text-right font-medium text-muted-foreground">Renter</th>
+                                <th className="px-2 py-1.5 text-right font-medium text-muted-foreground">Avdrag</th>
+                                <th className="px-2 py-1.5 text-right font-medium text-muted-foreground">Saldo</th>
                               </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                            </thead>
+                            <tbody>
+                              {plan.rows.map((row, i) => {
+                                const d = new Date(now)
+                                d.setMonth(d.getMonth() + i + 1)
+                                const label = `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+                                return (
+                                  <tr key={i} className="border-b border-border/40 last:border-0">
+                                    <td className="px-2 py-1 text-muted-foreground">{label}</td>
+                                    <td className="px-2 py-1 text-right font-mono">{fmtNOK(row.payment)}</td>
+                                    <td className="px-2 py-1 text-right font-mono text-red-400">{fmtNOK(row.interest)}</td>
+                                    <td className="px-2 py-1 text-right font-mono text-green-400">{fmtNOK(row.principal)}</td>
+                                    <td className="px-2 py-1 text-right font-mono">{fmtNOK(row.balance)}</td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )
+                  })()}
 
                   <ExtraPaymentCalc
                     debt={debt}
