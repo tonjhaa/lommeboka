@@ -501,6 +501,13 @@ export interface SubscriptionEntry {
   priceChanges?: { fromMonth: string; amount: number }[]
 }
 
+export interface InsuranceProviderHistory {
+  provider: string
+  from: string        // "YYYY-MM-DD" eller "YYYY"
+  to?: string
+  bonus?: number      // bonus-nivå i % ved avslutning
+}
+
 export interface InsuranceEntry {
   id: string
   provider: string
@@ -510,6 +517,13 @@ export interface InsuranceEntry {
   }
   isActive: boolean
   renewalMonth?: number   // 1–12
+  /** 'avsluttet' = soft-slettet, vises i historikk */
+  status?: 'aktiv' | 'avsluttet'
+  cancelledDate?: string  // "YYYY-MM-DD"
+  /** Bonus-nivå i % (f.eks. 70 = 70% bonus) */
+  bonus?: number
+  /** Leverandørhistorikk */
+  providerHistory?: InsuranceProviderHistory[]
 }
 
 // ------------------------------------------------------------

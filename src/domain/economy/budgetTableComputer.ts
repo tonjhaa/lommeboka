@@ -97,7 +97,11 @@ function subMonthAmount(sub: SubscriptionEntry, year: number, month: number): nu
   return sub.defaultMonthly
 }
 
-function insMonthAmount(ins: InsuranceEntry, year: number): number {
+function insMonthAmount(ins: InsuranceEntry, year: number, month: number): number {
+  if (ins.cancelledDate) {
+    const monthKey = `${year}-${String(month).padStart(2, '0')}`
+    if (monthKey > ins.cancelledDate.slice(0, 7)) return 0
+  }
   return (ins.yearlyAmounts[String(year)] ?? 0) / 12
 }
 
@@ -528,10 +532,10 @@ export function computeBudgetTable(
     )))
   }
 
-  const activeIns = insurances.filter((ins) => ins.isActive)
+  const activeIns = insurances.filter((ins) => ins.isActive || (ins.status === 'avsluttet' && !!ins.cancelledDate))
   if (activeIns.length > 0) {
     fasteRows.push(mkRow('forsikring-auto', 'Forsikringer', uniform12(
-      (m) => budgetVal('forsikring-auto', m, -activeIns.reduce((s, ins) => s + insMonthAmount(ins, year), 0)),
+      (m) => budgetVal('forsikring-auto', m, -activeIns.reduce((s, ins) => s + insMonthAmount(ins, year, m), 0)),
       () => null,
     )))
   }

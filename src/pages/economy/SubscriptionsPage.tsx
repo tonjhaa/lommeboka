@@ -43,6 +43,8 @@ export function SubscriptionsPage() {
   const [showAddIns, setShowAddIns] = useState(false)
   const [editingInsId, setEditingInsId] = useState<string | null>(null)
   const [expandedInsId, setExpandedInsId] = useState<string | null>(null)
+  const [cancellingInsId, setCancellingInsId] = useState<string | null>(null)
+  const [showCancelledIns, setShowCancelledIns] = useState(false)
 
   const now = new Date()
   const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -214,7 +216,53 @@ export function SubscriptionsPage() {
         </Card>
       )}
 
-      {insurances.length > 0 && (
+      {insurances.filter(i => i.status === 'avsluttet').length > 0 && (
+        <div>
+          <button
+            className="text-xs text-muted-foreground flex items-center gap-1 hover:text-foreground mb-2"
+            onClick={() => setShowCancelledIns(v => !v)}
+          >
+            {showCancelledIns ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            Avsluttede forsikringer ({insurances.filter(i => i.status === 'avsluttet').length})
+          </button>
+          {showCancelledIns && (
+            <Card className="opacity-60 mb-2">
+              <CardContent className="p-0">
+                <table className="w-full text-sm">
+                  <tbody>
+                    {insurances.filter(i => i.status === 'avsluttet').map((ins) => (
+                      <tr key={ins.id} className="border-b border-border/50 last:border-0">
+                        <td className="px-3 py-2">
+                          <p className="line-through text-muted-foreground">{ins.type}</p>
+                          <p className="text-xs text-muted-foreground">{ins.cancelledDate ? `Avsluttet ${ins.cancelledDate}` : 'Avsluttet'}</p>
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground text-xs">{ins.provider}</td>
+                        <td className="px-3 py-2 text-right text-xs text-muted-foreground">
+                          {ins.bonus != null && <span>Bonus: {ins.bonus}%</span>}
+                        </td>
+                        <td className="px-2 py-2">
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground"
+                              onClick={() => updateInsurance(ins.id, { status: 'aktiv', cancelledDate: undefined })}>
+                              <ToggleRight className="h-3.5 w-3.5 text-green-500" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-red-400"
+                              onClick={() => removeInsurance(ins.id)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {insurances.filter(i => i.status !== 'avsluttet').length > 0 && (
         <Card>
           <CardContent className="p-0">
             <table className="w-full text-sm">
@@ -227,7 +275,7 @@ export function SubscriptionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {insurances.map((ins) => {
+                {insurances.filter(i => i.status !== 'avsluttet').map((ins) => {
                   const yearlyAmt = ins.yearlyAmounts[currentYear] ?? 0
                   if (editingInsId === ins.id) {
                     return (
@@ -296,13 +344,11 @@ export function SubscriptionsPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-6 w-6 p-0 text-muted-foreground"
-                              onClick={() => updateInsurance(ins.id, { isActive: !ins.isActive })}
-                              title={ins.isActive ? 'Deaktiver' : 'Aktiver'}
+                              className="h-6 w-6 p-0 text-muted-foreground hover:text-amber-400"
+                              onClick={() => setCancellingInsId(cancellingInsId === ins.id ? null : ins.id)}
+                              title="Avslutt forsikring"
                             >
-                              {ins.isActive
-                                ? <ToggleRight className="h-3.5 w-3.5 text-green-500" />
-                                : <ToggleLeft className="h-3.5 w-3.5" />}
+                              <ToggleLeft className="h-3.5 w-3.5" />
                             </Button>
                             <Button
                               variant="ghost"
@@ -336,6 +382,20 @@ export function SubscriptionsPage() {
                                 )
                               })}
                             </div>
+                          </td>
+                        </tr>
+                      )}
+                      {cancellingInsId === ins.id && (
+                        <tr className="border-b border-border/50 bg-amber-500/5">
+                          <td colSpan={4} className="px-3 py-2">
+                            <CancelInsuranceForm
+                              ins={ins}
+                              onSave={(updates) => {
+                                updateInsurance(ins.id, updates)
+                                setCancellingInsId(null)
+                              }}
+                              onCancel={() => setCancellingInsId(null)}
+                            />
                           </td>
                         </tr>
                       )}
@@ -706,6 +766,63 @@ function EditInsuranceForm({
           }
         >
           Lagre
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function CancelInsuranceForm({
+  ins,
+  onSave,
+  onCancel,
+}: {
+  ins: InsuranceEntry
+  onSave: (updates: Partial<InsuranceEntry>) => void
+  onCancel: () => void
+}) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [cancelledDate, setCancelledDate] = useState(today)
+  const [bonus, setBonus] = useState(ins.bonus != null ? String(ins.bonus) : '')
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium text-amber-400">Avslutt forsikring</p>
+      <div className="flex flex-wrap items-end gap-2 text-xs">
+        <div className="space-y-0.5">
+          <Label className="text-xs">Avslutningsdato</Label>
+          <Input
+            type="date"
+            className="h-7 w-36 text-xs"
+            value={cancelledDate}
+            onChange={(e) => setCancelledDate(e.target.value)}
+          />
+        </div>
+        <div className="space-y-0.5">
+          <Label className="text-xs">Bonus ved avslutning (%)</Label>
+          <Input
+            type="number"
+            className="h-7 w-24 text-xs"
+            placeholder="f.eks. 70"
+            value={bonus}
+            onChange={(e) => setBonus(e.target.value)}
+          />
+        </div>
+        <Button
+          size="sm"
+          className="h-7 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30"
+          variant="ghost"
+          onClick={() => onSave({
+            status: 'avsluttet',
+            isActive: false,
+            cancelledDate,
+            bonus: bonus ? parseFloat(bonus) : undefined,
+          })}
+        >
+          Avslutt
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={onCancel}>
+          Avbryt
         </Button>
       </div>
     </div>
