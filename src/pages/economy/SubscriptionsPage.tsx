@@ -131,6 +131,9 @@ export function SubscriptionsPage() {
                   <td className="px-3 py-2 font-medium text-xs" colSpan={2}>Sum aktive</td>
                   <td className="px-3 py-2 text-right font-mono font-semibold">
                     {fmtNOK(monthlySubTotal)}/mnd
+                    <div className="text-xs text-muted-foreground font-normal">
+                      {fmtNOK(Math.round(monthlySubTotal * 12))}/år
+                    </div>
                   </td>
                   <td />
                 </tr>
@@ -499,7 +502,10 @@ function SubscriptionRow({
           </div>
         </td>
         <td className="px-3 py-2 text-right font-mono">
-          {Math.round(currentPrice).toLocaleString('no-NO')} kr/mnd
+          <div>{Math.round(currentPrice).toLocaleString('no-NO')} kr/mnd</div>
+          <div className="text-xs text-muted-foreground font-normal">
+            {Math.round(currentPrice * 12).toLocaleString('no-NO')} kr/år
+          </div>
         </td>
         <td className="px-2 py-2">
           <div className="flex gap-1 justify-end">
