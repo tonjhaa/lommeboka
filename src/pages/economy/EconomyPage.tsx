@@ -17,7 +17,6 @@ import {
   Palmtree,
   HeartPulse,
   Umbrella,
-  Settings,
   Map,
   Gift,
 } from 'lucide-react'
@@ -90,7 +89,6 @@ const NAV_ITEMS: NavItem[] = [
   { page: 'vacation', label: 'Ferie', Icon: Umbrella },
   { page: 'veikart', label: 'Veikart', Icon: Map },
   { page: 'gaver', label: 'Gaver', Icon: Gift },
-  { page: 'settings', label: 'Innstillinger', Icon: Settings },
 ]
 
 function PageFallback() {

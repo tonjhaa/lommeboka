@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Calculator, Wallet, BadgePercent, LogOut, User, Users } from 'lucide-react'
+import { Calculator, Wallet, BadgePercent, LogOut, User, Users, Settings } from 'lucide-react'
 import { useAppStore, type AppView } from '@/store/useAppStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { cn } from '@/lib/utils'
@@ -14,6 +14,7 @@ const NAV_ITEMS: { view: AppView; label: string; Icon: React.FC<{ className?: st
 export function MainNav() {
   const currentView = useAppStore((s) => s.currentView)
   const setCurrentView = useAppStore((s) => s.setCurrentView)
+  const setCurrentEconomyPage = useAppStore((s) => s.setCurrentEconomyPage)
   const { user, signOut } = useAuthStore()
 
   const [menuOpen, setMenuOpen] = useState(false)
@@ -86,6 +87,19 @@ export function MainNav() {
                 <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
               </div>
             </div>
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false)
+                setCurrentView('economy')
+                setCurrentEconomyPage('settings')
+              }}
+              className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-left hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
+            >
+              <Settings className="h-3.5 w-3.5" />
+              Innstillinger
+            </button>
+            <div className="border-t border-border" />
             <button
               role="menuitem"
               onClick={() => { setMenuOpen(false); signOut() }}
