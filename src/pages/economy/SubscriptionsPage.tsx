@@ -56,7 +56,7 @@ export function SubscriptionsPage() {
   )
   const inactiveSubscriptions = subscriptions.filter((s) => !s.isActive)
 
-  const monthlySubTotal = activeSubscriptions.reduce((s, sub) => s + sub.defaultMonthly, 0)
+  const monthlySubTotal = activeSubscriptions.reduce((s, sub) => s + effectivePrice(sub, currentMonthKey), 0)
   const yearlyInsTotal = insurances
     .filter((i) => i.isActive)
     .reduce((s, ins) => s + (ins.yearlyAmounts[currentYear] ?? 0), 0)
@@ -505,16 +505,17 @@ function SubscriptionRow({
                 Avbryt
               </Button>
             </div>
-            {(sub.priceChanges?.length ?? 0) > 0 && (
-              <div className="mt-2 space-y-0.5">
-                <p className="text-[10px] text-muted-foreground">Prishistorikk:</p>
-                {[...sub.priceChanges!].sort((a, b) => a.fromMonth.localeCompare(b.fromMonth)).map((c) => (
-                  <p key={c.fromMonth} className="text-[10px] text-muted-foreground font-mono">
-                    {c.fromMonth}: {Math.round(c.amount).toLocaleString('no-NO')} kr/mnd
-                  </p>
-                ))}
-              </div>
-            )}
+            <div className="mt-2 space-y-0.5">
+              <p className="text-[10px] text-muted-foreground">Prishistorikk:</p>
+              <p className="text-[10px] text-muted-foreground font-mono">
+                Fra start: {Math.round(sub.defaultMonthly).toLocaleString('no-NO')} kr/mnd
+              </p>
+              {[...(sub.priceChanges ?? [])].sort((a, b) => a.fromMonth.localeCompare(b.fromMonth)).map((c) => (
+                <p key={c.fromMonth} className="text-[10px] text-muted-foreground font-mono">
+                  {c.fromMonth}: {Math.round(c.amount).toLocaleString('no-NO')} kr/mnd
+                </p>
+              ))}
+            </div>
           </td>
         </tr>
       )}
