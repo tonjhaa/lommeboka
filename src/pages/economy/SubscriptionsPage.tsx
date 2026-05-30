@@ -636,8 +636,20 @@ function EditInsuranceForm({
   const [form, setForm] = useState({
     provider: ins.provider,
     type: ins.type,
+    year: currentYear,
     yearlyAmount: ins.yearlyAmounts[currentYear] ?? 0,
   })
+
+  // Oppdater beløpet når år endres
+  function handleYearChange(year: string) {
+    setForm((f) => ({ ...f, year, yearlyAmount: ins.yearlyAmounts[year] ?? 0 }))
+  }
+
+  const allYears = [...new Set([
+    ...Object.keys(ins.yearlyAmounts),
+    currentYear,
+    String(parseInt(currentYear) + 1),
+  ])].sort()
 
   return (
     <div className="rounded-md border border-border bg-muted/20 p-3 space-y-3">
@@ -652,7 +664,19 @@ function EditInsuranceForm({
           <Input value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Årsbeløp {currentYear}</Label>
+          <Label className="text-xs">År</Label>
+          <select
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={form.year}
+            onChange={(e) => handleYearChange(e.target.value)}
+          >
+            {allYears.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Årsbeløp (kr)</Label>
           <Input
             type="number"
             value={form.yearlyAmount}
@@ -660,6 +684,14 @@ function EditInsuranceForm({
           />
         </div>
       </div>
+      {Object.keys(ins.yearlyAmounts).length > 0 && (
+        <div className="text-[10px] text-muted-foreground space-y-0.5">
+          <p>Prishistorikk:</p>
+          {Object.entries(ins.yearlyAmounts).sort(([a], [b]) => a.localeCompare(b)).map(([yr, amt]) => (
+            <p key={yr} className="font-mono">{yr}: {Math.round(amt).toLocaleString('no-NO')} kr/år ({Math.round(amt / 12).toLocaleString('no-NO')} kr/mnd)</p>
+          ))}
+        </div>
+      )}
       <div className="flex gap-2 justify-end">
         <Button variant="outline" size="sm" onClick={onCancel}>Avbryt</Button>
         <Button
@@ -669,7 +701,7 @@ function EditInsuranceForm({
             onSave({
               provider: form.provider.trim(),
               type: form.type.trim(),
-              yearlyAmounts: { ...ins.yearlyAmounts, [currentYear]: form.yearlyAmount },
+              yearlyAmounts: { ...ins.yearlyAmounts, [form.year]: form.yearlyAmount },
             })
           }
         >
