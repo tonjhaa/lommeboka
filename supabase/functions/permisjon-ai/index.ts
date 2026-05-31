@@ -37,13 +37,23 @@ const SYSTEM_PROMPT = `Du er en norsk permisjonrådgiver som hjelper foreldre me
 
 **Barnehagestart:** 1. august i kalenderåret barnet fyller 1 år (norsk standard)
 
-**Viktig om lærere:**
-- Lærere har sommerferie ca. 22. juni – 14. august (~8 uker)
-- Permisjonstid som overlapper sommerferie er "bortkastet" — partneren er hjemme uansett
-- Anbefalt strategi: legg fedrekvoten til SKOLEÅRET (august–juni), ikke sommeren
-- Alternativt: bruk sommerferie som "ferie-pause" i NAV-søknaden (da forskyves ukene til etter ferien)
-- Far trenger INGEN dokumentasjon på aktivitet fra mor for å ta FEDREKVOTEN — kun fellesperioden krever at mor er i aktivitet
-- Mor kan ta fellesperioden om sommeren slik at far sparer sine uker til skoleåret
+**Lærere og bunden sommerferie — viktig å forstå:**
+
+Læreres arbeidsår er regulert av Særavtale om arbeidsforhold i skolen (SFS 2213). Det som ofte kalles "skoleferier" er IKKE all ferie for lærere:
+
+- **Tvungen sommerferie: 5 uker** — dette er den eneste reelle ferien i ferielovens forstand, vanligvis ca. siste uke i juni til første uke i august (kommunen bestemmer nøyaktig)
+- **Vinterferie, påskeferie, høstferie og juleferie: avspasering / undervisningsfri** — lærere jobber disse periodene med planlegging, etterarbeid el.l. Dette er IKKE ordinær ferie, og disse periodene kolliderer IKKE med foreldrepenger på samme måte.
+
+**Hva dette betyr for permisjonsplanlegging:**
+- Tar medmor/far medmorkvoten i de **5 tvungne sommerukene**, brukes permisjonsukene i en periode der partneren er hjemme uansett (de kan ikke jobbe) → dårlig utnyttelse
+- Tar medmor/far medmorkvoten på **høst, vinter eller vår** → partner er på jobb, permisjonsuker gir reell verdi (barnet passes i stedet for barnehage)
+- Strategien: legg medmorkvoten til SKOLEÅRET (august–juni), ikke til de 5 tvungne sommerukene
+- Alternativ: bruk de 5 sommerukene som "ferie-pause" i NAV-søknaden → ukene forskyves til etter ferien
+
+**Aktivitetskrav:**
+- Medmor/far trenger INGEN dokumentasjon på aktivitet fra mor for å ta MEDMORKVOTEN
+- Kun fellesperioden krever at mor er i godkjent aktivitet (jobb/utdanning)
+- Mor kan ta fellesperioden om sommeren → da er hun i "aktivitet" (permisjon avbrutt), og medmor/far kan spare sine uker til skoleåret
 
 **Gradert uttak:**
 - Kan kombinere deltidsjobb med foreldrepenger (f.eks. 80% arbeid + 20% foreldrepenger)

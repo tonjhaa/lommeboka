@@ -116,7 +116,7 @@ export function PermisjonPage() {
 
   const STEG = [
     { key: 'grav', label: 'Graviditet', q: 'Fortell om graviditeten', lead: 'Termindato og dekningsgrad avgjør hvor mange uker dere har til rådighet.' },
-    { key: 'partner', label: 'Partner', q: 'Noe spesielt med partner?', lead: 'Bunden ferie hos partner påvirker når fedrekvoten bør tas.' },
+    { key: 'partner', label: 'Partner', q: 'Har partner bunden sommerferie?', lead: 'Lærere har 5 uker tvungen sommerferie. Medmorkvoten bør legges utenom — ellers brukes uker partner er hjemme uansett.' },
     { key: 'ferie', label: 'Min ferie', q: 'Når har du ferie?', lead: 'Ferie kan forskyve permisjonen og tette gapet før barnehagestart.' },
     { key: 'fordeling', label: 'Fordeling', q: 'Hvordan fordele fellesperioden?', lead: 'Bestem hvor mange uker av fellesperioden hver av dere tar.' },
     { key: 'gen', label: 'Generer', q: 'Klar til å lage planen', lead: 'Vi setter opp et forslag basert på reglene og valgene dine.' },
@@ -278,12 +278,19 @@ export function PermisjonPage() {
 
                 {/* --- Steg 2: Partner --- */}
                 {step === 1 && (
-                  <div className="space-y-4">
-                    <ToggleRow icon={GraduationCap} title="Partner er lærer eller skoleansatt"
-                      desc="Da har partner fast sommerferie. Vi plasserer fedrekvoten etter ferien så ukene ikke går til spille."
+                  <div className="space-y-5">
+                    <InfoBox>
+                      <b>Om lærere og ferie:</b> Lærere har <b>5 uker tvungen sommerferie</b> — det er den eneste ferien som kan "kollidere" med foreldrepenger. Vinterferie, påskeferie, høstferie og juleferie er <i>avspasering / undervisningsfri</i> og teller ikke som ordinær ferie i NAV-sammenheng.<br /><br />
+                      Tar medmor/far medmorkvoten i de 5 sommerukene, brukes permisjons­uker i en periode der partner er hjemme uansett — en dårlig deal. Legg heller medmorkvoten til skoleåret.
+                    </InfoBox>
+
+                    <ToggleRow icon={GraduationCap} title="Partner har bunden sommerferie"
+                      desc="Partner er f.eks. lærer eller har annen tvungen sommerferie. Vi legger medmorkvoten utenfor ferieperioden."
                       on={input.partnerErLærer} onToggle={() => setInput({ partnerErLærer: !input.partnerErLærer })} />
-                    {input.partnerErLærer ? (
-                      <div className="space-y-4">
+
+                    {input.partnerErLærer && (
+                      <div className="space-y-3">
+                        <p className="text-[13px] text-muted-foreground">Når er sommerferien? (Brukes til å plassere medmorkvoten optimalt.)</p>
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                           <div className="space-y-1.5">
                             <Label>Sommerferie starter</Label>
@@ -294,11 +301,10 @@ export function PermisjonPage() {
                             <MonthDayPicker label="Sommerferie slutter" value={input.partnerSommerTilManedDag} onChange={(v) => setInput({ partnerSommerTilManedDag: v })} />
                           </div>
                         </div>
-                        <InfoBox>Far/medmor kan tidligst starte sin permisjon <b>uke 7 etter fødsel</b>. Vi unngår å legge fedrekvoten i sommerferien — da ville ukene «forsvunnet» fordi partner er hjemme uansett.</InfoBox>
                       </div>
-                    ) : (
-                      <InfoBox>Far/medmor kan tidligst starte sin permisjon <b>uke 7 etter fødsel</b>. Slå på bryteren over hvis partner har bunden sommerferie å ta hensyn til.</InfoBox>
                     )}
+
+                    <InfoBox>Medmor/far kan tidligst starte sin permisjon <b>uke 7 etter fødsel</b>. Medmorkvoten kan tas uten at mor trenger å dokumentere aktivitet.</InfoBox>
                   </div>
                 )}
 
