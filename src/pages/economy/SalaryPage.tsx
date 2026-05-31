@@ -448,11 +448,24 @@ function pdfBlobUrl(base64: string): string {
 
 function SlipDetailModal({ record, onClose }: { record: MonthRecord; onClose: () => void }) {
   const slip = record.slipData
-  const hasPdf = !!record.slipPdfBase64
+  const [pdfSrc, setPdfSrc] = useState<string | null>(record.slipPdfBase64 ?? null)
+
+  useEffect(() => {
+    if (record.slipPdfBase64) { setPdfSrc(record.slipPdfBase64); return }
+    if (record.slipStoragePath) {
+      import('@/lib/slipStorage').then(({ downloadSlipPDF }) => {
+        downloadSlipPDF(record.slipStoragePath!).then((base64) => {
+          if (base64) setPdfSrc(base64)
+        })
+      })
+    }
+  }, [record])
+
+  const hasPdf = !!record.slipPdfBase64 || !!record.slipStoragePath
 
   function openPdf() {
-    if (!record.slipPdfBase64) return
-    const url = pdfBlobUrl(record.slipPdfBase64)
+    if (!pdfSrc) return
+    const url = pdfBlobUrl(pdfSrc)
     window.open(url, '_blank')
     // Rydder opp blob-URL etter 60 sekunder
     setTimeout(() => URL.revokeObjectURL(url), 60_000)
@@ -470,9 +483,9 @@ function SlipDetailModal({ record, onClose }: { record: MonthRecord; onClose: ()
           </div>
           <div className="flex gap-2">
             {hasPdf && (
-              <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={openPdf}>
+              <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={openPdf} disabled={!pdfSrc}>
                 <ExternalLink className="h-3 w-3" />
-                Åpne PDF
+                {pdfSrc ? 'Åpne PDF' : 'Laster PDF…'}
               </Button>
             )}
             <Button size="sm" variant="ghost" onClick={onClose}>Lukk</Button>
@@ -1164,7 +1177,7 @@ function LønnshistorikkTabell({
                         )}
                       </td>
                       <td className="py-1.5">
-                        {(m.slipData || m.slipPdfBase64) && (
+                        {(m.slipData || m.slipPdfBase64 || m.slipStoragePath) && (
                           <button
                             className="text-muted-foreground hover:text-foreground"
                             onClick={() => setViewingSlip(m)}
