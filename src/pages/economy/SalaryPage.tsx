@@ -318,6 +318,7 @@ export function SalaryPage() {
           <CardContent>
             <LonnsoppgjorSection
               records={lonnsoppgjor}
+              monthHistory={monthHistory}
               hasSlips={monthHistory.some((m) => m.source === 'imported_slip')}
               onAdd={addLonnsoppgjor}
               onUpdate={updateLonnsoppgjor}
@@ -649,6 +650,7 @@ function EtterbetalingPanel({
 
 function LonnsoppgjorSection({
   records,
+  monthHistory,
   hasSlips,
   onAdd,
   onUpdate,
@@ -658,6 +660,7 @@ function LonnsoppgjorSection({
   onRemoveEtterbetalingBooking,
 }: {
   records: LonnsoppgjorRecord[]
+  monthHistory: MonthRecord[]
   hasSlips: boolean
   onAdd: (r: LonnsoppgjorRecord) => void
   onUpdate: (id: string, updates: Partial<LonnsoppgjorRecord>) => void
@@ -681,6 +684,13 @@ function LonnsoppgjorSection({
   const [editForm, setEditForm] = useState<Partial<LonnsoppgjorRecord>>({})
 
   const sorted = [...records].sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
+  const [viewingSlipFromOppgjor, setViewingSlipFromOppgjor] = useState<MonthRecord | null>(null)
+
+  function findSlipForRecord(r: LonnsoppgjorRecord): MonthRecord | undefined {
+    if (r.source !== 'slip') return undefined
+    const [year, month] = r.effectiveDate.split('-').map(Number)
+    return monthHistory.find((m) => m.source === 'imported_slip' && m.year === year && m.month === month)
+  }
 
   function handleAdd() {
     if (form.maanedslonn <= 0) return
@@ -956,13 +966,28 @@ function LonnsoppgjorSection({
                       ) : r.notes || '—'}
                     </td>
                     <td className="py-1.5 pr-3">
-                      <span className={`text-xs px-1.5 py-0.5 rounded ${
-                        r.source === 'slip' ? 'bg-green-900/30 text-green-400' :
-                        r.source === 'forventet' ? 'bg-yellow-900/30 text-yellow-400' :
-                        'bg-muted text-muted-foreground'
-                      }`}>
-                        {r.source === 'slip' ? 'slipp' : r.source === 'forventet' ? 'forventet' : 'manuelt'}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${
+                          r.source === 'slip' ? 'bg-green-900/30 text-green-400' :
+                          r.source === 'forventet' ? 'bg-yellow-900/30 text-yellow-400' :
+                          'bg-muted text-muted-foreground'
+                        }`}>
+                          {r.source === 'slip' ? 'slipp' : r.source === 'forventet' ? 'forventet' : 'manuelt'}
+                        </span>
+                        {(() => {
+                          const slip = findSlipForRecord(r)
+                          if (!slip || (!slip.slipPdfBase64 && !slip.slipStoragePath)) return null
+                          return (
+                            <button
+                              className="text-muted-foreground hover:text-foreground"
+                              title="Vis slip"
+                              onClick={() => setViewingSlipFromOppgjor(slip)}
+                            >
+                              <FileText className="h-3 w-3" />
+                            </button>
+                          )
+                        })()}
+                      </div>
                     </td>
                     <td className="py-1.5">
                       <div className="flex items-center gap-1">
@@ -1008,6 +1033,12 @@ function LonnsoppgjorSection({
             <p className="text-xs text-muted-foreground mt-1">* Forventet oppgjør</p>
           )}
         </div>
+      )}
+      {viewingSlipFromOppgjor && (
+        <SlipDetailModal
+          record={viewingSlipFromOppgjor}
+          onClose={() => setViewingSlipFromOppgjor(null)}
+        />
       )}
     </div>
   )
