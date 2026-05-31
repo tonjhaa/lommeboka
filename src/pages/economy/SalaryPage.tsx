@@ -1100,6 +1100,20 @@ function LønnssimulatorCard({
 // LØNNSHISTORIKK TABELL
 // ------------------------------------------------------------
 
+function detectAvviksårsak(sd: import('@/types/economy').ParsetLonnsslipp, delta: number | null): string | null {
+  const atf = sd.atfBeløp ?? 0
+  const fungering = sd.fungeringBeløp ?? 0
+  const effektivSkatt = sd.skattetrekk / (sd.nettoUtbetalt + sd.skattetrekk + sd.pensjonstrekk + sd.fagforeningskontingent + sd.ekstraTrekk + sd.husleietrekk + sd.ouFond)
+
+  if (effektivSkatt < 0.02 && sd.nettoUtbetalt > 40000) return 'Feriepenger'
+  if (atf > 2000 && fungering > 2000) return `ATF + fungering`
+  if (atf > 2000) return `ATF ${Math.round(atf / 1000)}k`
+  if (fungering > 2000) return `Fungering ${Math.round(fungering / 1000)}k`
+  if (delta !== null && delta < -5000 && effektivSkatt > 0.28) return 'Mulig fravær'
+  if (delta !== null && delta > 5000) return 'Ekstrautbetaling'
+  return null
+}
+
 function LønnshistorikkTabell({
   slips,
 }: {
@@ -1141,6 +1155,7 @@ function LønnshistorikkTabell({
                   <th className="text-left py-1 pr-3 font-normal">Måned</th>
                   <th className="text-right py-1 pr-3 font-normal">Netto</th>
                   <th className="text-right py-1 pr-3 font-normal">Avvik fra normalt</th>
+                  <th className="text-left py-1 pr-3 font-normal">Årsak</th>
                   <th className="text-right py-1 pr-3 font-normal">Brutto</th>
                   <th className="text-right py-1 pr-3 font-normal">Skattesats</th>
                   <th className="py-1" />
@@ -1150,10 +1165,17 @@ function LønnshistorikkTabell({
                 {slips.map((m) => {
                   const netto = m.slipData?.nettoUtbetalt ?? m.nettoUtbetalt
                   const brutto = m.slipData?.bruttoSum ?? 0
-                  const taxRate = brutto > 0 && m.slipData ? (m.slipData.skattetrekk / brutto) * 100 : null
+                  // Rekonstruer full brutto fra kjente trekkkomponenter for korrekt skattesats
+                  const sd = m.slipData
+                  const totalTrekk = sd
+                    ? sd.skattetrekk + sd.pensjonstrekk + sd.fagforeningskontingent + sd.ekstraTrekk + sd.husleietrekk + sd.ouFond
+                    : 0
+                  const fullBrutto = sd ? netto + totalTrekk : 0
+                  const taxRate = sd && fullBrutto > 0 ? (sd.skattetrekk / fullBrutto) * 100 : null
                   const bruttoKey = Math.round(brutto / 500) * 500
                   const slipBaseline = bruttoBaselines.get(bruttoKey) ?? 0
                   const delta = slipBaseline > 0 ? netto - slipBaseline : null
+                  const avviksårsak = sd ? detectAvviksårsak(sd, delta) : null
                   return (
                     <tr key={`${m.year}-${m.month}`} className="border-b border-border/40 hover:bg-muted/10">
                       <td className="py-1.5 pr-3 text-muted-foreground">{MONTH_NAMES[m.month]} {m.year}</td>
@@ -1168,6 +1190,9 @@ function LønnshistorikkTabell({
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
+                      </td>
+                      <td className="py-1.5 pr-3 text-[10px] text-muted-foreground">
+                        {avviksårsak ?? ''}
                       </td>
                       <td className="py-1.5 pr-3 text-right font-mono text-muted-foreground">
                         {brutto > 0 ? fmtNOK(brutto) : '—'}
