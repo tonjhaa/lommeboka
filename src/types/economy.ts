@@ -553,6 +553,7 @@ export interface FondPortfolio {
   startDate: string  // YYYY-MM-DD
   funds: FondEntry[]
   snapshots: FondPortfolioSnapshot[]
+  contributionPeriods?: ContributionPeriod[]
 }
 
 // ------------------------------------------------------------

@@ -317,7 +317,7 @@ export function SavingsPage() {
         <MånedsoversiktTable
           accounts={savingsAccounts}
           fondCurrentValue={fondCurrentValue}
-          fondMonthlyDeposit={fondMonthlyDeposit}
+          fondPortfolio={fondPortfolio ?? null}
           debts={debts}
           profile={profile}
           partnerVeikart={partnerVeikart}
@@ -631,12 +631,26 @@ function InnskuddCell({ value, onChange, isOverridden, onFillDown }: {
   )
 }
 
+function getFondContribForMonth(portfolio: import('@/types/economy').FondPortfolio, year: number, month: number): number {
+  const periods = portfolio.contributionPeriods
+  if (periods && periods.length > 0) {
+    const ym = `${year}-${String(month).padStart(2, '0')}`
+    const period = periods.find(p => {
+      const from = p.fromDate ? p.fromDate.slice(0, 7) : '0000-00'
+      const to = p.toDate ? p.toDate.slice(0, 7) : '9999-99'
+      return ym >= from && ym <= to
+    })
+    return period ? Math.round(period.amount) : 0
+  }
+  return Math.round(portfolio.monthlyDeposit)
+}
+
 function MånedsoversiktTable({
-  accounts, fondCurrentValue, fondMonthlyDeposit, debts, profile, partnerVeikart, now,
+  accounts, fondCurrentValue, fondPortfolio, debts, profile, partnerVeikart, now,
 }: {
   accounts: SavingsAccount[]
   fondCurrentValue: number
-  fondMonthlyDeposit: number
+  fondPortfolio: import('@/types/economy').FondPortfolio | null
   debts: DebtAccount[]
   profile: EmploymentProfile | null
   partnerVeikart: PartnerVeikart
@@ -667,6 +681,7 @@ function MånedsoversiktTable({
     }
   }
 
+  const fondMonthlyDeposit = fondPortfolio?.monthlyDeposit ?? 0
   const hasFond = fondCurrentValue > 0 || fondMonthlyDeposit > 0
   const hasPartner = partnerVeikart.enabled
 
@@ -740,7 +755,8 @@ function MånedsoversiktTable({
 
       // Fond — månedlig compounding (markedsbasert, daglig kursendring)
       const fondKey = `fond-${year}-${month}`
-      const effectiveFondMnd = fondKey in contribOverrides ? contribOverrides[fondKey] : fondMonthlyDeposit
+      const baseFondMnd = fondPortfolio ? getFondContribForMonth(fondPortfolio, year, month) : fondMonthlyDeposit
+      const effectiveFondMnd = fondKey in contribOverrides ? contribOverrides[fondKey] : baseFondMnd
       const fondInterest = fondBal * FOND_RATE_TABLE / 100 / 12
       fondBal = fondBal + fondInterest + effectiveFondMnd
 
@@ -813,7 +829,7 @@ function MånedsoversiktTable({
     })
 
     return { accMeta, partnerAccMeta: partnerAccMeta as PartnerAccount[], monthRows }
-  }, [accounts, fondCurrentValue, fondMonthlyDeposit, debts, annualIncome, myAnnualIncome, partnerOnlyAnnualIncome, salaryGrowthPct, hasFond, hasPartner, partnerVeikart, now, contribOverrides])
+  }, [accounts, fondCurrentValue, fondPortfolio, fondMonthlyDeposit, debts, annualIncome, myAnnualIncome, partnerOnlyAnnualIncome, salaryGrowthPct, hasFond, hasPartner, partnerVeikart, now, contribOverrides])
 
   const years = [...new Set(monthRows.map(r => r.year))]
 
