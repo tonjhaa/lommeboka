@@ -17,30 +17,34 @@ import { PermisjonAIChat } from '@/components/economy/PermisjonAIChat'
 type Tab = 'oppsett' | 'tidslinje' | 'ai'
 type PlanView = 'kalender' | 'tidslinje'
 
-const MÅNEDER = ['Jan','Feb','Mars','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des']
+// Kalendervelger for gjentakende årsdag (MM-DD). Bruker native date-input med inneværende år.
+function MonthDayPicker({ value, onChange, label }: { value: string; onChange: (v: string) => void; label?: string }) {
+  const year = new Date().getFullYear()
+  const fullDate = value ? `${year}-${value}` : ''
 
-function MonthDayPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [mm, dd] = value.split('-')
-  const month = parseInt(mm ?? '6')
-  const day = parseInt(dd ?? '1')
-  const daysInMonth = new Date(2024, month, 0).getDate()
-
-  function update(newMm: number, newDd: number) {
-    const clampedDay = Math.min(newDd, new Date(2024, newMm, 0).getDate())
-    onChange(`${String(newMm).padStart(2,'0')}-${String(clampedDay).padStart(2,'0')}`)
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value  // "YYYY-MM-DD"
+    if (val) onChange(val.slice(5))  // behold bare "MM-DD"
   }
 
+  const displayDate = fullDate
+    ? new Date(fullDate).toLocaleDateString('no-NO', { day: 'numeric', month: 'long' })
+    : 'Velg dato'
+
   return (
-    <div className="flex gap-2">
-      <select className="h-11 flex-1 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-        value={month} onChange={(e) => update(parseInt(e.target.value), day)}>
-        {MÅNEDER.map((m, i) => <option key={i+1} value={i+1}>{m}</option>)}
-      </select>
-      <select className="h-11 w-20 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-        value={day} onChange={(e) => update(month, parseInt(e.target.value))}>
-        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
-      </select>
-    </div>
+    <label className="relative block cursor-pointer">
+      <div className="h-11 flex items-center rounded-xl border border-border bg-background px-3 text-sm text-foreground hover:border-primary transition-colors">
+        <span className="flex-1">{displayDate}</span>
+        <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+      </div>
+      <input
+        type="date"
+        aria-label={label}
+        value={fullDate}
+        onChange={handleChange}
+        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+      />
+    </label>
   )
 }
 
@@ -86,7 +90,7 @@ function ToggleRow({
 const QUOTAS = [
   { key: 'mødrekvote' as const,   name: 'Mødrekvote',    bar: 'bg-blue-500',  dot: 'bg-blue-500',  note: 'forbeholdt mor' },
   { key: 'fellesperiode' as const, name: 'Fellesperiode', bar: 'bg-teal-500',  dot: 'bg-teal-500',  note: 'fritt fordelt' },
-  { key: 'fedrekvote' as const,   name: 'Fedrekvote',    bar: 'bg-green-600', dot: 'bg-green-600', note: 'forbeholdt partner' },
+  { key: 'fedrekvote' as const,   name: 'Medmorkvote',   bar: 'bg-green-600', dot: 'bg-green-600', note: 'forbeholdt partner' },
 ]
 
 export function PermisjonPage() {
@@ -283,11 +287,11 @@ export function PermisjonPage() {
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                           <div className="space-y-1.5">
                             <Label>Sommerferie starter</Label>
-                            <MonthDayPicker value={input.partnerSommerFraManedDag} onChange={(v) => setInput({ partnerSommerFraManedDag: v })} />
+                            <MonthDayPicker label="Sommerferie starter" value={input.partnerSommerFraManedDag} onChange={(v) => setInput({ partnerSommerFraManedDag: v })} />
                           </div>
                           <div className="space-y-1.5">
                             <Label>Sommerferie slutter</Label>
-                            <MonthDayPicker value={input.partnerSommerTilManedDag} onChange={(v) => setInput({ partnerSommerTilManedDag: v })} />
+                            <MonthDayPicker label="Sommerferie slutter" value={input.partnerSommerTilManedDag} onChange={(v) => setInput({ partnerSommerTilManedDag: v })} />
                           </div>
                         </div>
                         <InfoBox>Far/medmor kan tidligst starte sin permisjon <b>uke 7 etter fødsel</b>. Vi unngår å legge fedrekvoten i sommerferien — da ville ukene «forsvunnet» fordi partner er hjemme uansett.</InfoBox>

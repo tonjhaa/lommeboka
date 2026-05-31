@@ -21,7 +21,7 @@ const PERIODE_SHORT: Record<string, string> = {
   mor_kvote:        'Mødrekvote',
   felles_mor:       'Felles',
   felles_far:       'Felles',
-  far_kvote:        'Fedrekvote',
+  far_kvote:        'Medmorkvote',
   ferie_pause:      'Ferie',
 }
 
@@ -31,7 +31,7 @@ const PERIODE_LABEL: Record<string, string> = {
   mor_kvote:        'Mor — mødrekvote',
   felles_mor:       'Fellesperiode (mor)',
   felles_far:       'Fellesperiode (partner)',
-  far_kvote:        'Partner — fedrekvote',
+  far_kvote:        'Partner — medmorkvote',
   ferie_pause:      'Ferie-pause',
 }
 
