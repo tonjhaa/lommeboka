@@ -58,7 +58,7 @@ export async function loadFromSupabase(): Promise<boolean> {
   // Migrer eventuelle lokale PDFer til Storage (kjøres om noe mangler)
   const { migrateLocalPDFs } = await import('./slipStorage')
   const store = useEconomyStore.getState()
-  migrateLocalPDFs(store.monthHistory, (year, month, storagePath) => {
+  await migrateLocalPDFs(store.monthHistory, (year, month, storagePath) => {
     useEconomyStore.setState((s) => ({
       monthHistory: s.monthHistory.map((m) =>
         m.year === year && m.month === month

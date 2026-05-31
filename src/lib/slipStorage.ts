@@ -44,7 +44,10 @@ export async function uploadSlipPDF(
 export async function downloadSlipPDF(storagePath: string): Promise<string | null> {
   try {
     const { data, error } = await supabase.storage.from(BUCKET).download(storagePath)
-    if (error || !data) return null
+    if (error || !data) {
+      if (error) console.error('[slipStorage] download feil:', error.message)
+      return null
+    }
 
     return new Promise((resolve) => {
       const reader = new FileReader()

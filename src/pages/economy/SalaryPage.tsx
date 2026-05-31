@@ -451,14 +451,17 @@ function SlipDetailModal({ record, onClose }: { record: MonthRecord; onClose: ()
   const [pdfSrc, setPdfSrc] = useState<string | null>(record.slipPdfBase64 ?? null)
 
   useEffect(() => {
+    let cancelled = false
+    setPdfSrc(null)
     if (record.slipPdfBase64) { setPdfSrc(record.slipPdfBase64); return }
     if (record.slipStoragePath) {
       import('@/lib/slipStorage').then(({ downloadSlipPDF }) => {
         downloadSlipPDF(record.slipStoragePath!).then((base64) => {
-          if (base64) setPdfSrc(base64)
+          if (!cancelled && base64) setPdfSrc(base64)
         })
       })
     }
+    return () => { cancelled = true }
   }, [record])
 
   const hasPdf = !!record.slipPdfBase64 || !!record.slipStoragePath
