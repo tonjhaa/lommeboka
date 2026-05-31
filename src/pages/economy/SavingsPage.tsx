@@ -534,7 +534,17 @@ const SAVINGS_RATE_TABLE = 3.5
 const FULL_MONTH_NAMES = ['Januar', 'Februar', 'Mars', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Desember']
 
 /** Sjekker om et gitt år/måned faller innenfor en valgfri from/to-periode */
-function getBaseContribForMonth(acc: SavingsAccount, year: number, month: number): number {
+function getBaseContribForMonth(acc: SavingsAccount, year: number, month: number, nowISO?: string): number {
+  // Fremtidige registrerte innskudd (etter today) som faller i denne måneden
+  const futureContribs = nowISO
+    ? (acc.contributions ?? [])
+        .filter(c => {
+          const d = new Date(c.date)
+          return d.getFullYear() === year && d.getMonth() + 1 === month && c.date > nowISO
+        })
+        .reduce((s, c) => s + c.amount, 0)
+    : 0
+
   const periods = acc.contributionPeriods
   if (periods && periods.length > 0) {
     const ym = `${year}-${String(month).padStart(2, '0')}`
@@ -543,10 +553,10 @@ function getBaseContribForMonth(acc: SavingsAccount, year: number, month: number
       const to = p.toDate ? p.toDate.slice(0, 7) : '9999-99'
       return ym >= from && ym <= to
     })
-    return period ? Math.round(period.amount) : 0
+    return (period ? Math.round(period.amount) : 0) + futureContribs
   }
   const active = isActiveMonth(year, month, acc.monthlyContributionFromDate, acc.monthlyContributionToDate)
-  return active ? Math.round(acc.monthlyContribution ?? 0) : 0
+  return (active ? Math.round(acc.monthlyContribution ?? 0) : 0) + futureContribs
 }
 
 function isActiveMonth(year: number, month: number, fromDate?: string, toDate?: string): boolean {
@@ -666,13 +676,14 @@ function MånedsoversiktTable({
   const salaryGrowthPct = contribOverrides['salary-growth'] ?? 3
 
   const { accMeta, partnerAccMeta, monthRows } = useMemo(() => {
+    const nowISO = now.toISOString().split('T')[0]
     const accMeta = accounts.map(acc => ({
       id: acc.id,
       label: acc.label,
       type: acc.type,
       startBalance: contribOverrides[`start-${acc.id}`] ?? computeEffectiveBalance(acc, now),
       rate: contribOverrides[`rate-${acc.id}`] ?? ([...acc.rateHistory].sort((a, b) => b.fromDate.localeCompare(a.fromDate))[0]?.rate ?? 0),
-      getBase: (year: number, month: number) => getBaseContribForMonth(acc, year, month),
+      getBase: (year: number, month: number) => getBaseContribForMonth(acc, year, month, nowISO),
     }))
 
     // Partner accounts meta — startBalance from overrides
