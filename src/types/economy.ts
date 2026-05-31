@@ -178,6 +178,7 @@ export interface MonthRecord {
   disposable: number                   // beregnet disponibelt etter alle trekk
   slipData?: ParsetLonnsslipp          // raw slip-data for låste måneder
   slipPdfBase64?: string               // PDF-fil lagret som base64 (maks 12 slipper)
+  slipStoragePath?: string             // Supabase Storage-sti: {userId}/{year}-{month}.pdf
 }
 
 // ------------------------------------------------------------
