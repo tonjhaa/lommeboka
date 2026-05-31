@@ -11,6 +11,43 @@ import { PermisjonAIChat } from '@/components/economy/PermisjonAIChat'
 
 type Tab = 'oppsett' | 'tidslinje' | 'ai'
 
+const MÅNEDER = ['Jan','Feb','Mars','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des']
+
+function MonthDayPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [mm, dd] = value.split('-')
+  const month = parseInt(mm ?? '6')
+  const day = parseInt(dd ?? '1')
+  const daysInMonth = new Date(2024, month, 0).getDate()
+
+  function update(newMm: number, newDd: number) {
+    const clampedDay = Math.min(newDd, new Date(2024, newMm, 0).getDate())
+    onChange(`${String(newMm).padStart(2,'0')}-${String(clampedDay).padStart(2,'0')}`)
+  }
+
+  return (
+    <div className="flex gap-1">
+      <select
+        className="h-8 flex-1 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+        value={month}
+        onChange={(e) => update(parseInt(e.target.value), day)}
+      >
+        {MÅNEDER.map((m, i) => (
+          <option key={i+1} value={i+1}>{m}</option>
+        ))}
+      </select>
+      <select
+        className="h-8 w-16 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+        value={day}
+        onChange={(e) => update(month, parseInt(e.target.value))}
+      >
+        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => (
+          <option key={d} value={d}>{d}</option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('no-NO', { day: 'numeric', month: 'long', year: 'numeric' })
 }
@@ -145,16 +182,18 @@ export function PermisjonPage() {
                 {input.partnerErLærer && (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <Label className="text-xs">Sommerferie fra (MM-DD)</Label>
-                      <Input className="h-8 text-xs" placeholder="06-22"
+                      <Label className="text-xs">Sommerferie starter</Label>
+                      <MonthDayPicker
                         value={input.partnerSommerFraManedDag}
-                        onChange={(e) => setInput({ partnerSommerFraManedDag: e.target.value })} />
+                        onChange={(v) => setInput({ partnerSommerFraManedDag: v })}
+                      />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">Sommerferie til (MM-DD)</Label>
-                      <Input className="h-8 text-xs" placeholder="08-14"
+                      <Label className="text-xs">Sommerferie slutter</Label>
+                      <MonthDayPicker
                         value={input.partnerSommerTilManedDag}
-                        onChange={(e) => setInput({ partnerSommerTilManedDag: e.target.value })} />
+                        onChange={(v) => setInput({ partnerSommerTilManedDag: v })}
+                      />
                     </div>
                   </div>
                 )}
