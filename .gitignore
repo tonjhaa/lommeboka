@@ -32,3 +32,5 @@ dist-ssr
 *.sw?
 .gstack/
 graphify-out/
+docs/slips/
+Lønnslipper/
