@@ -458,6 +458,23 @@ export const useEconomyStore = create<EconomyState>()(
             profile: updatedProfile,
           }
         })
+
+        // Last opp PDF til Supabase Storage i bakgrunnen
+        if (pdfBase64) {
+          import('@/lib/slipStorage').then(({ uploadSlipPDF }) => {
+            uploadSlipPDF(slip.periode.year, slip.periode.month, pdfBase64).then((path) => {
+              if (path) {
+                set((s) => ({
+                  monthHistory: s.monthHistory.map((m) =>
+                    m.year === slip.periode.year && m.month === slip.periode.month
+                      ? { ...m, slipStoragePath: path }
+                      : m
+                  ),
+                }))
+              }
+            })
+          })
+        }
       },
 
       // --- ATF ---
