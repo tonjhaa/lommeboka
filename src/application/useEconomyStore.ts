@@ -694,8 +694,8 @@ export const useEconomyStore = create<EconomyState>()(
           .filter((m) => m.source === 'imported_slip' && (m.slipData?.maanedslonn ?? 0) > 0)
           .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
 
-        // HTA-artskoder (Hoved­tariff­avtalens generelle tillegg i Forsvaret)
-        const HTA_ARTSKODER = new Set(['1040', '1041', '1042', '1043', '1044', '1045'])
+        // HTA-artskoder — 1162 er brukt i Forsvaret, 1040-1045 er alternative koder
+        const HTA_ARTSKODER = new Set(['1162', '1040', '1041', '1042', '1043', '1044', '1045'])
 
         const derived: LonnsoppgjorRecord[] = []
         let prevLonn = 0
