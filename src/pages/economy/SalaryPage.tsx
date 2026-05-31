@@ -1145,12 +1145,54 @@ function detectAvviksårsak(sd: import('@/types/economy').ParsetLonnsslipp, delt
   return null
 }
 
+type SlipSortKey = 'maaned' | 'netto' | 'avvik' | 'brutto' | 'skattesats'
+
+function SortHeader({
+  label,
+  col,
+  current,
+  dir,
+  onClick,
+  align = 'right',
+}: {
+  label: string
+  col: SlipSortKey
+  current: SlipSortKey
+  dir: 'asc' | 'desc'
+  onClick: (col: SlipSortKey) => void
+  align?: 'left' | 'right'
+}) {
+  const active = current === col
+  return (
+    <th
+      className={`py-1 pr-3 font-normal cursor-pointer select-none hover:text-foreground transition-colors ${active ? 'text-foreground' : ''} text-${align}`}
+      onClick={() => onClick(col)}
+    >
+      {label}
+      <span className="ml-0.5 opacity-60 text-[9px]">
+        {active ? (dir === 'asc' ? '↑' : '↓') : '↕'}
+      </span>
+    </th>
+  )
+}
+
 function LønnshistorikkTabell({
   slips,
 }: {
   slips: MonthRecord[]
 }) {
   const [viewingSlip, setViewingSlip] = useState<MonthRecord | null>(null)
+  const [sortKey, setSortKey] = useState<SlipSortKey>('maaned')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  function handleSort(col: SlipSortKey) {
+    if (col === sortKey) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(col)
+      setSortDir('desc')
+    }
+  }
 
   // Baseline = per bruttonivå: hva var normalt netto da brutto var X?
   // Grupper slipper etter brutto (±500 kr), finn median av ikke-outlier måneder per gruppe.
@@ -1172,6 +1214,38 @@ function LønnshistorikkTabell({
     bruttoBaselines.set(key, normal[Math.floor(normal.length / 2)] ?? roughMed)
   }
 
+  const sortedSlips = [...slips].sort((a, b) => {
+    const sd_a = a.slipData
+    const sd_b = b.slipData
+    const netto_a = sd_a?.nettoUtbetalt ?? a.nettoUtbetalt
+    const netto_b = sd_b?.nettoUtbetalt ?? b.nettoUtbetalt
+    const brutto_a = sd_a?.bruttoSum ?? 0
+    const brutto_b = sd_b?.bruttoSum ?? 0
+
+    const totalTrekk_a = sd_a ? sd_a.skattetrekk + sd_a.pensjonstrekk + sd_a.fagforeningskontingent + sd_a.ekstraTrekk + sd_a.husleietrekk + sd_a.ouFond : 0
+    const totalTrekk_b = sd_b ? sd_b.skattetrekk + sd_b.pensjonstrekk + sd_b.fagforeningskontingent + sd_b.ekstraTrekk + sd_b.husleietrekk + sd_b.ouFond : 0
+    const fullBrutto_a = sd_a ? netto_a + totalTrekk_a : 0
+    const fullBrutto_b = sd_b ? netto_b + totalTrekk_b : 0
+    const tax_a = sd_a && fullBrutto_a > 0 ? (sd_a.skattetrekk / fullBrutto_a) * 100 : 0
+    const tax_b = sd_b && fullBrutto_b > 0 ? (sd_b.skattetrekk / fullBrutto_b) * 100 : 0
+
+    const bruttoKey_a = Math.round(brutto_a / 500) * 500
+    const bruttoKey_b = Math.round(brutto_b / 500) * 500
+    const baseline_a = bruttoBaselines.get(bruttoKey_a) ?? 0
+    const baseline_b = bruttoBaselines.get(bruttoKey_b) ?? 0
+    const delta_a = baseline_a > 0 ? netto_a - baseline_a : 0
+    const delta_b = baseline_b > 0 ? netto_b - baseline_b : 0
+
+    let cmp = 0
+    if (sortKey === 'maaned') cmp = a.year !== b.year ? a.year - b.year : a.month - b.month
+    else if (sortKey === 'netto') cmp = netto_a - netto_b
+    else if (sortKey === 'avvik') cmp = delta_a - delta_b
+    else if (sortKey === 'brutto') cmp = brutto_a - brutto_b
+    else if (sortKey === 'skattesats') cmp = tax_a - tax_b
+
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+
   return (
     <>
       <Card>
@@ -1183,17 +1257,17 @@ function LønnshistorikkTabell({
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-card">
                 <tr className="text-muted-foreground border-b border-border">
-                  <th className="text-left py-1 pr-3 font-normal">Måned</th>
-                  <th className="text-right py-1 pr-3 font-normal">Netto</th>
-                  <th className="text-right py-1 pr-3 font-normal">Avvik fra normalt</th>
+                  <SortHeader label="Måned" col="maaned" current={sortKey} dir={sortDir} onClick={handleSort} align="left" />
+                  <SortHeader label="Netto" col="netto" current={sortKey} dir={sortDir} onClick={handleSort} />
+                  <SortHeader label="Avvik fra normalt" col="avvik" current={sortKey} dir={sortDir} onClick={handleSort} />
                   <th className="text-left py-1 pr-3 font-normal">Årsak</th>
-                  <th className="text-right py-1 pr-3 font-normal">Brutto</th>
-                  <th className="text-right py-1 pr-3 font-normal">Skattesats</th>
+                  <SortHeader label="Brutto" col="brutto" current={sortKey} dir={sortDir} onClick={handleSort} />
+                  <SortHeader label="Skattesats" col="skattesats" current={sortKey} dir={sortDir} onClick={handleSort} />
                   <th className="py-1" />
                 </tr>
               </thead>
               <tbody>
-                {slips.map((m) => {
+                {sortedSlips.map((m) => {
                   const netto = m.slipData?.nettoUtbetalt ?? m.nettoUtbetalt
                   const brutto = m.slipData?.bruttoSum ?? 0
                   // Rekonstruer full brutto fra kjente trekkkomponenter for korrekt skattesats
