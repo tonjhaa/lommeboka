@@ -114,6 +114,37 @@ export function computeMonthContributions(account: SavingsAccount, year: number,
     .reduce((s, c) => s + c.amount, 0)
 }
 
+export function computeMonthWithdrawals(account: SavingsAccount, year: number, month: number): number {
+  return (account.withdrawals ?? [])
+    .filter((w) => {
+      const d = new Date(w.date)
+      return d.getFullYear() === year && d.getMonth() + 1 === month
+    })
+    .reduce((s, w) => s + w.amount, 0) // amount er negativ
+}
+
+export function getBaseContribForPeriod(acc: SavingsAccount, year: number, month: number): number {
+  const periods = acc.contributionPeriods
+  if (periods && periods.length > 0) {
+    const ym = `${year}-${String(month).padStart(2, '0')}`
+    const period = periods.find(p => {
+      const from = p.fromDate ? p.fromDate.slice(0, 7) : '0000-00'
+      const to = p.toDate ? p.toDate.slice(0, 7) : '9999-99'
+      return ym >= from && ym <= to
+    })
+    return period ? Math.round(period.amount) : 0
+  }
+  const inRange = acc.monthlyContributionFromDate || acc.monthlyContributionToDate
+    ? (() => {
+        const ym2 = year * 100 + month
+        const from = acc.monthlyContributionFromDate ? parseInt(acc.monthlyContributionFromDate.slice(0, 4)) * 100 + parseInt(acc.monthlyContributionFromDate.slice(5, 7)) : 0
+        const to = acc.monthlyContributionToDate ? parseInt(acc.monthlyContributionToDate.slice(0, 4)) * 100 + parseInt(acc.monthlyContributionToDate.slice(5, 7)) : 999999
+        return ym2 >= from && ym2 <= to
+      })()
+    : true
+  return inRange ? Math.round(acc.monthlyContribution ?? 0) : 0
+}
+
 /**
  * Estimert dato for å nå targetBalance gitt nåværende saldo og estimert månedssparing.
  * Returnerer null hvis saldo allerede er nådd eller månedssparing = 0.

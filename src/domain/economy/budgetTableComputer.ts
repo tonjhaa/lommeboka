@@ -13,7 +13,7 @@ import type {
   FondPortfolio,
 } from '@/types/economy'
 import { estimateSalaryTrend, projectMonthlySalary } from './salaryCalculator'
-import { computeMonthContributions } from './savingsCalculator'
+import { computeMonthContributions, computeMonthWithdrawals, getBaseContribForPeriod } from './savingsCalculator'
 import { calcMonthlyTaxWithholding } from './norwegianTaxRules'
 
 // ----------------------------------------------------------------
@@ -590,43 +590,62 @@ export function computeBudgetTable(
   const sparingRows: BudgetRow[] = []
   const SAVINGS_CATS = new Set(['bsu', 'fond', 'krypto', 'buffer', 'annen_sparing'])
 
-  for (const acc of savingsAccounts.filter((a) => a.monthlyContribution > 0 || (a.contributions ?? []).length > 0)) {
+  const hasActivity = (a: SavingsAccount) =>
+    a.monthlyContribution > 0 ||
+    (a.contributionPeriods ?? []).length > 0 ||
+    (a.contributions ?? []).length > 0 ||
+    (a.withdrawals ?? []).length > 0
+
+  for (const acc of savingsAccounts.filter(hasActivity)) {
     sparingRows.push(mkRow(`sav-${acc.id}`, acc.label, uniform12(
       (m) => {
-        // Fast månedssparing (med override-støtte)
-        const monthlyInRange = monthInDateRange(year, m, acc.monthlyContributionFromDate, acc.monthlyContributionToDate)
-        const monthlyAmt = monthlyInRange ? acc.monthlyContribution : 0
+        const monthlyAmt = getBaseContribForPeriod(acc, year, m)
         const overriddenMonthly = monthlyAmt > 0 ? budgetVal(`sav-${acc.id}`, m, -monthlyAmt) : 0
-        // Enkeltinnskudd inngår alltid i budsjettet (de er planlagte)
         const oneTime = computeMonthContributions(acc, year, m)
-        return overriddenMonthly - oneTime
+        const withdrawal = computeMonthWithdrawals(acc, year, m) // negativ verdi
+        return overriddenMonthly - oneTime + withdrawal
       },
       (m) => {
         const oneTime = computeMonthContributions(acc, year, m)
-        if (oneTime <= 0) return null  // ingen enkeltinnskudd — fall through til budsjett (månedlig)
-        // Inkluder månedlig beløp i aktual-visningen slik at totalen stemmer
-        const monthlyInRange = monthInDateRange(year, m, acc.monthlyContributionFromDate, acc.monthlyContributionToDate)
-        const monthly = monthlyInRange ? acc.monthlyContribution : 0
-        return -(oneTime + monthly)
+        const withdrawal = computeMonthWithdrawals(acc, year, m)
+        if (oneTime <= 0 && withdrawal === 0) return null
+        const monthly = getBaseContribForPeriod(acc, year, m)
+        return -(oneTime + monthly) + withdrawal
       },
     )))
   }
 
   // KRON-fond spareavtale
-  if (fondPortfolio && fondPortfolio.monthlyDeposit > 0) {
+  if (fondPortfolio && (fondPortfolio.monthlyDeposit > 0 || (fondPortfolio.contributionPeriods ?? []).length > 0)) {
     const fondStartYear = new Date(fondPortfolio.startDate).getFullYear()
     const fondStartMonth = new Date(fondPortfolio.startDate).getMonth() + 1
     const nowYear = new Date().getFullYear()
     const nowMonth = new Date().getMonth() + 1
+
+    function fondMndForMonth(m: number): number {
+      const periods = fondPortfolio!.contributionPeriods
+      if (periods && periods.length > 0) {
+        const ym = `${year}-${String(m).padStart(2, '0')}`
+        const period = periods.find(p => {
+          const from = p.fromDate ? p.fromDate.slice(0, 7) : '0000-00'
+          const to = p.toDate ? p.toDate.slice(0, 7) : '9999-99'
+          return ym >= from && ym <= to
+        })
+        return period ? Math.round(period.amount) : 0
+      }
+      return fondPortfolio!.monthlyDeposit
+    }
+
     sparingRows.push(mkRow('kron-fond', 'KRON Fond', uniform12(
       (m) => {
         if (year < fondStartYear || (year === fondStartYear && m < fondStartMonth)) return 0
-        return budgetVal('kron-fond', m, -fondPortfolio.monthlyDeposit)
+        const mnd = fondMndForMonth(m)
+        return mnd > 0 ? budgetVal('kron-fond', m, -mnd) : 0
       },
       (m) => {
-        // Bruk faktisk = budsjett for alle passerte måneder (spareavtale er fast)
         if (year < fondStartYear || (year === fondStartYear && m < fondStartMonth)) return null
-        if (year < nowYear || (year === nowYear && m <= nowMonth)) return -fondPortfolio.monthlyDeposit
+        const mnd = fondMndForMonth(m)
+        if (year < nowYear || (year === nowYear && m <= nowMonth)) return mnd > 0 ? -mnd : null
         return null
       },
     )))

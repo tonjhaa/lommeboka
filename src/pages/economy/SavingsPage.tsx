@@ -1,6 +1,6 @@
 import { useState, useMemo, Fragment } from 'react'
 import { useAppStore } from '@/store/useAppStore'
-import { Plus, Trash2, Upload, ChevronDown, ChevronUp, Repeat2, Pencil, Check, X } from 'lucide-react'
+import { Plus, Trash2, Upload, ChevronDown, ChevronUp, Repeat2, Pencil, Check, X, AlertTriangle } from 'lucide-react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -535,14 +535,17 @@ const FULL_MONTH_NAMES = ['Januar', 'Februar', 'Mars', 'April', 'Mai', 'Juni', '
 
 /** Sjekker om et gitt år/måned faller innenfor en valgfri from/to-periode */
 function getBaseContribForMonth(acc: SavingsAccount, year: number, month: number, nowISO?: string): number {
-  // Fremtidige registrerte innskudd (etter today) som faller i denne måneden
-  const futureContribs = nowISO
-    ? (acc.contributions ?? [])
-        .filter(c => {
-          const d = new Date(c.date)
-          return d.getFullYear() === year && d.getMonth() + 1 === month && c.date > nowISO
+  // Fremtidige registrerte transaksjoner (etter today) som faller i denne måneden
+  const futureTxDelta = nowISO
+    ? [
+        ...(acc.contributions ?? []).map(c => ({ date: c.date, amount: c.amount })),
+        ...(acc.withdrawals ?? []).map(w => ({ date: w.date, amount: w.amount })),
+      ]
+        .filter(t => {
+          const d = new Date(t.date)
+          return d.getFullYear() === year && d.getMonth() + 1 === month && t.date > nowISO
         })
-        .reduce((s, c) => s + c.amount, 0)
+        .reduce((s, t) => s + t.amount, 0)
     : 0
 
   const periods = acc.contributionPeriods
@@ -553,10 +556,10 @@ function getBaseContribForMonth(acc: SavingsAccount, year: number, month: number
       const to = p.toDate ? p.toDate.slice(0, 7) : '9999-99'
       return ym >= from && ym <= to
     })
-    return (period ? Math.round(period.amount) : 0) + futureContribs
+    return (period ? Math.round(period.amount) : 0) + futureTxDelta
   }
   const active = isActiveMonth(year, month, acc.monthlyContributionFromDate, acc.monthlyContributionToDate)
-  return (active ? Math.round(acc.monthlyContribution ?? 0) : 0) + futureContribs
+  return (active ? Math.round(acc.monthlyContribution ?? 0) : 0) + futureTxDelta
 }
 
 function isActiveMonth(year: number, month: number, fromDate?: string, toDate?: string): boolean {
@@ -1917,12 +1920,16 @@ function AccountCard({
           <AddContributionForm
             onSave={(c) => { onAddContribution(c); setActiveTab(null) }}
             onCancel={() => setActiveTab(null)}
+            existingContributions={account.contributions ?? []}
+            existingWithdrawals={account.withdrawals ?? []}
           />
         )}
         {activeTab === 'uttak' && (
           <AddWithdrawalForm
             onSave={(w) => { onAddWithdrawal(w); setActiveTab(null) }}
             onCancel={() => setActiveTab(null)}
+            existingContributions={account.contributions ?? []}
+            existingWithdrawals={account.withdrawals ?? []}
           />
         )}
         {activeTab === 'saldo' && (
@@ -2099,58 +2106,99 @@ function SummaryCard({ label, value, subvalue }: { label: string; value: string;
   )
 }
 
-function AddContributionForm({ onSave, onCancel }: { onSave: (c: SavingsContribution) => void; onCancel: () => void }) {
+function dupWarning(date: string, existing: { date: string }[]): string | null {
+  const [y, m] = date.split('-').map(Number)
+  const hit = existing.find(e => {
+    const d = new Date(e.date)
+    return d.getFullYear() === y && d.getMonth() + 1 === m
+  })
+  return hit ? `Det finnes allerede en oppføring for ${new Date(date).toLocaleDateString('no-NO', { month: 'long', year: 'numeric' })}` : null
+}
+
+function AddContributionForm({
+  onSave, onCancel, existingContributions = [], existingWithdrawals = [],
+}: {
+  onSave: (c: SavingsContribution) => void
+  onCancel: () => void
+  existingContributions?: SavingsContribution[]
+  existingWithdrawals?: WithdrawalEntry[]
+}) {
   const today = new Date().toISOString().split('T')[0]
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(today)
   const [note, setNote] = useState('')
 
+  const warning = date ? dupWarning(date, [...existingContributions, ...existingWithdrawals]) : null
+
   return (
-    <div className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">
-      <div className="space-y-0.5">
-        <Label className="text-xs">Dato</Label>
-        <Input type="date" className="h-8 text-xs w-36" value={date} onChange={(e) => setDate(e.target.value)} />
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">
+        <div className="space-y-0.5">
+          <Label className="text-xs">Dato</Label>
+          <Input type="date" className="h-8 text-xs w-36" value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+        <div className="space-y-0.5">
+          <Label className="text-xs">Beløp (kr)</Label>
+          <Input type="number" className="h-8 text-xs w-28" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />
+        </div>
+        <div className="space-y-0.5 flex-1">
+          <Label className="text-xs">Notat (valgfritt)</Label>
+          <Input className="h-8 text-xs" value={note} onChange={(e) => setNote(e.target.value)} placeholder="f.eks. lønning" />
+        </div>
+        <Button size="sm" className="h-8 text-xs" onClick={() => onSave({ id: crypto.randomUUID(), date, amount: parseFloat(amount) || 0, note: note || undefined })}>
+          Lagre
+        </Button>
+        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={onCancel}>Avbryt</Button>
       </div>
-      <div className="space-y-0.5">
-        <Label className="text-xs">Beløp (kr)</Label>
-        <Input type="number" className="h-8 text-xs w-28" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />
-      </div>
-      <div className="space-y-0.5 flex-1">
-        <Label className="text-xs">Notat (valgfritt)</Label>
-        <Input className="h-8 text-xs" value={note} onChange={(e) => setNote(e.target.value)} placeholder="f.eks. lønning" />
-      </div>
-      <Button size="sm" className="h-8 text-xs" onClick={() => onSave({ id: crypto.randomUUID(), date, amount: parseFloat(amount) || 0, note: note || undefined })}>
-        Lagre
-      </Button>
-      <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={onCancel}>Avbryt</Button>
+      {warning && (
+        <p className="flex items-center gap-1 text-[11px] text-amber-400">
+          <AlertTriangle className="h-3 w-3 shrink-0" />{warning}
+        </p>
+      )}
     </div>
   )
 }
 
-function AddWithdrawalForm({ onSave, onCancel }: { onSave: (w: WithdrawalEntry) => void; onCancel: () => void }) {
+function AddWithdrawalForm({
+  onSave, onCancel, existingContributions = [], existingWithdrawals = [],
+}: {
+  onSave: (w: WithdrawalEntry) => void
+  onCancel: () => void
+  existingContributions?: SavingsContribution[]
+  existingWithdrawals?: WithdrawalEntry[]
+}) {
   const today = new Date().toISOString().split('T')[0]
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(today)
   const [note, setNote] = useState('')
 
+  const warning = date ? dupWarning(date, [...existingContributions, ...existingWithdrawals]) : null
+
   return (
-    <div className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">
-      <div className="space-y-0.5">
-        <Label className="text-xs">Dato</Label>
-        <Input type="date" className="h-8 text-xs w-36" value={date} onChange={(e) => setDate(e.target.value)} />
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">
+        <div className="space-y-0.5">
+          <Label className="text-xs">Dato</Label>
+          <Input type="date" className="h-8 text-xs w-36" value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+        <div className="space-y-0.5">
+          <Label className="text-xs">Beløp (kr)</Label>
+          <Input type="number" className="h-8 text-xs w-28" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />
+        </div>
+        <div className="space-y-0.5 flex-1">
+          <Label className="text-xs">Notat (valgfritt)</Label>
+          <Input className="h-8 text-xs" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Årsak" />
+        </div>
+        <Button size="sm" className="h-8 text-xs" onClick={() => onSave({ id: crypto.randomUUID(), date, amount: -(parseFloat(amount) || 0), note: note || undefined })}>
+          Lagre
+        </Button>
+        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={onCancel}>Avbryt</Button>
       </div>
-      <div className="space-y-0.5">
-        <Label className="text-xs">Beløp (kr)</Label>
-        <Input type="number" className="h-8 text-xs w-28" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />
-      </div>
-      <div className="space-y-0.5 flex-1">
-        <Label className="text-xs">Notat (valgfritt)</Label>
-        <Input className="h-8 text-xs" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Årsak" />
-      </div>
-      <Button size="sm" className="h-8 text-xs" onClick={() => onSave({ id: crypto.randomUUID(), date, amount: -(parseFloat(amount) || 0), note: note || undefined })}>
-        Lagre
-      </Button>
-      <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={onCancel}>Avbryt</Button>
+      {warning && (
+        <p className="flex items-center gap-1 text-[11px] text-amber-400">
+          <AlertTriangle className="h-3 w-3 shrink-0" />{warning}
+        </p>
+      )}
     </div>
   )
 }
