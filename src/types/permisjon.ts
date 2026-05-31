@@ -38,6 +38,7 @@ export interface PermisjonInput {
   partnerFerieblokker: FerieBlokk[]  // typisk sommer-ferie
   partnerSommerFraManedDag: string   // default "06-22"
   partnerSommerTilManedDag: string   // default "08-14"
+  fellesTilMor?: number | null       // antall uker av fellesperioden mor tar (null = 50/50)
 }
 
 export interface TilgjengeligeUker {

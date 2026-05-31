@@ -221,6 +221,59 @@ export function validerPlan(input: PermisjonInput, perioder: PermisjonPeriode[])
   return { ok: feil.length === 0, advarsler, feil }
 }
 
+export function genererPlanFordelt(input: PermisjonInput): PermisjonPeriode[] {
+  const fodsel = input.fodselsDato ?? input.terminDato
+  const t = beregnTilgjengeligeUker(input)
+  const perioder: PermisjonPeriode[] = []
+
+  const fellesTotal = t.fellesperiode
+  let fellesTilMor = input.fellesTilMor == null ? Math.round(fellesTotal / 2) : input.fellesTilMor
+  fellesTilMor = Math.max(0, Math.min(fellesTotal, fellesTilMor))
+  const fellesTilPartner = fellesTotal - fellesTilMor
+
+  perioder.push({ id: 'mor-for-termin', type: 'mor_før_termin', owner: 'meg',
+    fra: addWeeks(input.terminDato, -t.forTermin), til: addDays(fodsel, -1) })
+
+  const obligSlutt = addWeeks(fodsel, t.obligatorisk.etterFodsel)
+  perioder.push({ id: 'mor-obligatorisk', type: 'mor_obligatorisk', owner: 'meg',
+    fra: fodsel, til: addDays(obligSlutt, -1) })
+
+  const morFleks = t.mødrekvote - t.obligatorisk.etterFodsel
+  let cursor = obligSlutt
+  if (morFleks > 0) {
+    perioder.push({ id: 'mor-kvote', type: 'mor_kvote', owner: 'meg',
+      fra: cursor, til: addDays(addWeeks(cursor, morFleks), -1) })
+    cursor = addWeeks(cursor, morFleks)
+  }
+  if (fellesTilMor > 0) {
+    perioder.push({ id: 'felles-mor', type: 'felles_mor', owner: 'meg',
+      fra: cursor, til: addDays(addWeeks(cursor, fellesTilMor), -1) })
+    cursor = addWeeks(cursor, fellesTilMor)
+  }
+  const morSlutt = cursor
+
+  const uke7 = addWeeks(fodsel, 7)
+  let earliest = uke7
+  if (input.partnerErLærer) {
+    const y = new Date(fodsel).getFullYear()
+    const sommerSlutter = [y, y + 1]
+      .map((yy) => `${yy}-${input.partnerSommerTilManedDag}`)
+      .find((d) => d > uke7)
+    if (sommerSlutter && sommerSlutter > uke7) earliest = sommerSlutter
+  }
+  let pStart = morSlutt > earliest ? morSlutt : earliest
+
+  perioder.push({ id: 'far-kvote', type: 'far_kvote', owner: 'partner',
+    fra: pStart, til: addDays(addWeeks(pStart, t.fedrekvote), -1) })
+  pStart = addWeeks(pStart, t.fedrekvote)
+
+  if (fellesTilPartner > 0) {
+    perioder.push({ id: 'felles-far', type: 'felles_far', owner: 'partner',
+      fra: pStart, til: addDays(addWeeks(pStart, fellesTilPartner), -1) })
+  }
+  return perioder
+}
+
 export function beregnOppsummering(input: PermisjonInput, perioder: PermisjonPeriode[]): PermisjonOppsummering {
   const tilgjengelig = beregnTilgjengeligeUker(input)
   const barnehageStart = beregnBarnehageStart(input.terminDato, input.fodselsDato)

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { PermisjonInput, PermisjonPeriode, ChatMessage } from '@/types/permisjon'
-import { genererStandardPlan } from '@/domain/economy/foreldrepengerRules'
+import { genererPlanFordelt } from '@/domain/economy/foreldrepengerRules'
 
 const DEFAULT_INPUT: PermisjonInput = {
   terminDato: '',
@@ -14,6 +14,7 @@ const DEFAULT_INPUT: PermisjonInput = {
   partnerFerieblokker: [],
   partnerSommerFraManedDag: '06-22',
   partnerSommerTilManedDag: '08-14',
+  fellesTilMor: null,
 }
 
 interface PermisjonStoreState {
@@ -44,7 +45,7 @@ export const usePermisjonStore = create<PermisjonStoreState>()(
       genererPlan: () => {
         const { input } = get()
         if (!input.terminDato) return
-        set({ perioder: genererStandardPlan(input) })
+        set({ perioder: genererPlanFordelt(input) })
       },
 
       addChatMessage: (msg) =>

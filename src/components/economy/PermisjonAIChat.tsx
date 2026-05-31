@@ -101,28 +101,35 @@ export function PermisjonAIChat({
   }
 
   return (
-    <div className="flex flex-col h-full min-h-[500px] space-y-3">
+    <div className="flex flex-col h-full min-h-[500px] gap-4 max-w-3xl">
+      {/* Topplinje med avatar */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Bot className="h-4 w-4 text-blue-400" />
-          <span className="text-sm font-medium">AI-rådgiver</span>
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-xl bg-primary/15 text-primary grid place-items-center">
+            <Bot className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-base font-semibold leading-tight">AI-rådgiver</p>
+            <p className="text-xs text-muted-foreground">Kjenner regelverket og situasjonen din</p>
+          </div>
         </div>
         {chatHistory.length > 0 && (
-          <Button variant="ghost" size="sm" className="text-xs h-6 gap-1" onClick={clearChat}>
-            <RefreshCw className="h-3 w-3" /> Ny samtale
+          <Button variant="ghost" size="sm" className="text-xs gap-1.5" onClick={clearChat}>
+            <RefreshCw className="h-3.5 w-3.5" /> Ny samtale
           </Button>
         )}
       </div>
 
+      {/* Forslag som piller */}
       {chatHistory.length === 0 && (
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">Vanlige spørsmål:</p>
-          <div className="flex flex-wrap gap-1.5">
+        <div className="space-y-2.5">
+          <p className="text-sm text-muted-foreground">Vanlige spørsmål</p>
+          <div className="flex flex-wrap gap-2">
             {FORSLAG.map((f) => (
               <button
                 key={f}
                 onClick={() => send(f)}
-                className="text-xs px-2 py-1 rounded border border-border hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground"
+                className="rounded-full px-4 py-2 text-[13px] font-medium border border-border bg-muted/20 text-foreground/80 transition-colors hover:bg-primary/15 hover:border-primary/50 hover:text-primary"
               >
                 {f}
               </button>
@@ -131,19 +138,25 @@ export function PermisjonAIChat({
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto space-y-3 rounded-md border border-border p-3 bg-muted/10 min-h-40">
+      {/* Chat-vindu */}
+      <div className="flex-1 overflow-y-auto rounded-2xl border border-border bg-muted/10 p-5 flex flex-col gap-4 min-h-[400px]">
         {chatHistory.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center py-4">
-            Still meg et spørsmål om permisjonplanlegging — jeg kjenner regelverket og situasjonen din.
+          <p className="m-auto max-w-sm text-center text-sm text-muted-foreground leading-relaxed">
+            Still meg et spørsmål om permisjonsplanlegging — jeg kjenner regelverket og situasjonen din.
           </p>
         )}
         {chatHistory.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          <div key={i} className={`flex gap-3 max-w-[82%] ${msg.role === 'user' ? 'ml-auto flex-row-reverse' : ''}`}>
+            {msg.role === 'assistant' && (
+              <div className="h-7 w-7 shrink-0 rounded-lg bg-primary/15 text-primary grid place-items-center">
+                <Bot className="h-4 w-4" />
+              </div>
+            )}
             <div
-              className={`max-w-[80%] rounded-lg px-3 py-2 text-xs whitespace-pre-wrap ${
+              className={`px-4 py-3 text-[13.5px] leading-relaxed whitespace-pre-wrap ${
                 msg.role === 'user'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-foreground'
+                  ? 'bg-primary text-primary-foreground rounded-2xl rounded-tr-sm'
+                  : 'bg-card border border-border text-foreground rounded-2xl rounded-tl-sm'
               }`}
             >
               {msg.content}
@@ -151,9 +164,16 @@ export function PermisjonAIChat({
           </div>
         ))}
         {loading && (
-          <div className="flex justify-start">
-            <div className="bg-muted rounded-lg px-3 py-2 text-xs text-muted-foreground animate-pulse">
-              Tenker…
+          <div className="flex gap-3">
+            <div className="h-7 w-7 shrink-0 rounded-lg bg-primary/15 text-primary grid place-items-center">
+              <Bot className="h-4 w-4" />
+            </div>
+            <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3">
+              <div className="flex gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:-0.3s]" />
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:-0.15s]" />
+                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce" />
+              </div>
             </div>
           </div>
         )}
@@ -161,10 +181,11 @@ export function PermisjonAIChat({
         <div ref={bottomRef} />
       </div>
 
-      <div className="flex gap-2">
+      {/* Inndatafelt */}
+      <div className="flex gap-2.5">
         <input
-          className="flex-1 h-9 rounded-md border border-border bg-background px-3 text-xs outline-none focus:border-primary"
-          placeholder="Spør om permisjonplanlegging…"
+          className="flex-1 h-12 rounded-xl border border-border bg-background px-4 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
+          placeholder="Spør om permisjonsplanlegging…"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -172,8 +193,8 @@ export function PermisjonAIChat({
           }}
           disabled={loading}
         />
-        <Button size="sm" className="h-9 px-3" onClick={() => send(draft)} disabled={!draft.trim() || loading}>
-          <Send className="h-3.5 w-3.5" />
+        <Button size="lg" className="h-12 px-5 gap-2" onClick={() => send(draft)} disabled={!draft.trim() || loading}>
+          <Send className="h-4 w-4" /> Send
         </Button>
       </div>
     </div>
