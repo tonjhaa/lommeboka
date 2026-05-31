@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   Shield, Briefcase, PiggyBank, BarChart2, CreditCard,
   FileText, TrendingUp, RefreshCw, HeartPulse, Umbrella,
-  Palmtree, CheckCircle2, ArrowRight, ChevronLeft, Map, Gift,
+  Palmtree, CheckCircle2, ArrowRight, ChevronLeft, Map, Gift, Baby,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -107,6 +107,13 @@ export const MODULES: ModuleOption[] = [
     desc: 'Planlegg og fordel gaveutgifter gjennom året',
     icon: Gift,
     defaultFor: ['forsvaret', 'custom'],
+  },
+  {
+    tab: 'permisjon',
+    label: 'Permisjon',
+    desc: 'Planlegg foreldrepermisjon og se lønnsutfall',
+    icon: Baby,
+    defaultFor: [],
   },
 ]
 

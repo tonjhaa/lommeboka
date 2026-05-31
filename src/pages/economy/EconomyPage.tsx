@@ -19,6 +19,7 @@ import {
   Umbrella,
   Map,
   Gift,
+  Baby,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -67,6 +68,9 @@ const VeikartPage = lazy(() =>
 const GiftPage = lazy(() =>
   import('./GiftPage').then((m) => ({ default: m.GiftPage }))
 )
+const PermisjonPage = lazy(() =>
+  import('./PermisjonPage').then((m) => ({ default: m.PermisjonPage }))
+)
 
 interface NavItem {
   page: EconomySubPage
@@ -89,6 +93,7 @@ const NAV_ITEMS: NavItem[] = [
   { page: 'vacation', label: 'Ferie', Icon: Umbrella },
   { page: 'veikart', label: 'Veikart', Icon: Map },
   { page: 'gaver', label: 'Gaver', Icon: Gift },
+  { page: 'permisjon', label: 'Permisjon', Icon: Baby },
 ]
 
 function PageFallback() {
@@ -189,6 +194,7 @@ export function EconomyPage() {
           {currentPage === 'vacation' && <VacationPage />}
           {currentPage === 'veikart' && <VeikartPage />}
           {currentPage === 'gaver' && <GiftPage />}
+          {currentPage === 'permisjon' && <PermisjonPage />}
           {currentPage === 'settings' && <EconomySettingsPage />}
         </Suspense>
         </PageErrorBoundary>
