@@ -1091,17 +1091,25 @@ function LønnshistorikkTabell({
 }) {
   const [viewingSlip, setViewingSlip] = useState<MonthRecord | null>(null)
 
-  // Baseline = siste "normale" måneds netto (filtrerer ut åpenbare outliers som feriepenger og ATF)
-  const allNettos = slips.map((m) => m.slipData?.nettoUtbetalt ?? m.nettoUtbetalt).filter((n) => n > 0)
-  const roughMedian = allNettos.length > 0
-    ? [...allNettos].sort((a, b) => a - b)[Math.floor(allNettos.length / 2)]
-    : 0
-  const normalThreshold = roughMedian * 1.15
-  const baseline = slips.find((m) => {
+  // Baseline = per bruttonivå: hva var normalt netto da brutto var X?
+  // Grupper slipper etter brutto (±500 kr), finn median av ikke-outlier måneder per gruppe.
+  const bruttoGroups = new Map<number, number[]>()
+  for (const m of slips) {
+    const b = m.slipData?.bruttoSum ?? 0
     const n = m.slipData?.nettoUtbetalt ?? m.nettoUtbetalt
-    return n > 0 && n <= normalThreshold
-  })
-  const baselineNetto = baseline ? (baseline.slipData?.nettoUtbetalt ?? baseline.nettoUtbetalt) : 0
+    if (b > 0 && n > 0) {
+      const key = Math.round(b / 500) * 500
+      if (!bruttoGroups.has(key)) bruttoGroups.set(key, [])
+      bruttoGroups.get(key)!.push(n)
+    }
+  }
+  const bruttoBaselines = new Map<number, number>()
+  for (const [key, nettos] of bruttoGroups) {
+    const sorted = [...nettos].sort((a, b) => a - b)
+    const roughMed = sorted[Math.floor(sorted.length / 2)]
+    const normal = sorted.filter((n) => n <= roughMed * 1.15)
+    bruttoBaselines.set(key, normal[Math.floor(normal.length / 2)] ?? roughMed)
+  }
 
   return (
     <>
@@ -1127,7 +1135,9 @@ function LønnshistorikkTabell({
                   const netto = m.slipData?.nettoUtbetalt ?? m.nettoUtbetalt
                   const brutto = m.slipData?.bruttoSum ?? 0
                   const taxRate = brutto > 0 && m.slipData ? (m.slipData.skattetrekk / brutto) * 100 : null
-                  const delta = baselineNetto > 0 ? netto - baselineNetto : null
+                  const bruttoKey = Math.round(brutto / 500) * 500
+                  const slipBaseline = bruttoBaselines.get(bruttoKey) ?? 0
+                  const delta = slipBaseline > 0 ? netto - slipBaseline : null
                   return (
                     <tr key={`${m.year}-${m.month}`} className="border-b border-border/40 hover:bg-muted/10">
                       <td className="py-1.5 pr-3 text-muted-foreground">{MONTH_NAMES[m.month]} {m.year}</td>
