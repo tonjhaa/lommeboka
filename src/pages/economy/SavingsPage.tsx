@@ -755,6 +755,12 @@ function MånedsoversiktTable({
 
       // Fond — månedlig compounding (markedsbasert, daglig kursendring)
       const fondKey = `fond-${year}-${month}`
+      const ym = `${year}-${String(month).padStart(2, '0')}`
+      const activeFondPeriod = fondPortfolio?.contributionPeriods?.find(p => {
+        const from = p.fromDate ? p.fromDate.slice(0, 7) : '0000-00'
+        const to = p.toDate ? p.toDate.slice(0, 7) : '9999-99'
+        return ym >= from && ym <= to
+      }) ?? null
       const baseFondMnd = fondPortfolio ? getFondContribForMonth(fondPortfolio, year, month) : fondMonthlyDeposit
       const effectiveFondMnd = fondKey in contribOverrides ? contribOverrides[fondKey] : baseFondMnd
       const fondInterest = fondBal * FOND_RATE_TABLE / 100 / 12
@@ -817,6 +823,7 @@ function MånedsoversiktTable({
         fondBalance: fondBal,
         fondContrib: Math.round(effectiveFondMnd),
         fondInterest: Math.round(fondInterest),
+        fondPeriod: activeFondPeriod,
         partnerAccBalances,
         partnerBsuBalance: partnerBsuBal,
         partnerBsuContrib: partnerBsuMnd,
@@ -1168,12 +1175,27 @@ function MånedsoversiktTable({
                       <td colSpan={2} className="border-r border-border p-0">
                         <div className="flex items-center">
                           <span className="flex-1 px-3 py-1">
+                            {row.fondPeriod && !(`fond-${row.year}-${row.month}` in contribOverrides) ? (
+                              <span
+                                className="flex items-center gap-1"
+                                title={`Spareperiode: ${Math.round(row.fondPeriod.amount).toLocaleString('no-NO')} kr/mnd${row.fondPeriod.fromDate ? ` · fra ${row.fondPeriod.fromDate.slice(0, 7)}` : ''}${row.fondPeriod.toDate ? ` → ${row.fondPeriod.toDate.slice(0, 7)}` : ''}`}
+                              >
+                                <InnskuddCell
+                                  value={row.fondContrib}
+                                  isOverridden={false}
+                                  onChange={v => setMonthOverride('fond', row.year, row.month, v)}
+                                  onFillDown={v => fillDown('fond', row.year, row.month, v)}
+                                />
+                                <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-medium bg-teal-900/40 text-teal-400 leading-none">P</span>
+                              </span>
+                            ) : (
                             <InnskuddCell
                               value={row.fondContrib}
                               isOverridden={`fond-${row.year}-${row.month}` in contribOverrides}
                               onChange={v => setMonthOverride('fond', row.year, row.month, v)}
                               onFillDown={v => fillDown('fond', row.year, row.month, v)}
                             />
+                            )}
                           </span>
                           <span className="flex-1 px-3 py-1 text-right font-mono text-teal-400 whitespace-nowrap">
                             {fmtNOK(row.fondBalance)}
