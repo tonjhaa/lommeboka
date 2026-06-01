@@ -1,4 +1,9 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function lazyWithRetry<T extends React.ComponentType<any>>(f: () => Promise<{ default: T }>): React.LazyExoticComponent<T> {
+  return lazy(async () => { try { return await f() } catch (e) { const k = `lazy-reload-${f.toString().slice(0,60)}`; if (!sessionStorage.getItem(k)) { sessionStorage.setItem(k,'1'); window.location.reload(); return new Promise<{default:T}>(()=>{}) } throw e } })
+}
 import { useAppStore } from '@/store/useAppStore'
 import { useNewScenario } from '@/hooks/useNewScenario'
 import { useAllCalculations } from '@/hooks/useCalculator'
@@ -9,10 +14,10 @@ import { Button } from '@/components/ui/button'
 import { Plus, Calculator, FileInput, BarChart2, BarChart3, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-const ScenarioComparison = lazy(() =>
+const ScenarioComparison = lazyWithRetry(() =>
   import('@/components/scenarios/ScenarioComparison').then((m) => ({ default: m.ScenarioComparison }))
 )
-const SettingsPanel = lazy(() =>
+const SettingsPanel = lazyWithRetry(() =>
   import('@/components/settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel }))
 )
 

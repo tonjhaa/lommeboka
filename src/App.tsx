@@ -1,4 +1,23 @@
 import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  factory: () => Promise<{ default: T }>
+): React.LazyExoticComponent<T> {
+  return lazy(async () => {
+    try {
+      return await factory()
+    } catch (e) {
+      const key = `lazy-reload-${factory.toString().slice(0, 60)}`
+      if (!sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key, '1')
+        window.location.reload()
+        return new Promise<{ default: T }>(() => {})
+      }
+      throw e
+    }
+  })
+}
 import { AppLayout } from '@/components/layout/AppLayout'
 import { MainNav } from '@/components/layout/MainNav'
 import { CalculatorPage } from '@/pages/CalculatorPage'
@@ -10,25 +29,25 @@ import { LoginPage } from '@/pages/LoginPage'
 import { loadFromSupabase, startAutoSync } from '@/lib/syncEconomyData'
 import { useEconomyStore } from '@/application/useEconomyStore'
 
-const EconomyPage = lazy(() =>
+const EconomyPage = lazyWithRetry(() =>
   import('@/pages/economy/EconomyPage').then((m) => ({
     default: m.EconomyPage,
   }))
 )
 
-const VeikartPage = lazy(() =>
+const VeikartPage = lazyWithRetry(() =>
   import('@/pages/economy/VeikartPage').then((m) => ({
     default: m.VeikartPage,
   }))
 )
 
-const TaxCalculatorPage = lazy(() =>
+const TaxCalculatorPage = lazyWithRetry(() =>
   import('@/pages/TaxCalculatorPage').then((m) => ({
     default: m.TaxCalculatorPage as ComponentType,
   }))
 )
 
-const PartnerPage = lazy(() =>
+const PartnerPage = lazyWithRetry(() =>
   import('@/pages/economy/PartnerPage').then((m) => ({ default: m.PartnerPage }))
 )
 
