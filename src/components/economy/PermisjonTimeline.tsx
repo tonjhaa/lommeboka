@@ -203,13 +203,70 @@ function PlanLegend({ partnerErLærer }: { partnerErLærer: boolean }) {
       {partnerErLærer && <span className="flex items-center gap-2 text-xs text-muted-foreground"><span className="inline-block w-3 h-3 rounded-[4px] bg-yellow-500/50" />Sommerferie</span>}
       <span className="flex items-center gap-2 text-xs text-muted-foreground"><span className="inline-block w-3 h-3 rounded-[4px] border-2 border-pink-500" />Termin</span>
       <span className="flex items-center gap-2 text-xs text-muted-foreground">🎒 Barnehageplass</span>
+      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="relative inline-block w-3 h-3 rounded-[4px] bg-muted ring-1 ring-red-500/50"><span className="absolute top-[1px] right-[1px] w-1 h-1 rounded-full bg-red-500" /></span>
+        Helligdag (teller ikke)
+      </span>
     </div>
   )
 }
 
 /* ============================================================================
+ *  Norske helligdager — Meeus/Jones/Butcher-algoritme for påsken + faste dager
+ * ========================================================================== */
+
+function easterSunday(year: number): Date {
+  const a = year % 19
+  const b = Math.floor(year / 100)
+  const c = year % 100
+  const d = Math.floor(b / 4)
+  const e = b % 4
+  const f = Math.floor((b + 8) / 25)
+  const g = Math.floor((b - f + 1) / 3)
+  const h = (19 * a + b - d - g + 15) % 30
+  const i = Math.floor(c / 4)
+  const k = c % 4
+  const l = (32 + 2 * e + 2 * i - h - k) % 7
+  const m = Math.floor((a + 11 * h + 22 * l) / 451)
+  const month = Math.floor((h + l - 7 * m + 114) / 31) - 1
+  const day = ((h + l - 7 * m + 114) % 31) + 1
+  return new Date(year, month, day)
+}
+
+function addDaysToDate(d: Date, days: number): Date {
+  const r = new Date(d)
+  r.setDate(r.getDate() + days)
+  return r
+}
+
+/** Returnerer Map<'YYYY-MM-DD', navn> for alle norske helligdager i gitt år */
+function getNorskHelligdager(year: number): Map<string, string> {
+  const map = new Map<string, string>()
+  const fmt = (d: Date) => d.toISOString().split('T')[0]
+
+  // Faste helligdager
+  map.set(`${year}-01-01`, 'Nyttårsdag')
+  map.set(`${year}-05-01`, 'Arbeidernes dag')
+  map.set(`${year}-05-17`, 'Grunnlovsdag')
+  map.set(`${year}-12-25`, '1. juledag')
+  map.set(`${year}-12-26`, '2. juledag')
+
+  // Påskebaserte (bevegelige)
+  const påske = easterSunday(year)
+  map.set(fmt(addDaysToDate(påske, -3)), 'Skjærtorsdag')
+  map.set(fmt(addDaysToDate(påske, -2)), 'Langfredag')
+  map.set(fmt(påske),                   '1. påskedag')
+  map.set(fmt(addDaysToDate(påske,  1)), '2. påskedag')
+  map.set(fmt(addDaysToDate(påske, 39)), 'Kristi himmelfartsdag')
+  map.set(fmt(addDaysToDate(påske, 49)), '1. pinsedag')
+  map.set(fmt(addDaysToDate(påske, 50)), '2. pinsedag')
+
+  return map
+}
+
+/* ============================================================================
  *  PermisjonKalender — NAV-stil månedskalender. Dager farges etter hvem som
- *  er hjemme; helg = grå; termin- og barnehage-markør.
+ *  er hjemme; helg = grå; helligdager = rød kant; termin- og barnehage-markør.
  * ========================================================================== */
 const UKEDAGER = ['ma', 'ti', 'on', 'to', 'fr', 'lø', 'sø']
 const MND_NAVN = ['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember']
@@ -259,7 +316,15 @@ export function PermisjonKalender({
   const stop = new Date(lastDate.getFullYear(), lastDate.getMonth(), 1)
   while (m <= stop && months.length < 18) { months.push(new Date(m)); m.setMonth(m.getMonth() + 1) }
 
-  function dayClass(info: { type: string; owner: string } | undefined, isWeekend: boolean): string {
+  // Forhåndsberegn helligdager for alle relevante år
+  const helligdagÅr = new Set(months.map((mo) => mo.getFullYear()))
+  const helligdager = new Map<string, string>()
+  helligdagÅr.forEach((yr) => {
+    getNorskHelligdager(yr).forEach((navn, dato) => helligdager.set(dato, navn))
+  })
+
+  function dayClass(info: { type: string; owner: string } | undefined, isWeekend: boolean, isHelligdag: boolean): string {
+    if (isHelligdag) return 'bg-muted text-muted-foreground'  // helligdag = ikke stønadsdager, grå som helg
     if (!info) return 'bg-muted/20 text-muted-foreground/60'
     if (isWeekend) return 'bg-muted text-muted-foreground'
     if (info.owner === 'partner') return `${info.type === 'felles_far' ? 'bg-green-500' : 'bg-green-600'} text-white`
@@ -294,16 +359,22 @@ export function PermisjonKalender({
                   const ds = ymd(cell)
                   const info = dayMap[ds]
                   const isWeekend = ci === 5 || ci === 6
+                  const helligdagNavn = helligdager.get(ds)
+                  const isHelligdag = !!helligdagNavn && !isWeekend  // helg er allerede grå
                   const isTermin = ds === input.terminDato
                   const isBhg = ds === barnehageStart
+                  const tooltip = helligdagNavn
+                    ? helligdagNavn
+                    : info ? (info.owner === 'partner' ? 'Partners periode' : 'Mors/medmors periode') : ''
                   return (
                     <span
                       key={ci}
-                      className={`relative aspect-square grid place-items-center text-[12.5px] font-medium rounded-lg ${dayClass(info, isWeekend)} ${isTermin ? 'ring-2 ring-pink-500 ring-inset !text-pink-200 font-bold' : ''} ${isBhg ? 'ring-2 ring-amber-500 ring-inset' : ''}`}
-                      title={info ? (info.owner === 'partner' ? 'Partners periode' : 'Mors periode') : ''}
+                      className={`relative aspect-square grid place-items-center text-[12.5px] font-medium rounded-lg ${dayClass(info, isWeekend, isHelligdag)} ${isTermin ? 'ring-2 ring-pink-500 ring-inset !text-pink-200 font-bold' : ''} ${isBhg ? 'ring-2 ring-amber-500 ring-inset' : ''} ${isHelligdag ? 'ring-1 ring-red-500/50' : ''}`}
+                      title={tooltip}
                     >
                       {cell.getDate()}
-                      {ferieDays[ds] && <span className="absolute bottom-[3px] left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-orange-500" />}
+                      {isHelligdag && <span className="absolute top-[2px] right-[2px] w-1 h-1 rounded-full bg-red-500" />}
+                      {ferieDays[ds] && !isHelligdag && <span className="absolute bottom-[3px] left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-orange-500" />}
                       {isBhg && <span className="absolute -top-1.5 -right-1 text-[11px]">🎒</span>}
                     </span>
                   )
