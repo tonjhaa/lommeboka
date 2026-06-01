@@ -140,11 +140,11 @@ export function PermisjonTimeline({
             <div className="absolute w-0.5 bg-amber-500/80" style={{ left: `${bhgLeft}%`, top: -2, bottom: 70 }} />
           </div>
 
-          {/* Mor */}
+          {/* Mor / Medmor */}
           <div className="flex items-center gap-4 mb-3.5">
             <div className="w-32 shrink-0">
               <p className="text-sm font-semibold flex items-center gap-2"><span className="inline-block w-2.5 h-2.5 rounded-[3px] bg-blue-500" /> Meg</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">{input.fodselsDato ? 'mor' : 'mor (gravid)'}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{input.morErMeg ? (input.fodselsDato ? 'mor' : 'mor (gravid)') : 'medmor / far'}</p>
             </div>
             <div className="relative flex-1 h-12 rounded-xl bg-muted/20 border border-border overflow-hidden">
               {input.mineFerieblokker.map((f, i) => (
@@ -158,7 +158,7 @@ export function PermisjonTimeline({
           <div className="flex items-center gap-4">
             <div className="w-32 shrink-0">
               <p className="text-sm font-semibold flex items-center gap-2"><span className="inline-block w-2.5 h-2.5 rounded-[3px] bg-green-600" /> Partner</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">{input.partnerErLærer ? 'lærer' : 'far / medmor'}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{input.morErMeg ? (input.partnerErLærer ? 'medmor/far · lærer' : 'medmor / far') : (input.fodselsDato ? 'mor' : 'mor (gravid)')}</p>
             </div>
             <div className="relative flex-1 h-12 rounded-xl bg-muted/20 border border-border overflow-hidden">
               {sommerBlokker.map((f, i) => (

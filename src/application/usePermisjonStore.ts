@@ -4,6 +4,7 @@ import type { PermisjonInput, PermisjonPeriode, ChatMessage } from '@/types/perm
 import { genererPlanFordelt } from '@/domain/economy/foreldrepengerRules'
 
 const DEFAULT_INPUT: PermisjonInput = {
+  morErMeg: true,
   terminDato: '',
   fodselsDato: undefined,
   dekningsgrad: 100,

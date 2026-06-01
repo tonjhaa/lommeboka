@@ -105,6 +105,12 @@ export function PermisjonPage() {
   const oppsummering = input.terminDato && perioder.length > 0 ? beregnOppsummering(input, perioder) : null
   const barnehageStart = input.terminDato ? beregnBarnehageStart(input.terminDato, input.fodselsDato) : null
 
+  // Rollebaserte labels — hvem er "meg" og hvem er "partner"?
+  const megLabel = input.morErMeg ? 'Mor (meg)' : 'Medmor/far (meg)'
+  const partnerLabel = input.morErMeg ? 'Medmor/far' : 'Mor (partner)'
+  const megKort = input.morErMeg ? 'Mor' : 'Medmor/far'
+  const partnerKort = input.morErMeg ? 'Medmor/far' : 'Mor'
+
   function leggTilMinFerie() {
     if (!minFerieFra || !minFerieTil) return
     setInput({ mineFerieblokker: [...input.mineFerieblokker, { fra: minFerieFra, til: minFerieTil, label: 'Ferie' }] })
@@ -195,9 +201,34 @@ export function PermisjonPage() {
                 {/* --- Steg 1: Graviditet & dekningsgrad --- */}
                 {step === 0 && (
                   <div className="space-y-6">
+                    {/* Rollevalg */}
+                    <div className="space-y-2.5">
+                      <Label>Hvem er du i dette forholdet?</Label>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {[
+                          { v: true,  label: 'Jeg er mor',         sub: 'Du er den som er gravid / har født' },
+                          { v: false, label: 'Jeg er medmor / far', sub: 'Partner er den som er gravid / har født' },
+                        ].map((o) => {
+                          const sel = input.morErMeg === o.v
+                          return (
+                            <button key={String(o.v)} type="button" onClick={() => setInput({ morErMeg: o.v })}
+                              className={`relative rounded-2xl border-[1.5px] px-5 py-3.5 text-left transition-all ${
+                                sel ? 'border-primary bg-primary/10 ring-[3px] ring-primary/15' : 'border-border bg-muted/10 hover:border-muted-foreground/40'
+                              }`}>
+                              <span className={`absolute right-3.5 top-3.5 grid h-[22px] w-[22px] place-items-center rounded-full border-[1.5px] ${sel ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-transparent'}`}>
+                                <Check className="h-3 w-3" />
+                              </span>
+                              <span className="block text-[15px] font-semibold">{o.label}</span>
+                              <span className="mt-0.5 block text-[12.5px] text-muted-foreground">{o.sub}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div className="space-y-1.5">
-                        <Label>Når har du termin?</Label>
+                        <Label>Når er termindatoen?</Label>
                         <Input type="date" className="h-11" value={input.terminDato} onChange={(e) => setInput({ terminDato: e.target.value })} />
                         <p className="text-[12.5px] text-muted-foreground">Datoen legen har beregnet. Permisjonen kan starte 3 uker før.</p>
                       </div>
@@ -351,7 +382,7 @@ export function PermisjonPage() {
                       </p>
                       <div className="rounded-2xl border border-primary/25 bg-primary/[0.07] px-5 py-5">
                         <div className="flex justify-between text-[13.5px] font-semibold">
-                          <span className="text-blue-400">Mor</span><span className="text-green-400">Partner</span>
+                          <span className="text-blue-400">{megKort}</span><span className="text-green-400">{partnerKort}</span>
                         </div>
                         <div className="mt-3.5 flex items-center gap-3">
                           <button className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-border bg-muted/20 hover:bg-muted/40 disabled:opacity-40" onClick={() => setFordeling(tilMor - 1)} disabled={tilMor <= 0} aria-label="Mindre til mor"><Minus className="h-4 w-4" /></button>
@@ -365,8 +396,8 @@ export function PermisjonPage() {
                           <button className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-border bg-muted/20 hover:bg-muted/40 disabled:opacity-40" onClick={() => setFordeling(tilMor + 1)} disabled={tilMor >= fellesUker} aria-label="Mer til mor"><Plus className="h-4 w-4" /></button>
                         </div>
                         <div className="mt-3 flex justify-between text-[13px] text-muted-foreground">
-                          <span><b className="text-[17px] text-foreground">{tilMor}</b> uker til mor</span>
-                          <span><b className="text-[17px] text-foreground">{tilPartner}</b> uker til partner</span>
+                          <span><b className="text-[17px] text-foreground">{tilMor}</b> uker til {megKort.toLowerCase()}</span>
+                          <span><b className="text-[17px] text-foreground">{tilPartner}</b> uker til {partnerKort.toLowerCase()}</span>
                         </div>
                       </div>
 
@@ -374,11 +405,11 @@ export function PermisjonPage() {
                         <p className="mb-2 text-[13px] font-semibold">Perioden deres</p>
                         <div className="space-y-2">
                           <div className="flex items-center gap-3 rounded-xl border border-blue-500/30 bg-muted/10 px-4 py-2.5 text-[13.5px]">
-                            <span className="h-2.5 w-2.5 rounded-[3px] bg-blue-500" /><span className="font-semibold">Mor</span>
+                            <span className="h-2.5 w-2.5 rounded-[3px] bg-blue-500" /><span className="font-semibold">{megKort}</span>
                             <span className="ml-auto text-muted-foreground">{morFra && morTil ? `${fmtDate(morFra)} – ${fmtDate(morTil)}` : '—'}</span>
                           </div>
                           <div className="flex items-center gap-3 rounded-xl border border-green-600/30 bg-muted/10 px-4 py-2.5 text-[13.5px]">
-                            <span className="h-2.5 w-2.5 rounded-[3px] bg-green-600" /><span className="font-semibold">Partner{input.partnerErLærer ? ' (lærer)' : ''}</span>
+                            <span className="h-2.5 w-2.5 rounded-[3px] bg-green-600" /><span className="font-semibold">{partnerKort}{input.partnerErLærer ? ' (bunden ferie)' : ''}</span>
                             <span className="ml-auto text-muted-foreground">{parFra && parTil ? `${fmtDate(parFra)} – ${fmtDate(parTil)}` : '—'}</span>
                           </div>
                         </div>
@@ -468,7 +499,7 @@ export function PermisjonPage() {
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <Card className="rounded-2xl">
                         <CardContent className="px-5 py-5">
-                          <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide"><span className="h-2.5 w-2.5 rounded-[4px] bg-blue-500" /> Meg</p>
+                          <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide"><span className="h-2.5 w-2.5 rounded-[4px] bg-blue-500" /> {megLabel}</p>
                           <div className="flex items-baseline justify-between border-b border-border/60 py-1.5"><span className="text-[13px] text-muted-foreground">Brukt</span><span className="text-[15px] font-semibold">{oppsummering.ukerdBruktMeg} uker</span></div>
                           <div className="flex items-baseline justify-between border-b border-border/60 py-1.5"><span className="text-[13px] text-muted-foreground">Igjen</span><span className={`text-[15px] font-semibold ${oppsummering.ukerIgjenMeg > 0 ? 'text-amber-400' : 'text-green-400'}`}>{oppsummering.ukerIgjenMeg} uker</span></div>
                           {oppsummering.sluttdatoMeg && <div className="flex items-baseline justify-between py-1.5"><span className="text-[13px] text-muted-foreground">Slutter</span><span className="text-[15px] font-semibold">{fmtDate(oppsummering.sluttdatoMeg)}</span></div>}
@@ -476,7 +507,7 @@ export function PermisjonPage() {
                       </Card>
                       <Card className="rounded-2xl">
                         <CardContent className="px-5 py-5">
-                          <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide"><span className="h-2.5 w-2.5 rounded-[4px] bg-green-600" /> Partner</p>
+                          <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide"><span className="h-2.5 w-2.5 rounded-[4px] bg-green-600" /> {partnerLabel}</p>
                           <div className="flex items-baseline justify-between border-b border-border/60 py-1.5"><span className="text-[13px] text-muted-foreground">Brukt</span><span className="text-[15px] font-semibold">{oppsummering.ukerBruktPartner} uker</span></div>
                           <div className="flex items-baseline justify-between border-b border-border/60 py-1.5"><span className="text-[13px] text-muted-foreground">Igjen</span><span className={`text-[15px] font-semibold ${oppsummering.ukerIgjenPartner > 0 ? 'text-amber-400' : 'text-green-400'}`}>{oppsummering.ukerIgjenPartner} uker</span></div>
                           {oppsummering.sluttdatoPartner && <div className="flex items-baseline justify-between border-b border-border/60 py-1.5"><span className="text-[13px] text-muted-foreground">Slutter</span><span className="text-[15px] font-semibold">{fmtDate(oppsummering.sluttdatoPartner)}</span></div>}

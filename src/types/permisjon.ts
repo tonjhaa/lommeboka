@@ -28,12 +28,13 @@ export interface PermisjonPeriode {
 }
 
 export interface PermisjonInput {
+  morErMeg: boolean               // true = jeg er mor (fødende), false = jeg er medmor/far
   terminDato: string              // "YYYY-MM-DD"
   fodselsDato?: string            // settes hvis allerede født
   dekningsgrad: Dekningsgrad
   tvillinger: boolean
   forTidligFodsel: boolean        // født < uke 33
-  mineFerieblokker: FerieBlokk[] // brukerens (mor) ferie
+  mineFerieblokker: FerieBlokk[] // ferie for den som bruker appen
   partnerErLærer: boolean
   partnerFerieblokker: FerieBlokk[]  // typisk sommer-ferie
   partnerSommerFraManedDag: string   // default "06-22"
