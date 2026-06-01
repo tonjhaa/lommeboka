@@ -18,6 +18,8 @@ const DEFAULT_INPUT: PermisjonInput = {
   fellesTilMor: null,
   minMaanedslonn: undefined,
   partnerMaanedslonn: undefined,
+  minAGDeкkerOver6G: undefined,
+  partnerAGDeкkerOver6G: undefined,
 }
 
 interface PermisjonStoreState {

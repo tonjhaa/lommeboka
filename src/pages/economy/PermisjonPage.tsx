@@ -443,6 +443,28 @@ export function PermisjonPage() {
                             onChange={(e) => setInput({ partnerMaanedslonn: parseFloat(e.target.value) || undefined })} />
                         </div>
                       </div>
+                      {((input.minMaanedslonn ?? 0) > 68274 || (input.partnerMaanedslonn ?? 0) > 68274) && (
+                        <div className="space-y-2 rounded-xl border border-border bg-muted/10 px-4 py-3">
+                          <p className="text-[13px] font-medium">Lønn over 6G-taket (68 274 kr/mnd) — dekker arbeidsgiver gapet?</p>
+                          <p className="text-[12px] text-muted-foreground">Mange kommunale og statlige arbeidsgivere betaler full lønn også over 6G under permisjon. Dette påvirker om 100% eller 80% er lønnsomt.</p>
+                          <div className="space-y-1.5">
+                            {(input.minMaanedslonn ?? 0) > 68274 && (
+                              <label className="flex items-center gap-2 text-[13px] cursor-pointer">
+                                <input type="checkbox" checked={input.minAGDeкkerOver6G ?? false}
+                                  onChange={(e) => setInput({ minAGDeкkerOver6G: e.target.checked })} />
+                                {megKort}s arbeidsgiver dekker lønn over 6G
+                              </label>
+                            )}
+                            {(input.partnerMaanedslonn ?? 0) > 68274 && (
+                              <label className="flex items-center gap-2 text-[13px] cursor-pointer">
+                                <input type="checkbox" checked={input.partnerAGDeкkerOver6G ?? false}
+                                  onChange={(e) => setInput({ partnerAGDeкkerOver6G: e.target.checked })} />
+                                {partnerKort}s arbeidsgiver dekker lønn over 6G
+                              </label>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <Card className="rounded-xl bg-muted/10">

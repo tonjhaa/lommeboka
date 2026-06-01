@@ -42,6 +42,8 @@ export interface PermisjonInput {
   fellesTilMor?: number | null       // antall uker av fellesperioden mor tar (null = 50/50)
   minMaanedslonn?: number            // brutto månedslønn (meg) — brukes til 6G-beregning
   partnerMaanedslonn?: number        // brutto månedslønn (partner)
+  minAGDeкkerOver6G?: boolean        // arbeidsgiver (meg) dekker gap over 6G
+  partnerAGDeкkerOver6G?: boolean    // arbeidsgiver (partner) dekker gap over 6G
 }
 
 export interface TilgjengeligeUker {

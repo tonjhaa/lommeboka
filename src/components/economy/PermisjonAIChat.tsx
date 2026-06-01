@@ -21,8 +21,7 @@ function buildUserContext(
   oppsummering: PermisjonOppsummering | null
 ): string {
   const tilgjengelig = input.terminDato ? beregnTilgjengeligeUker(input) : null
-  const G = 124028  // Grunnbeløpet 2025
-  const takKr = G * 6 / 12  // månedlig 6G-tak ≈ 62 014 kr
+  const takKr = 819294 / 12  // 6G (819 294 kr/år per mai 2025) = 68 274 kr/mnd
 
   const lines: (string | null)[] = [
     `Jeg er: ${input.morErMeg ? 'mor (fødende)' : 'medmor / far'}`,
@@ -32,10 +31,10 @@ function buildUserContext(
     input.tvillinger ? 'Tvillinger: ja' : null,
     input.forTidligFodsel ? 'Født for tidlig (< uke 33): ja' : null,
     input.minMaanedslonn
-      ? `Min månedslønn: ${input.minMaanedslonn.toLocaleString('no-NO')} kr${input.minMaanedslonn > takKr ? ` (OVER 6G-taket på ${Math.round(takKr).toLocaleString('no-NO')} kr/mnd — foreldrepenger begrenses til 6G)` : ' (under 6G-tak)'}`
+      ? `Min månedslønn: ${input.minMaanedslonn.toLocaleString('no-NO')} kr${input.minMaanedslonn > takKr ? ` (OVER 6G-taket ${Math.round(takKr).toLocaleString('no-NO')} kr/mnd — arbeidsgiver dekker over 6G: ${input.minAGDeкkerOver6G ? 'JA' : 'NEI/ukjent'})` : ' (under 6G-tak — full dekning)'}`
       : 'Min månedslønn: ikke oppgitt',
     input.partnerMaanedslonn
-      ? `Partners månedslønn: ${input.partnerMaanedslonn.toLocaleString('no-NO')} kr${input.partnerMaanedslonn > takKr ? ` (OVER 6G-taket — foreldrepenger begrenses til 6G)` : ' (under 6G-tak)'}`
+      ? `Partners månedslønn: ${input.partnerMaanedslonn.toLocaleString('no-NO')} kr${input.partnerMaanedslonn > takKr ? ` (OVER 6G-taket — arbeidsgiver dekker over 6G: ${input.partnerAGDeкkerOver6G ? 'JA' : 'NEI/ukjent'})` : ' (under 6G-tak — full dekning)'}`
       : 'Partners månedslønn: ikke oppgitt',
     `Partner har bunden sommerferie: ${input.partnerErLærer ? 'ja' : 'nei'}`,
     input.partnerErLærer

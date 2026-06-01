@@ -205,7 +205,7 @@ function PlanLegend({ partnerErLærer }: { partnerErLærer: boolean }) {
       <span className="flex items-center gap-2 text-xs text-muted-foreground">🎒 Barnehageplass</span>
       <span className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="relative inline-block w-3 h-3 rounded-[4px] bg-muted ring-1 ring-red-500/50"><span className="absolute top-[1px] right-[1px] w-1 h-1 rounded-full bg-red-500" /></span>
-        Helligdag (teller ikke)
+        Helligdag (avtal med arbeidsgiver)
       </span>
     </div>
   )
@@ -364,7 +364,7 @@ export function PermisjonKalender({
                   const isTermin = ds === input.terminDato
                   const isBhg = ds === barnehageStart
                   const tooltip = helligdagNavn
-                    ? helligdagNavn
+                    ? `${helligdagNavn} — foreldrepenger kan fortsette eller pauses (avtal med arbeidsgiver)`
                     : info ? (info.owner === 'partner' ? 'Partners periode' : 'Mors/medmors periode') : ''
                   return (
                     <span
