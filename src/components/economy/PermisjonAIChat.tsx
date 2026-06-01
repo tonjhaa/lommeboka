@@ -83,17 +83,18 @@ export function PermisjonAIChat({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatHistory, loading])
 
-  async function send(content: string) {
+  async function send(content: string, retryCount = 0) {
     if (!content.trim() || loading) return
     setDraft('')
     setError(null)
 
     const userMsg: ChatMessage = { role: 'user', content, timestamp: new Date().toISOString() }
-    addChatMessage(userMsg)
+    if (retryCount === 0) addChatMessage(userMsg)
     setLoading(true)
 
     const userContext = buildUserContext(input, perioder, oppsummering)
-    const messages = [...chatHistory, userMsg].map(({ role, content: c }) => ({ role, content: c }))
+    const allMessages = retryCount === 0 ? [...chatHistory, userMsg] : chatHistory
+    const messages = allMessages.map(({ role, content: c }) => ({ role, content: c }))
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke('permisjon-ai', {
@@ -103,7 +104,18 @@ export function PermisjonAIChat({
       const assistantContent = (data as { content?: { text?: string } })?.content?.text ?? 'Ingen svar'
       addChatMessage({ role: 'assistant', content: assistantContent, timestamp: new Date().toISOString() })
     } catch (e) {
-      setError(`Feil ved AI-kall: ${String(e)}`)
+      const msg = String(e)
+      const isNetworkError = msg.includes('FunctionsFetchError') || msg.includes('Failed to fetch') || msg.includes('NetworkError')
+      if (isNetworkError && retryCount === 0) {
+        // Automatisk retry ved nettverksfeil (kald start)
+        await new Promise((r) => setTimeout(r, 2000))
+        setLoading(false)
+        await send(content, 1)
+        return
+      }
+      setError(isNetworkError
+        ? 'Tjenesten svarte ikke. Prøv igjen om et øyeblikk.'
+        : `Feil ved AI-kall: ${msg}`)
     } finally {
       setLoading(false)
     }
@@ -186,7 +198,20 @@ export function PermisjonAIChat({
             </div>
           </div>
         )}
-        {error && <p className="text-xs text-red-400 text-center">{error}</p>}
+        {error && (
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-xs text-red-400 text-center">{error}</p>
+            <button
+              className="text-xs underline text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                const last = [...chatHistory].reverse().find((m) => m.role === 'user')
+                if (last) { setError(null); send(last.content, 1) }
+              }}
+            >
+              Prøv igjen
+            </button>
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
 
