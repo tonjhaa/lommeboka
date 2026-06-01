@@ -460,7 +460,7 @@ function SlipDetailModal({ record, onClose }: { record: MonthRecord; onClose: ()
         downloadSlipPDF(record.slipStoragePath!).then((base64) => {
           if (!cancelled && base64) setPdfSrc(base64)
         })
-      })
+      }).catch(() => { /* Stale chunk — PDF lastes ikke, reload siden for å prøve igjen */ })
     }
     return () => { cancelled = true }
   }, [record])

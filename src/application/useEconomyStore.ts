@@ -473,7 +473,7 @@ export const useEconomyStore = create<EconomyState>()(
                 }))
               }
             })
-          })
+          }).catch(() => { /* Stale chunk — ignorerer, PDF-opplasting kjøres ved neste økt */ })
         }
       },
 
