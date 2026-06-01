@@ -16,6 +16,8 @@ const DEFAULT_INPUT: PermisjonInput = {
   partnerSommerFraManedDag: '06-22',
   partnerSommerTilManedDag: '08-14',
   fellesTilMor: null,
+  minMaanedslonn: undefined,
+  partnerMaanedslonn: undefined,
 }
 
 interface PermisjonStoreState {

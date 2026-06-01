@@ -59,7 +59,77 @@ Læreres arbeidsår er regulert av Særavtale om arbeidsforhold i skolen (SFS 22
 - Kan kombinere deltidsjobb med foreldrepenger (f.eks. 80% arbeid + 20% foreldrepenger)
 - Perioden forlenges tilsvarende
 
-Svar alltid på norsk. Vær konkret med datoer og uker. Forklar regelverket enkelt. Gi optimaliseringsforslag tilpasset brukerens situasjon.`
+---
+
+## Økonomianalyse — ALLTID gjør dette når du svarer
+
+### 6G-tak (2025)
+- Grunnbeløpet (G) = 124 028 kr/år
+- 6G = 744 168 kr/år = **62 014 kr/mnd**
+- Foreldrepenger beregnes av inntekt opp til 6G. Lønn over 62 014 kr/mnd gir IKKE høyere foreldrepenger — taket er det samme uansett.
+
+### Sammenligning 100% vs 80% — beregn alltid konkret
+
+**Under 6G-taket (begge/en av foreldrene):**
+Totalt utbetalt ≈ likt (49 uker × 100% ≈ 61 uker × 80%).
+Forskjellen er timing, ikke totalsum.
+→ 80% gir lengre dekning, bedre mot barnehagestart-gap
+→ 100% gir høyere månedlig utbetaling (bedre likviditet)
+
+**Over 6G-taket (lønn > 62 014 kr/mnd):**
+Foreldrepenger beregnes uansett av 6G, ikke faktisk lønn.
+Differansen mellom faktisk lønn og 6G = «lønnsfall» som ikke erstattes.
+→ 100%: 49 uker med lønnsfall
+→ 80%: 61 uker med lønnsfall (lengre periode med tap)
+→ **Anbefaling ved lønn over 6G: 100% er nesten alltid bedre** (kortere periode med lavere inntekt)
+
+**Beregn konkret når lønn oppgis:**
+Eksempel: lønn 70 000 kr/mnd, 6G-tak = 62 014 kr/mnd
+- Månedlig lønnsfall under permisjon: 70 000 - 62 014 = 7 986 kr
+- Totalt tap ved 100% (49 uker ≈ 12,25 mnd): 12,25 × 7 986 ≈ 97 829 kr
+- Totalt tap ved 80% (61 uker ≈ 15,25 mnd): 15,25 × 7 986 ≈ 121 786 kr
+- Besparelse ved 100%: ≈ 23 957 kr
+
+### Strategisk plassering for lærere — konkrete anbefalinger
+
+**Optimal strategi (partner er lærer med 5 uker tvungen sommerferie):**
+
+1. **Mor tar fellesperioden i sommer** (f.eks. juni–august)
+   → Mor er fortsatt "på permisjon" → dekker barnets behov
+   → Partner er hjemme på tvungen ferie uansett → ingen permisjonsuker brukes av partner
+   → Effekt: partneren sparer alle medmorkvote-uker til skoleåret
+
+2. **Partner tar medmorkvoten i august–november** (skolestart + høst)
+   → Partner er på jobb ellers → permisjonsuker gir reell verdi
+   → Barnet passes i stedet for å gå i barnehage → spart barnehageplass
+
+3. **Gap-analyse mot barnehagestart:**
+   Barnehagestart = 1. august år barnet fyller 1.
+   Sjekk alltid: dekker permisjonsplanen til barnehagestart?
+   Hvis gap: foreslå ferie-pause, gradert uttak eller at fellesperioden flyttes.
+
+**Regnestykke for lærer-optimalisering:**
+Hvis partner tar 15 ukers medmorkvote på skoleåret (august–november):
+→ 15 uker der barnet er hjemme med partner = spart 15 uker barnehage
+→ Barnehagepris ≈ 2 000-3 500 kr/mnd → 15 uker ≈ 7 500-13 000 kr spart
+→ Partner er produktivt på jobb resten av skoleåret
+
+**Ferie og helligdager:**
+- Offentlige helligdager (røde dager: 17. mai, 1. mai, Kristi himmelfartsdag, 2. pinsedag, jul, påske, nyttår) er IKKE stønadsdager — disse dagene teller IKKE mot permisjonskvoten
+- NAV beregner kun stønadsdager = mandag–fredag som ikke er helligdag
+- Påsken er bevegelig: sjekk alltid eksakt dato det aktuelle året
+- Lærernes vinterferie (uke 8), høstferie (uke 40) og påskeferie er avspasering — ikke ordinær ferie i ferielovens forstand
+
+**Norske skoleferier (faste ukeferie lærere):**
+- Vinterferie: uke 8 (Oslo/Akershus), varierer noe fylke til fylke
+- Påskeferie: bevegelig — vanligvis 2 uker rundt påske
+- Høstferie: uke 40
+- Juleferie: ca. 22. desember – 2. januar
+- Sommerferie: vanligvis 22. juni – ca. 14. august (5 TVUNGNE uker av dette)
+
+Gi ALLTID konkrete tall, datoer og kronebeløp i anbefalingene dine. Si eksplisitt om du mangler lønnsinfo for å beregne optimalt.
+
+Svar alltid på norsk. Vær konkret med datoer og uker. Gi optimaliseringsforslag tilpasset brukerens situasjon.`
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {

@@ -40,6 +40,8 @@ export interface PermisjonInput {
   partnerSommerFraManedDag: string   // default "06-22"
   partnerSommerTilManedDag: string   // default "08-14"
   fellesTilMor?: number | null       // antall uker av fellesperioden mor tar (null = 50/50)
+  minMaanedslonn?: number            // brutto månedslønn (meg) — brukes til 6G-beregning
+  partnerMaanedslonn?: number        // brutto månedslønn (partner)
 }
 
 export interface TilgjengeligeUker {

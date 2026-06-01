@@ -21,15 +21,25 @@ function buildUserContext(
   oppsummering: PermisjonOppsummering | null
 ): string {
   const tilgjengelig = input.terminDato ? beregnTilgjengeligeUker(input) : null
+  const G = 124028  // Grunnbeløpet 2025
+  const takKr = G * 6 / 12  // månedlig 6G-tak ≈ 62 014 kr
+
   const lines: (string | null)[] = [
+    `Jeg er: ${input.morErMeg ? 'mor (fødende)' : 'medmor / far'}`,
     `Termindato: ${input.terminDato || 'ikke satt'}`,
     input.fodselsDato ? `Fødselsdato: ${input.fodselsDato}` : null,
-    `Dekningsgrad: ${input.dekningsgrad} %`,
+    `Dekningsgrad valgt: ${input.dekningsgrad} %`,
     input.tvillinger ? 'Tvillinger: ja' : null,
     input.forTidligFodsel ? 'Født for tidlig (< uke 33): ja' : null,
-    `Partner er lærer: ${input.partnerErLærer ? 'ja' : 'nei'}`,
+    input.minMaanedslonn
+      ? `Min månedslønn: ${input.minMaanedslonn.toLocaleString('no-NO')} kr${input.minMaanedslonn > takKr ? ` (OVER 6G-taket på ${Math.round(takKr).toLocaleString('no-NO')} kr/mnd — foreldrepenger begrenses til 6G)` : ' (under 6G-tak)'}`
+      : 'Min månedslønn: ikke oppgitt',
+    input.partnerMaanedslonn
+      ? `Partners månedslønn: ${input.partnerMaanedslonn.toLocaleString('no-NO')} kr${input.partnerMaanedslonn > takKr ? ` (OVER 6G-taket — foreldrepenger begrenses til 6G)` : ' (under 6G-tak)'}`
+      : 'Partners månedslønn: ikke oppgitt',
+    `Partner har bunden sommerferie: ${input.partnerErLærer ? 'ja' : 'nei'}`,
     input.partnerErLærer
-      ? `Partner sommerferie: ${input.partnerSommerFraManedDag} – ${input.partnerSommerTilManedDag}`
+      ? `Partners sommerferie: ${input.partnerSommerFraManedDag} – ${input.partnerSommerTilManedDag}`
       : null,
     input.mineFerieblokker.length > 0
       ? `Mine ferieblokker: ${input.mineFerieblokker.map((f) => `${f.fra}→${f.til}`).join(', ')}`

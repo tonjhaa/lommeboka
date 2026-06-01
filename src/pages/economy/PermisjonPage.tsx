@@ -425,6 +425,26 @@ export function PermisjonPage() {
                 {/* --- Steg 5: Generer --- */}
                 {step === 4 && (
                   <div className="space-y-5">
+                    {/* Lønn — for AI-beregning av 6G og 100%/80%-anbefaling */}
+                    <div className="space-y-2.5">
+                      <Label>Lønn (valgfritt — brukes av AI til å anbefale 100% eller 80%)</Label>
+                      <p className="text-[12.5px] text-muted-foreground -mt-1">Foreldrepenger begrenses til 6G ≈ 744 000 kr/år (≈ 62 000 kr/mnd). Tjener du over dette, har valget av dekningsgrad en annen effekt.</p>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <Label className="text-[13px]">{megKort} — månedslønn (brutto)</Label>
+                          <Input type="number" className="h-11" placeholder="f.eks. 58000"
+                            value={input.minMaanedslonn ?? ''}
+                            onChange={(e) => setInput({ minMaanedslonn: parseFloat(e.target.value) || undefined })} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[13px]">{partnerKort} — månedslønn (brutto)</Label>
+                          <Input type="number" className="h-11" placeholder="f.eks. 52000"
+                            value={input.partnerMaanedslonn ?? ''}
+                            onChange={(e) => setInput({ partnerMaanedslonn: parseFloat(e.target.value) || undefined })} />
+                        </div>
+                      </div>
+                    </div>
+
                     <Card className="rounded-xl bg-muted/10">
                       <CardContent className="grid grid-cols-1 gap-x-6 gap-y-3.5 py-5 sm:grid-cols-2">
                         {[
