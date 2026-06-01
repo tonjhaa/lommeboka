@@ -1,9 +1,9 @@
-import { Fragment } from 'react'
+import { Fragment, useState, useEffect, useRef } from 'react'
 import type { PermisjonPeriode, PermisjonInput, FerieBlokk } from '@/types/permisjon'
 import { beregnBarnehageStart } from '@/domain/economy/foreldrepengerRules'
 
 /* ============================================================================
- *  Kvote-farger — NAV-semantikk: mor = blå, partner = grønn, helg = grå.
+ *  Kvote-farger — NAV-semantikk: mor = blå, partner = grønn.
  * ========================================================================== */
 const PERIODE_FARGER: Record<string, string> = {
   mor_før_termin:    'bg-blue-400',
@@ -12,7 +12,7 @@ const PERIODE_FARGER: Record<string, string> = {
   felles_mor:        'bg-blue-600',
   felles_far:        'bg-green-400',
   far_kvote:         'bg-green-600',
-  ferie_pause:       'bg-muted border border-border',
+  ferie_pause:       'bg-orange-500/20 border border-orange-500/40',
 }
 
 const PERIODE_SHORT: Record<string, string> = {
@@ -22,7 +22,7 @@ const PERIODE_SHORT: Record<string, string> = {
   felles_mor:       'Felles',
   felles_far:       'Felles',
   far_kvote:        'Medmorkvote',
-  ferie_pause:      'Ferie',
+  ferie_pause:      'Ferie-pause',
 }
 
 const PERIODE_LABEL: Record<string, string> = {
@@ -38,13 +38,76 @@ const PERIODE_LABEL: Record<string, string> = {
 function fmtShort(d: string) {
   return new Date(d).toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })
 }
+function fmtLong(d: string) {
+  return new Date(d).toLocaleDateString('no-NO', { day: 'numeric', month: 'long' })
+}
 function monthsBetween(a: string, b: string): number {
   const da = new Date(a), db = new Date(b)
   return (db.getFullYear() - da.getFullYear()) * 12 + (db.getMonth() - da.getMonth())
 }
 
+/* Legg til/trekk fra dager fra en YYYY-MM-DD-streng */
+function addDaysStr(dateStr: string, days: number): string {
+  const d = new Date(dateStr)
+  d.setDate(d.getDate() + days)
+  return d.toISOString().split('T')[0]
+}
+
+/* Sett inn ferie-pause og forskyv etterfølgende perioder for owner */
+function insertFeriePause(
+  perioder: PermisjonPeriode[],
+  owner: 'meg' | 'partner',
+  ferieFra: string,
+  ferieTil: string,
+): PermisjonPeriode[] {
+  const fFra = new Date(ferieFra)
+  const fTil = new Date(ferieTil)
+  const shiftDays = Math.round((fTil.getTime() - fFra.getTime()) / 86400000) + 1
+
+  const result: PermisjonPeriode[] = []
+
+  for (const p of perioder) {
+    // Perioder for den andre forelderen berøres ikke
+    if (p.owner !== owner || p.erPause) {
+      result.push(p)
+      continue
+    }
+    const pFra = new Date(p.fra)
+    const pTil = new Date(p.til)
+
+    if (pTil < fFra) {
+      // Perioden slutter før ferien begynner: uendret
+      result.push(p)
+    } else if (pFra >= fFra) {
+      // Perioden starter etter eller på feriedagen: forskyv
+      result.push({ ...p, fra: addDaysStr(p.fra, shiftDays), til: addDaysStr(p.til, shiftDays) })
+    } else {
+      // Perioden overlapper med feriestart: splitt
+      result.push({ ...p, til: addDaysStr(ferieFra, -1) })
+      result.push({
+        ...p,
+        id: crypto.randomUUID(),
+        fra: addDaysStr(ferieTil, 1),
+        til: addDaysStr(p.til, shiftDays),
+      })
+    }
+  }
+
+  // Sett inn ferieblokken
+  result.push({
+    id: crypto.randomUUID(),
+    type: 'ferie_pause',
+    owner,
+    fra: ferieFra,
+    til: ferieTil,
+    erPause: true,
+  })
+
+  return result.sort((a, b) => a.fra.localeCompare(b.fra))
+}
+
 /* ============================================================================
- *  PermisjonTimeline — bred, vannrett tidslinje (uendret logikk, ny UI).
+ *  PermisjonTimeline — bred, vannrett tidslinje
  * ========================================================================== */
 export function PermisjonTimeline({
   input,
@@ -69,15 +132,11 @@ export function PermisjonTimeline({
     Math.max(0, Math.min(100, (monthsBetween(timelineStart, date) / totalMonths) * 100))
   const widthPct = (fra: string, til: string) => Math.max(0.6, posPct(til) - posPct(fra))
 
-  const months: { label: string; left: number; isYear: boolean }[] = []
+  const months: { label: string; left: number }[] = []
   const cur = new Date(timelineStart)
   cur.setDate(1)
   while (cur.toISOString().split('T')[0] < timelineEnd) {
-    months.push({
-      label: cur.toLocaleDateString('no-NO', { month: 'short' }),
-      isYear: cur.getMonth() === 0,
-      left: posPct(cur.toISOString().split('T')[0]),
-    })
+    months.push({ label: cur.toLocaleDateString('no-NO', { month: 'short' }), left: posPct(cur.toISOString().split('T')[0]) })
     cur.setMonth(cur.getMonth() + 1)
   }
 
@@ -140,21 +199,16 @@ export function PermisjonTimeline({
             <div className="absolute w-0.5 bg-amber-500/80" style={{ left: `${bhgLeft}%`, top: -2, bottom: 70 }} />
           </div>
 
-          {/* Mor / Medmor */}
           <div className="flex items-center gap-4 mb-3.5">
             <div className="w-32 shrink-0">
               <p className="text-sm font-semibold flex items-center gap-2"><span className="inline-block w-2.5 h-2.5 rounded-[3px] bg-blue-500" /> Meg</p>
               <p className="text-[11px] text-muted-foreground mt-0.5">{input.morErMeg ? (input.fodselsDato ? 'mor' : 'mor (gravid)') : 'medmor / far'}</p>
             </div>
             <div className="relative flex-1 h-12 rounded-xl bg-muted/20 border border-border overflow-hidden">
-              {input.mineFerieblokker.map((f, i) => (
-                <div key={i} className="absolute top-0 bottom-0 bg-orange-500/15 border-x border-orange-500/40" style={{ left: `${posPct(f.fra)}%`, width: `${widthPct(f.fra, f.til)}%` }} title={`Ferie: ${fmtShort(f.fra)} → ${fmtShort(f.til)}`} />
-              ))}
               {renderPerioder(morPerioder)}
             </div>
           </div>
 
-          {/* Partner */}
           <div className="flex items-center gap-4">
             <div className="w-32 shrink-0">
               <p className="text-sm font-semibold flex items-center gap-2"><span className="inline-block w-2.5 h-2.5 rounded-[3px] bg-green-600" /> Partner</p>
@@ -168,7 +222,6 @@ export function PermisjonTimeline({
             </div>
           </div>
 
-          {/* Markører */}
           <div className="flex items-start gap-4 mt-3">
             <div className="w-32 shrink-0" />
             <div className="relative flex-1 h-11">
@@ -192,20 +245,19 @@ export function PermisjonTimeline({
   )
 }
 
-/* Felles forklaring (legend) — NAV-vokabular. */
+/* Forklaring (legend) */
 function PlanLegend({ partnerErLærer }: { partnerErLærer: boolean }) {
   return (
     <div className="flex flex-wrap gap-x-5 gap-y-2 mt-5 pt-4 border-t border-border">
       <span className="flex items-center gap-2 text-xs text-muted-foreground"><span className="inline-block w-3 h-3 rounded-[4px] bg-blue-500" />Mors periode</span>
       <span className="flex items-center gap-2 text-xs text-muted-foreground"><span className="inline-block w-3 h-3 rounded-[4px] bg-green-600" />Partners periode</span>
-      <span className="flex items-center gap-2 text-xs text-muted-foreground"><span className="inline-block w-3 h-3 rounded-[4px] bg-muted" />Helg</span>
-      <span className="flex items-center gap-2 text-xs text-muted-foreground"><span className="inline-block w-3 h-3 rounded-full bg-orange-500/60" />Min ferie</span>
+      <span className="flex items-center gap-2 text-xs text-muted-foreground"><span className="inline-block w-3 h-3 rounded-[4px] bg-orange-500/30 border border-orange-500/50" />Ferie-pause</span>
       {partnerErLærer && <span className="flex items-center gap-2 text-xs text-muted-foreground"><span className="inline-block w-3 h-3 rounded-[4px] bg-yellow-500/50" />Sommerferie</span>}
       <span className="flex items-center gap-2 text-xs text-muted-foreground"><span className="inline-block w-3 h-3 rounded-[4px] border-2 border-pink-500" />Termin</span>
       <span className="flex items-center gap-2 text-xs text-muted-foreground">🎒 Barnehageplass</span>
       <span className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="relative inline-block w-3 h-3 rounded-[4px] bg-muted ring-1 ring-red-500/50"><span className="absolute top-[1px] right-[1px] w-1 h-1 rounded-full bg-red-500" /></span>
-        Helligdag (avtal med arbeidsgiver)
+        Helligdag
       </span>
     </div>
   )
@@ -214,7 +266,6 @@ function PlanLegend({ partnerErLærer }: { partnerErLærer: boolean }) {
 /* ============================================================================
  *  Norske helligdager — Meeus/Jones/Butcher-algoritme for påsken + faste dager
  * ========================================================================== */
-
 function easterSunday(year: number): Date {
   const a = year % 19
   const b = Math.floor(year / 100)
@@ -239,19 +290,14 @@ function addDaysToDate(d: Date, days: number): Date {
   return r
 }
 
-/** Returnerer Map<'YYYY-MM-DD', navn> for alle norske helligdager i gitt år */
 function getNorskHelligdager(year: number): Map<string, string> {
   const map = new Map<string, string>()
   const fmt = (d: Date) => d.toISOString().split('T')[0]
-
-  // Faste helligdager
   map.set(`${year}-01-01`, 'Nyttårsdag')
   map.set(`${year}-05-01`, 'Arbeidernes dag')
   map.set(`${year}-05-17`, 'Grunnlovsdag')
   map.set(`${year}-12-25`, '1. juledag')
   map.set(`${year}-12-26`, '2. juledag')
-
-  // Påskebaserte (bevegelige)
   const påske = easterSunday(year)
   map.set(fmt(addDaysToDate(påske, -3)), 'Skjærtorsdag')
   map.set(fmt(addDaysToDate(påske, -2)), 'Langfredag')
@@ -260,13 +306,11 @@ function getNorskHelligdager(year: number): Map<string, string> {
   map.set(fmt(addDaysToDate(påske, 39)), 'Kristi himmelfartsdag')
   map.set(fmt(addDaysToDate(påske, 49)), '1. pinsedag')
   map.set(fmt(addDaysToDate(påske, 50)), '2. pinsedag')
-
   return map
 }
 
 /* ============================================================================
- *  PermisjonKalender — NAV-stil månedskalender. Dager farges etter hvem som
- *  er hjemme; helg = grå; helligdager = rød kant; termin- og barnehage-markør.
+ *  PermisjonKalender — interaktiv månedskalender med ferie-velger
  * ========================================================================== */
 const UKEDAGER = ['ma', 'ti', 'on', 'to', 'fr', 'lø', 'sø']
 const MND_NAVN = ['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember']
@@ -281,57 +325,155 @@ function isoWeek(d: Date): number {
   return 1 + Math.round((date.getTime() - firstThursday.getTime()) / (7 * 24 * 3600 * 1000))
 }
 function ymd(d: Date) { return d.toISOString().split('T')[0] }
-function ownerOf(type: string): 'meg' | 'partner' {
-  return type === 'far_kvote' || type === 'felles_far' ? 'partner' : 'meg'
-}
 
 export function PermisjonKalender({
   input,
   perioder,
+  setPerioder,
+  setInput,
 }: {
   input: PermisjonInput
   perioder: PermisjonPeriode[]
+  setPerioder: (p: PermisjonPeriode[]) => void
+  setInput: (updates: Partial<PermisjonInput>) => void
 }) {
   if (!input.terminDato || perioder.length === 0) return null
 
   const barnehageStart = beregnBarnehageStart(input.terminDato, input.fodselsDato)
 
+  // --- Dra-og-velg-tilstand ---
+  const [selStart, setSelStart] = useState<string | null>(null)
+  const [selHover, setSelHover] = useState<string | null>(null)
+  const isDragging = useRef(false)
+  // Panel-steg: 'idle' → 'selected' → 'confirm'
+  const [panelStep, setPanelStep] = useState<'idle' | 'selected' | 'confirm'>('idle')
+  const [forskyv, setForskyv] = useState(true)
+
+  // Normalisert valg (alltid fra < til)
+  const selRange = selStart && selHover
+    ? { fra: [selStart, selHover].sort()[0], til: [selStart, selHover].sort()[1] }
+    : selStart
+    ? { fra: selStart, til: selStart }
+    : null
+
+  // Frigjør dragging om musknappen slippes utenfor kalenderen
+  useEffect(() => {
+    function handleGlobalUp() { isDragging.current = false }
+    document.addEventListener('mouseup', handleGlobalUp)
+    return () => document.removeEventListener('mouseup', handleGlobalUp)
+  }, [])
+
+  // --- Dags-kart: hvilken periode + eier tilhører en gitt dag? ---
   const dayMap: Record<string, { type: string; owner: 'meg' | 'partner' }> = {}
   perioder.forEach((p) => {
-    const owner = ownerOf(p.type)
     const cur = new Date(p.fra), end = new Date(p.til)
-    while (cur <= end) { dayMap[ymd(cur)] = { type: p.type, owner }; cur.setDate(cur.getDate() + 1) }
-  })
-  const ferieDays: Record<string, boolean> = {}
-  input.mineFerieblokker.forEach((f) => {
-    const cur = new Date(f.fra), end = new Date(f.til)
-    while (cur <= end) { ferieDays[ymd(cur)] = true; cur.setDate(cur.getDate() + 1) }
+    while (cur <= end) { dayMap[ymd(cur)] = { type: p.type, owner: p.owner }; cur.setDate(cur.getDate() + 1) }
   })
 
+  // Ferie-blokker for visuell overlay (simultant ferie vises som prikker)
+  const ferieDaysMeg: Record<string, boolean> = {}
+  input.mineFerieblokker.forEach((f) => {
+    const cur = new Date(f.fra), end = new Date(f.til)
+    while (cur <= end) { ferieDaysMeg[ymd(cur)] = true; cur.setDate(cur.getDate() + 1) }
+  })
+  const ferieDaysPartner: Record<string, boolean> = {}
+  input.partnerFerieblokker.forEach((f) => {
+    const cur = new Date(f.fra), end = new Date(f.til)
+    while (cur <= end) { ferieDaysPartner[ymd(cur)] = true; cur.setDate(cur.getDate() + 1) }
+  })
+
+  // --- Måneder å vise ---
   const allStarts = perioder.map((p) => p.fra).sort()
   const firstDate = new Date(allStarts[0])
   const lastDate = new Date(barnehageStart)
   const months: Date[] = []
   const m = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1)
   const stop = new Date(lastDate.getFullYear(), lastDate.getMonth(), 1)
-  while (m <= stop && months.length < 18) { months.push(new Date(m)); m.setMonth(m.getMonth() + 1) }
+  while (m <= stop && months.length < 20) { months.push(new Date(m)); m.setMonth(m.getMonth() + 1) }
 
-  // Forhåndsberegn helligdager for alle relevante år
+  // Helligdager
   const helligdagÅr = new Set(months.map((mo) => mo.getFullYear()))
   const helligdager = new Map<string, string>()
-  helligdagÅr.forEach((yr) => {
-    getNorskHelligdager(yr).forEach((navn, dato) => helligdager.set(dato, navn))
-  })
+  helligdagÅr.forEach((yr) => getNorskHelligdager(yr).forEach((navn, dato) => helligdager.set(dato, navn)))
 
-  function dayClass(info: { type: string; owner: string } | undefined, isWeekend: boolean, isHelligdag: boolean): string {
-    if (isHelligdag) return 'bg-muted text-muted-foreground'  // helligdag = ikke stønadsdager, grå som helg
+  // --- Avled eier fra valgt område ---
+  function getSelectionOwner(): 'meg' | 'partner' {
+    if (!selRange) return 'meg'
+    let meg = 0, partner = 0
+    const cur = new Date(selRange.fra), end = new Date(selRange.til)
+    while (cur <= end) {
+      const info = dayMap[ymd(cur)]
+      if (info?.owner === 'meg') meg++
+      else if (info?.owner === 'partner') partner++
+      cur.setDate(cur.getDate() + 1)
+    }
+    return partner > meg ? 'partner' : 'meg'
+  }
+
+  // --- Overlappende perioder i valgt område ---
+  const overlappingPerioder = selRange
+    ? perioder.filter((p) => !p.erPause && p.fra <= selRange.til && p.til >= selRange.fra)
+    : []
+
+  // --- Antall dager valgt ---
+  const selDays = selRange
+    ? Math.round((new Date(selRange.til).getTime() - new Date(selRange.fra).getTime()) / 86400000) + 1
+    : 0
+  const selWeeks = Math.floor(selDays / 7)
+  const selRem = selDays % 7
+  const selLabel = selWeeks > 0
+    ? `${selWeeks} uke${selWeeks !== 1 ? 'r' : ''}${selRem > 0 ? ` og ${selRem} dag${selRem !== 1 ? 'er' : ''}` : ''}`
+    : `${selDays} dag${selDays !== 1 ? 'er' : ''}`
+
+  function reset() {
+    setSelStart(null)
+    setSelHover(null)
+    setPanelStep('idle')
+    setForskyv(true)
+  }
+
+  function applyFerie() {
+    if (!selRange) return
+    const owner = getSelectionOwner()
+
+    if (!forskyv) {
+      // Simultant: kun visuell markering, ingen endring i perioder
+      const blokk: FerieBlokk = { fra: selRange.fra, til: selRange.til, label: 'Ferie' }
+      if (owner === 'meg') {
+        setInput({ mineFerieblokker: [...input.mineFerieblokker, blokk] })
+      } else {
+        setInput({ partnerFerieblokker: [...input.partnerFerieblokker, blokk] })
+      }
+    } else {
+      // Ferie-pause: sett inn og forskyv etterfølgende perioder
+      setPerioder(insertFeriePause(perioder, owner, selRange.fra, selRange.til))
+    }
+    reset()
+  }
+
+  // --- Dag-farging ---
+  function dayClass(
+    info: { type: string; owner: string } | undefined,
+    isWeekend: boolean,
+    isHelligdag: boolean,
+    isSelected: boolean,
+  ): string {
+    if (isSelected) return 'bg-orange-400/40 text-foreground ring-1 ring-orange-400'
+    if (isHelligdag) return 'bg-muted text-muted-foreground'
     if (!info) return 'bg-muted/20 text-muted-foreground/60'
     if (isWeekend) return 'bg-muted text-muted-foreground'
+    if (info.type === 'ferie_pause') return 'bg-orange-500/20 text-orange-200 ring-1 ring-orange-500/40'
     if (info.owner === 'partner') return `${info.type === 'felles_far' ? 'bg-green-500' : 'bg-green-600'} text-white`
-    const map: Record<string, string> = { mor_obligatorisk: 'bg-blue-800', mor_før_termin: 'bg-blue-700', felles_mor: 'bg-blue-600', mor_kvote: 'bg-blue-500' }
+    const map: Record<string, string> = {
+      mor_obligatorisk: 'bg-blue-800',
+      mor_før_termin: 'bg-blue-700',
+      felles_mor: 'bg-blue-600',
+      mor_kvote: 'bg-blue-500',
+    }
     return `${map[info.type] ?? 'bg-blue-500'} text-white`
   }
 
+  // --- Render én måned ---
   function renderMonth(monthDate: Date) {
     const year = monthDate.getFullYear(), mon = monthDate.getMonth()
     const startDow = (new Date(year, mon, 1).getDay() + 6) % 7
@@ -360,21 +502,49 @@ export function PermisjonKalender({
                   const info = dayMap[ds]
                   const isWeekend = ci === 5 || ci === 6
                   const helligdagNavn = helligdager.get(ds)
-                  const isHelligdag = !!helligdagNavn && !isWeekend  // helg er allerede grå
+                  const isHelligdag = !!helligdagNavn && !isWeekend
                   const isTermin = ds === input.terminDato
                   const isBhg = ds === barnehageStart
+                  const isSelected = !!(selRange && ds >= selRange.fra && ds <= selRange.til)
+                  const isSelectable = !isWeekend && !isHelligdag
+
                   const tooltip = helligdagNavn
-                    ? `${helligdagNavn} — foreldrepenger kan fortsette eller pauses (avtal med arbeidsgiver)`
+                    ? `${helligdagNavn} — foreldrepenger kan fortsette eller pauses`
+                    : isSelected ? `${fmtShort(ds)} — valgt`
                     : info ? (info.owner === 'partner' ? 'Partners periode' : 'Mors/medmors periode') : ''
+
                   return (
                     <span
                       key={ci}
-                      className={`relative aspect-square grid place-items-center text-[12.5px] font-medium rounded-lg ${dayClass(info, isWeekend, isHelligdag)} ${isTermin ? 'ring-2 ring-pink-500 ring-inset !text-pink-200 font-bold' : ''} ${isBhg ? 'ring-2 ring-amber-500 ring-inset' : ''} ${isHelligdag ? 'ring-1 ring-red-500/50' : ''}`}
+                      className={`relative aspect-square grid place-items-center text-[12.5px] font-medium rounded-lg select-none
+                        ${dayClass(info, isWeekend, isHelligdag, isSelected)}
+                        ${isTermin ? 'ring-2 ring-pink-500 ring-inset !text-pink-200 font-bold' : ''}
+                        ${isBhg ? 'ring-2 ring-amber-500 ring-inset' : ''}
+                        ${isHelligdag && !isSelected ? 'ring-1 ring-red-500/50' : ''}
+                        ${isSelectable ? 'cursor-pointer' : ''}
+                      `}
                       title={tooltip}
+                      onMouseDown={isSelectable ? () => {
+                        isDragging.current = true
+                        setSelStart(ds)
+                        setSelHover(ds)
+                        setPanelStep('selected')
+                      } : undefined}
+                      onMouseEnter={isSelectable ? () => {
+                        if (isDragging.current) setSelHover(ds)
+                      } : undefined}
+                      onMouseUp={isSelectable ? () => {
+                        isDragging.current = false
+                      } : undefined}
                     >
                       {cell.getDate()}
                       {isHelligdag && <span className="absolute top-[2px] right-[2px] w-1 h-1 rounded-full bg-red-500" />}
-                      {ferieDays[ds] && !isHelligdag && <span className="absolute bottom-[3px] left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-orange-500" />}
+                      {ferieDaysMeg[ds] && !isHelligdag && !isSelected && (
+                        <span className="absolute bottom-[3px] left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-orange-500" />
+                      )}
+                      {ferieDaysPartner[ds] && !isHelligdag && !isSelected && (
+                        <span className="absolute bottom-[3px] left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-yellow-400" />
+                      )}
                       {isBhg && <span className="absolute -top-1.5 -right-1 text-[11px]">🎒</span>}
                     </span>
                   )
@@ -387,12 +557,163 @@ export function PermisjonKalender({
     )
   }
 
-  return (
-    <div>
-      <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(248px, 1fr))' }}>
-        {months.map(renderMonth)}
+  // --- Panel på høyre side ---
+  function renderPanel() {
+    if (panelStep === 'idle') {
+      return (
+        <div className="rounded-2xl border border-border bg-muted/10 px-5 py-5 space-y-4">
+          <p className="text-sm font-semibold">Legg til ferie</p>
+          <p className="text-[13px] text-muted-foreground leading-relaxed">
+            Klikk og dra i kalenderen for å velge dager du ønsker å markere som ferie.
+          </p>
+          <div className="space-y-2 pt-1">
+            <LegendRow color="bg-orange-400/40 ring-1 ring-orange-400" label="Valgte dager" />
+            <LegendRow color="bg-orange-500/20 ring-1 ring-orange-500/40" label="Ferie-pause (forskyver plan)" />
+            <LegendRow color="bg-blue-500" label="Mors periode" />
+            <LegendRow color="bg-green-600" label="Partners periode" />
+            <LegendRow color="bg-muted ring-1 ring-red-500/40" label="Helligdag" dot="bg-red-500" />
+          </div>
+        </div>
+      )
+    }
+
+    if (panelStep === 'selected') {
+      const owner = getSelectionOwner()
+      return (
+        <div className="rounded-2xl border border-border bg-muted/10 px-5 py-5 space-y-4">
+          <div>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/20 border border-orange-500/40 px-3 py-1 text-[13px] font-semibold text-orange-200">
+              {selLabel} valgt
+            </span>
+            {selRange && (
+              <p className="mt-2 text-[12px] text-muted-foreground">
+                {fmtLong(selRange.fra)} – {fmtLong(selRange.til)}
+              </p>
+            )}
+          </div>
+
+          {overlappingPerioder.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[12px] font-medium text-muted-foreground">Valgte datoer inneholder:</p>
+              {overlappingPerioder.map((p) => (
+                <div key={p.id} className="flex items-center gap-2 text-[12.5px]">
+                  <span className={`h-2 w-2 rounded-[3px] shrink-0 ${p.owner === 'partner' ? 'bg-green-600' : 'bg-blue-500'}`} />
+                  <span>{p.owner === 'meg' ? 'Meg' : 'Partner'} — {PERIODE_LABEL[p.type] ?? p.type}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="text-[12.5px] text-muted-foreground">
+            Ferien registreres for: <span className="font-semibold text-foreground">{owner === 'meg' ? 'deg' : 'partner'}</span>
+          </p>
+
+          <div className="space-y-2 pt-1">
+            <button
+              className="w-full rounded-xl bg-primary text-primary-foreground text-[13.5px] font-semibold py-2.5 hover:bg-primary/90 transition-colors"
+              onClick={() => setPanelStep('confirm')}
+            >
+              Legg til som ferie
+            </button>
+            <button
+              className="w-full rounded-xl border border-border text-[13.5px] font-medium py-2.5 text-muted-foreground hover:text-foreground transition-colors"
+              onClick={reset}
+            >
+              Avbryt
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    // panelStep === 'confirm'
+    return (
+      <div className="rounded-2xl border border-border bg-muted/10 px-5 py-5 space-y-4">
+        <div>
+          <p className="text-sm font-semibold">Hva skal skje med resten av planen?</p>
+          <p className="text-[12.5px] text-muted-foreground mt-1 leading-relaxed">
+            Når du legger inn ferie, kan planen justeres på to måter.
+          </p>
+        </div>
+
+        <div className="space-y-2.5">
+          {[
+            {
+              v: true,
+              label: 'Forskyv resten av planen',
+              desc: 'Ferien pauses permisjonen. Resterende uker forskyves og planen forlenges tilsvarende.',
+            },
+            {
+              v: false,
+              label: 'Simultant — ingen forskyving',
+              desc: 'Ferie avvikles mens foreldrepenger løper parallelt. Permisjonstiden forkortes ikke.',
+            },
+          ].map((o) => (
+            <button
+              key={String(o.v)}
+              type="button"
+              onClick={() => setForskyv(o.v)}
+              className={`w-full text-left rounded-xl border px-4 py-3 transition-colors ${
+                forskyv === o.v ? 'border-primary/60 bg-primary/10' : 'border-border bg-muted/10 hover:border-border/80'
+              }`}
+            >
+              <span className="flex items-start gap-3">
+                <span className={`mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 flex items-center justify-center ${forskyv === o.v ? 'border-primary' : 'border-border'}`}>
+                  {forskyv === o.v && <span className="h-2 w-2 rounded-full bg-primary" />}
+                </span>
+                <span>
+                  <span className="block text-[13px] font-semibold">{o.label}</span>
+                  <span className="block mt-0.5 text-[12px] text-muted-foreground leading-snug">{o.desc}</span>
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <div className="space-y-2 pt-1">
+          <button
+            className="w-full rounded-xl bg-primary text-primary-foreground text-[13.5px] font-semibold py-2.5 hover:bg-primary/90 transition-colors"
+            onClick={applyFerie}
+          >
+            Bekreft
+          </button>
+          <button
+            className="w-full rounded-xl border border-border text-[13.5px] font-medium py-2.5 text-muted-foreground hover:text-foreground transition-colors"
+            onClick={reset}
+          >
+            Avbryt
+          </button>
+        </div>
       </div>
-      <PlanLegend partnerErLærer={input.partnerErLærer} />
+    )
+  }
+
+  return (
+    <div className="flex gap-6 items-start" onMouseLeave={() => { if (isDragging.current) isDragging.current = false }}>
+      {/* Kalender-grid */}
+      <div className="flex-1 min-w-0">
+        <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))' }}>
+          {months.map(renderMonth)}
+        </div>
+        <PlanLegend partnerErLærer={input.partnerErLærer} />
+      </div>
+
+      {/* Interaktivt panel (høyre kolonne) */}
+      <div className="w-64 shrink-0 sticky top-4 self-start">
+        {renderPanel()}
+      </div>
+    </div>
+  )
+}
+
+/* Liten hjelpefunksjon for legend-rader i panel */
+function LegendRow({ color, label, dot }: { color: string; label: string; dot?: string }) {
+  return (
+    <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+      <span className={`relative h-3 w-3 shrink-0 rounded-[3px] ${color}`}>
+        {dot && <span className={`absolute top-[1px] right-[1px] w-[5px] h-[5px] rounded-full ${dot}`} />}
+      </span>
+      {label}
     </div>
   )
 }

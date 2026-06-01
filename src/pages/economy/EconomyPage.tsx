@@ -1,5 +1,26 @@
 import { lazy, Suspense, Component } from 'react'
 import type { ReactNode } from 'react'
+
+/* Auto-reload ved stale cache etter ny deploy (Failed to fetch dynamically imported module).
+ * Prøver å laste én ekstra gang, deretter gir opp og viser feilmelding.  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  factory: () => Promise<{ default: T }>
+): React.LazyExoticComponent<T> {
+  return lazy(async () => {
+    try {
+      return await factory()
+    } catch (e) {
+      const key = `lazy-reload-${factory.toString().slice(0, 60)}`
+      if (!sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key, '1')
+        window.location.reload()
+        return new Promise<{ default: T }>(() => {})
+      }
+      throw e
+    }
+  })
+}
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { useAppStore } from '@/store/useAppStore'
 import type { EconomySubPage } from '@/store/useAppStore'
@@ -23,52 +44,52 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-const EconomyDashboard = lazy(() =>
+const EconomyDashboard = lazyWithRetry(() =>
   import('./EconomyDashboard').then((m) => ({ default: m.EconomyDashboard }))
 )
-const BudgetPage = lazy(() =>
+const BudgetPage = lazyWithRetry(() =>
   import('./BudgetPage').then((m) => ({ default: m.BudgetPage }))
 )
-const SalaryPage = lazy(() =>
+const SalaryPage = lazyWithRetry(() =>
   import('./SalaryPage').then((m) => ({ default: m.SalaryPage }))
 )
-const ATFPage = lazy(() =>
+const ATFPage = lazyWithRetry(() =>
   import('./ATFPage').then((m) => ({ default: m.ATFPage }))
 )
-const SavingsPage = lazy(() =>
+const SavingsPage = lazyWithRetry(() =>
   import('./SavingsPage').then((m) => ({ default: m.SavingsPage }))
 )
-const DebtPage = lazy(() =>
+const DebtPage = lazyWithRetry(() =>
   import('./DebtPage').then((m) => ({ default: m.DebtPage }))
 )
-const AbsencePage = lazy(() =>
+const AbsencePage = lazyWithRetry(() =>
   import('./AbsencePage').then((m) => ({ default: m.AbsencePage }))
 )
-const TaxSettlementPage = lazy(() =>
+const TaxSettlementPage = lazyWithRetry(() =>
   import('./TaxSettlementPage').then((m) => ({ default: m.TaxSettlementPage }))
 )
-const SubscriptionsPage = lazy(() =>
+const SubscriptionsPage = lazyWithRetry(() =>
   import('./SubscriptionsPage').then((m) => ({ default: m.SubscriptionsPage }))
 )
-const FeriepengePage = lazy(() =>
+const FeriepengePage = lazyWithRetry(() =>
   import('./FeriepengePage').then((m) => ({ default: m.FeriepengePage }))
 )
-const IVFPage = lazy(() =>
+const IVFPage = lazyWithRetry(() =>
   import('./IVFPage').then((m) => ({ default: m.IVFPage }))
 )
-const VacationPage = lazy(() =>
+const VacationPage = lazyWithRetry(() =>
   import('./VacationPage').then((m) => ({ default: m.VacationPage }))
 )
-const EconomySettingsPage = lazy(() =>
+const EconomySettingsPage = lazyWithRetry(() =>
   import('./EconomySettingsPage').then((m) => ({ default: m.EconomySettingsPage }))
 )
-const VeikartPage = lazy(() =>
+const VeikartPage = lazyWithRetry(() =>
   import('./VeikartPage').then((m) => ({ default: m.VeikartPage }))
 )
-const GiftPage = lazy(() =>
+const GiftPage = lazyWithRetry(() =>
   import('./GiftPage').then((m) => ({ default: m.GiftPage }))
 )
-const PermisjonPage = lazy(() =>
+const PermisjonPage = lazyWithRetry(() =>
   import('./PermisjonPage').then((m) => ({ default: m.PermisjonPage }))
 )
 
@@ -117,16 +138,35 @@ class PageErrorBoundary extends Component<
   }
   render() {
     if (this.state.error) {
+      const isStaleChunk = this.state.error.includes('Failed to fetch dynamically imported module')
+        || this.state.error.includes('Importing a module script failed')
       return (
         <div className="flex flex-col h-full items-center justify-center gap-3 p-6 text-center">
-          <p className="text-sm text-red-400">Noe gikk galt</p>
-          <p className="text-xs text-muted-foreground font-mono">{this.state.error}</p>
-          <button
-            className="text-xs underline text-muted-foreground hover:text-foreground"
-            onClick={() => this.setState({ error: null })}
-          >
-            Prøv igjen
-          </button>
+          {isStaleChunk ? (
+            <>
+              <p className="text-sm font-medium">Ny versjon tilgjengelig</p>
+              <p className="text-xs text-muted-foreground max-w-xs">
+                Siden er oppdatert siden du åpnet den. Last inn på nytt for å få den nyeste versjonen.
+              </p>
+              <button
+                className="mt-1 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+                onClick={() => window.location.reload()}
+              >
+                Last inn på nytt
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-red-400">Noe gikk galt</p>
+              <p className="text-xs text-muted-foreground font-mono">{this.state.error}</p>
+              <button
+                className="text-xs underline text-muted-foreground hover:text-foreground"
+                onClick={() => this.setState({ error: null })}
+              >
+                Prøv igjen
+              </button>
+            </>
+          )}
         </div>
       )
     }

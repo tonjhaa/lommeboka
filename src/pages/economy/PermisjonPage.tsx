@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   AlertTriangle, CheckCircle, GraduationCap, ChevronLeft, ChevronRight, Check, Info,
-  Plus, Minus, X, Users, Clock, Sparkles, Calendar,
+  Plus, Minus, Users, Clock, Sparkles, Calendar,
 } from 'lucide-react'
 import { usePermisjonStore } from '@/application/usePermisjonStore'
 import {
@@ -94,12 +94,10 @@ const QUOTAS = [
 ]
 
 export function PermisjonPage() {
-  const { input, perioder, setInput, genererPlan } = usePermisjonStore()
+  const { input, perioder, setInput, setPerioder, genererPlan } = usePermisjonStore()
   const [tab, setTab] = useState<Tab>('oppsett')
   const [planView, setPlanView] = useState<PlanView>('kalender')
   const [step, setStep] = useState(0)
-  const [minFerieFra, setMinFerieFra] = useState('')
-  const [minFerieTil, setMinFerieTil] = useState('')
 
   const tilgjengelig = input.terminDato ? beregnTilgjengeligeUker(input) : null
   const oppsummering = input.terminDato && perioder.length > 0 ? beregnOppsummering(input, perioder) : null
@@ -111,19 +109,9 @@ export function PermisjonPage() {
   const megKort = input.morErMeg ? 'Mor' : 'Medmor/far'
   const partnerKort = input.morErMeg ? 'Medmor/far' : 'Mor'
 
-  function leggTilMinFerie() {
-    if (!minFerieFra || !minFerieTil) return
-    setInput({ mineFerieblokker: [...input.mineFerieblokker, { fra: minFerieFra, til: minFerieTil, label: 'Ferie' }] })
-    setMinFerieFra(''); setMinFerieTil('')
-  }
-  function fjernMinFerie(i: number) {
-    setInput({ mineFerieblokker: input.mineFerieblokker.filter((_, idx) => idx !== i) })
-  }
-
   const STEG = [
     { key: 'grav', label: 'Graviditet', q: 'Fortell om graviditeten', lead: 'Termindato og dekningsgrad avgjør hvor mange uker dere har til rådighet.' },
     { key: 'partner', label: 'Partner', q: 'Har partner bunden sommerferie?', lead: 'Lærere har 5 uker tvungen sommerferie. Medmorkvoten bør legges utenom — ellers brukes uker partner er hjemme uansett.' },
-    { key: 'ferie', label: 'Min ferie', q: 'Når har du ferie?', lead: 'Ferie kan forskyve permisjonen og tette gapet før barnehagestart.' },
     { key: 'fordeling', label: 'Fordeling', q: 'Hvordan fordele fellesperioden?', lead: 'Bestem hvor mange uker av fellesperioden hver av dere tar.' },
     { key: 'gen', label: 'Generer', q: 'Klar til å lage planen', lead: 'Vi setter opp et forslag basert på reglene og valgene dine.' },
   ]
@@ -339,42 +327,8 @@ export function PermisjonPage() {
                   </div>
                 )}
 
-                {/* --- Steg 3: Mine ferieblokker --- */}
+                {/* --- Steg 3: Fordeling av fellesperioden --- */}
                 {step === 2 && (
-                  <div className="space-y-4">
-                    <p className="max-w-[60ch] text-[13.5px] text-muted-foreground leading-relaxed">
-                      Legg inn planlagte ferieperioder. Ferie kan brukes som <b>pause</b> fra foreldrepenger, slik at ukene forskyves og du strekker permisjonen lenger.
-                    </p>
-                    {input.mineFerieblokker.length > 0 && (
-                      <div className="space-y-2">
-                        {input.mineFerieblokker.map((f, i) => (
-                          <div key={i} className="flex items-center gap-3 rounded-xl border border-border bg-muted/10 px-4 py-2.5 text-[13.5px]">
-                            <span className="h-2.5 w-2.5 shrink-0 rounded-[3px] bg-orange-500" />
-                            <span className="font-mono">{f.fra}</span>
-                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="font-mono">{f.til}</span>
-                            <button className="ml-auto grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-red-500/15 hover:text-red-400" onClick={() => fjernMinFerie(i)} aria-label="Fjern"><X className="h-4 w-4" /></button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex flex-wrap items-end gap-3">
-                      <div className="flex-1 min-w-[150px] space-y-1.5">
-                        <Label>Fra</Label>
-                        <Input type="date" className="h-11" value={minFerieFra} onChange={(e) => setMinFerieFra(e.target.value)} />
-                      </div>
-                      <div className="flex-1 min-w-[150px] space-y-1.5">
-                        <Label>Til</Label>
-                        <Input type="date" className="h-11" value={minFerieTil} onChange={(e) => setMinFerieTil(e.target.value)} />
-                      </div>
-                      <Button variant="outline" className="h-11 gap-1.5" onClick={leggTilMinFerie} disabled={!minFerieFra || !minFerieTil}><Plus className="h-4 w-4" /> Legg til</Button>
-                    </div>
-                    <InfoBox>De fleste har <b>5 uker ferie</b> i året. Lagt inn her vises feriene som oransje felt på tidslinjen.</InfoBox>
-                  </div>
-                )}
-
-                {/* --- Steg 4: Fordeling av fellesperioden --- */}
-                {step === 3 && (
                   tilgjengelig ? (
                     <div className="space-y-5">
                       <p className="max-w-[60ch] text-[13.5px] text-muted-foreground leading-relaxed">
@@ -422,13 +376,13 @@ export function PermisjonPage() {
                   )
                 )}
 
-                {/* --- Steg 5: Generer --- */}
-                {step === 4 && (
+                {/* --- Steg 4: Generer --- */}
+                {step === 3 && (
                   <div className="space-y-5">
                     {/* Lønn — for AI-beregning av 6G og 100%/80%-anbefaling */}
                     <div className="space-y-2.5">
                       <Label>Lønn (valgfritt — brukes av AI til å anbefale 100% eller 80%)</Label>
-                      <p className="text-[12.5px] text-muted-foreground -mt-1">Foreldrepenger begrenses til 6G ≈ 744 000 kr/år (≈ 62 000 kr/mnd). Tjener du over dette, har valget av dekningsgrad en annen effekt.</p>
+                      <p className="text-[12.5px] text-muted-foreground -mt-1">Foreldrepenger begrenses til 6G = 819 294 kr/år (68 274 kr/mnd). Tjener du over dette, har valget av dekningsgrad en annen effekt.</p>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
                           <Label className="text-[13px]">{megKort} — månedslønn (brutto)</Label>
@@ -475,7 +429,6 @@ export function PermisjonPage() {
                           ['Totalt tilgjengelig', tilgjengelig ? `${Math.round(tilgjengelig.total)} uker` : '—'],
                           ['Barnehagestart', barnehageStart ? fmtDate(barnehageStart) : '—'],
                           ['Fellesperiode', `${tilMor} uker mor / ${tilPartner} uker partner`],
-                          ['Mine ferieuker', `${input.mineFerieblokker.length} blokk${input.mineFerieblokker.length === 1 ? '' : 'er'}`],
                         ].map(([k, v]) => (
                           <div key={k} className="flex items-baseline justify-between gap-3 border-b border-border/50 pb-2">
                             <span className="text-[13px] text-muted-foreground">{k}</span>
@@ -531,7 +484,7 @@ export function PermisjonPage() {
                 <Card className="rounded-2xl">
                   <CardContent className="px-6 py-6">
                     {planView === 'kalender'
-                      ? <PermisjonKalender input={input} perioder={perioder} />
+                      ? <PermisjonKalender input={input} perioder={perioder} setPerioder={setPerioder} setInput={setInput} />
                       : <PermisjonTimeline input={input} perioder={perioder} />}
                   </CardContent>
                 </Card>
