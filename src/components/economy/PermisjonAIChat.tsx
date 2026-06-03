@@ -100,7 +100,12 @@ export function PermisjonAIChat({
       const { data, error: fnError } = await supabase.functions.invoke('permisjon-ai', {
         body: { messages, userContext },
       })
-      if (fnError) throw fnError
+      if (fnError) {
+        if ((fnError as { status?: number }).status === 429) {
+          throw new Error('Daglig kvote nådd. Prøv igjen i morgen.')
+        }
+        throw fnError
+      }
       const assistantContent = (data as { content?: { text?: string } })?.content?.text ?? 'Ingen svar'
       addChatMessage({ role: 'assistant', content: assistantContent, timestamp: new Date().toISOString() })
     } catch (e) {

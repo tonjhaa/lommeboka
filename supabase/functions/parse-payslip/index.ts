@@ -1,19 +1,51 @@
+import { createClient } from 'npm:@supabase/supabase-js'
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, content-type, x-anthropic-key',
+  'Access-Control-Allow-Headers': 'authorization, content-type, apikey',
 }
+
+const DAILY_CALL_LIMIT = 20   // maks PDF-parsingkall per bruker per dag
+const MAX_TEXT_CHARS   = 8000 // maks tegn fra PDF-tekst
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  const apiKey = req.headers.get('x-anthropic-key')
-  if (!apiKey) {
-    return new Response(JSON.stringify({ error: 'Mangler X-Anthropic-Key header' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+  // Krev gyldig Supabase-sesjon
+  const authHeader = req.headers.get('Authorization')
+  const token = authHeader?.replace('Bearer ', '')
+  if (!token) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
+  const supabaseClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    { global: { headers: { Authorization: `Bearer ${token}` } } }
+  )
+  const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+  if (authError || !user) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
+
+  // Rate limiting: maks DAILY_CALL_LIMIT per bruker per dag
+  const supabaseAdmin = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+  )
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const { count } = await supabaseAdmin
+    .from('ai_usage_log')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .eq('endpoint', 'parse-payslip')
+    .gte('created_at', since)
+  if ((count ?? 0) >= DAILY_CALL_LIMIT) {
+    return new Response(JSON.stringify({ error: 'Daglig kvote nådd (20 slipper per dag). Prøv igjen i morgen.' }),
+      { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 
   let text: string
@@ -22,10 +54,18 @@ Deno.serve(async (req: Request) => {
     if (typeof body.text !== 'string' || !body.text.trim()) {
       throw new Error('Mangler felt: text')
     }
-    text = body.text
+    text = body.text.slice(0, MAX_TEXT_CHARS)
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), {
       status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+
+  const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
+  if (!apiKey) {
+    return new Response(JSON.stringify({ error: 'ANTHROPIC_API_KEY ikke satt i Supabase secrets' }), {
+      status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
@@ -47,7 +87,7 @@ Returner JSON på formen:
 {"periode":{"year":2026,"month":1},"maanedslonn":55000,"bruttoSum":60000,"skattetrekk":15000,"pensjonstrekk":2000,"fagforeningskontingent":500,"nettoUtbetalt":42500,"feriepengegrunnlag":180000}
 
 Lønnsslipp:
-${text.slice(0, 8000)}`
+${text}`
 
   const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -88,7 +128,13 @@ ${text.slice(0, 8000)}`
     })
   }
 
-  // Bygg fullstendig ParsetLonnsslipp med nullverdier for felt som ikke finnes
+  // Logg vellykket kall (best-effort)
+  supabaseAdmin.from('ai_usage_log').insert({
+    user_id: user.id,
+    endpoint: 'parse-payslip',
+    tokens_est: Math.ceil(text.length / 4),
+  }).then(() => {}).catch(() => {})
+
   const periode = (parsed.periode as { year: number; month: number }) ?? { year: new Date().getFullYear(), month: new Date().getMonth() + 1 }
   const result = {
     periode,

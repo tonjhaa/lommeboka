@@ -1,6 +1,11 @@
 import Anthropic from 'npm:@anthropic-ai/sdk'
 import { createClient } from 'npm:@supabase/supabase-js'
 
+const DAILY_CALL_LIMIT = 30    // maks AI-kall per bruker per dag
+const MAX_MESSAGES     = 20    // maks meldinger i historikken
+const MAX_MSG_CHARS    = 2000  // maks tegn per melding
+const MAX_CTX_CHARS    = 2000  // maks tegn i userContext
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -148,8 +153,41 @@ Deno.serve(async (req) => {
       { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 
+  // Rate limiting: tell AI-kall per bruker de siste 24 timene
+  const supabaseAdmin = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+  )
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const { count } = await supabaseAdmin
+    .from('ai_usage_log')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .eq('endpoint', 'permisjon-ai')
+    .gte('created_at', since)
+  if ((count ?? 0) >= DAILY_CALL_LIMIT) {
+    return new Response(JSON.stringify({ error: 'Daglig kvote nådd. Prøv igjen i morgen.' }),
+      { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
+
   try {
-    const { messages, userContext } = await req.json()
+    const body = await req.json() as { messages?: unknown; userContext?: unknown }
+
+    // Valider og trim messages
+    if (!Array.isArray(body.messages)) {
+      return new Response(JSON.stringify({ error: 'Ugyldig forespørsel: messages må være en liste' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+    const rawMessages = body.messages as Array<{ role: string; content: string }>
+    const messages = rawMessages
+      .filter((m) => m && typeof m.role === 'string' && typeof m.content === 'string')
+      .slice(-MAX_MESSAGES)
+      .map((m) => ({ role: m.role, content: m.content.slice(0, MAX_MSG_CHARS) }))
+
+    // Trim userContext
+    const rawCtx = typeof body.userContext === 'string' ? body.userContext : ''
+    const userContext = rawCtx.slice(0, MAX_CTX_CHARS)
+
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
     if (!apiKey) {
       return new Response(
@@ -167,6 +205,15 @@ Deno.serve(async (req) => {
       system: systemWithContext,
       messages,
     })
+
+    // Logg vellykket kall (best-effort — ignorer feil for ikke å blokkere svaret)
+    const inputEst = messages.reduce((acc, m) => acc + m.content.length, 0)
+    supabaseAdmin.from('ai_usage_log').insert({
+      user_id: user.id,
+      endpoint: 'permisjon-ai',
+      tokens_est: Math.ceil(inputEst / 4),
+    }).then(() => {}).catch(() => {})
+
     return new Response(
       JSON.stringify({ content: response.content[0] }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

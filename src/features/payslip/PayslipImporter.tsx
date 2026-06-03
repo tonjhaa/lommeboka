@@ -56,7 +56,9 @@ export function PayslipImporter({ onImported, compact }: PayslipImporterProps) {
   const importSlip = useEconomyStore((s) => s.importSlip)
 
   async function processFiles(files: File[], useAI = false) {
-    const pdfs = files.filter((f) => f.name.endsWith('.pdf') || f.type === 'application/pdf')
+    const pdfs = files
+      .filter((f) => f.name.endsWith('.pdf') || f.type === 'application/pdf')
+      .slice(0, 10)  // maks 10 filer per økt
     if (pdfs.length === 0) {
       setState({ stage: 'idle' })
       return
