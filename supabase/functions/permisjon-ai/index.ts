@@ -1,4 +1,5 @@
 import Anthropic from 'npm:@anthropic-ai/sdk'
+import { createClient } from 'npm:@supabase/supabase-js'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -128,6 +129,25 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
+
+  // Krev gyldig Supabase-sesjon — forhindrer uautentisert misbruk av API-nøkkelen.
+  const authHeader = req.headers.get('Authorization')
+  const token = authHeader?.replace('Bearer ', '')
+  if (!token) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
+  const supabaseClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    { global: { headers: { Authorization: `Bearer ${token}` } } }
+  )
+  const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+  if (authError || !user) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
+
   try {
     const { messages, userContext } = await req.json()
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY')

@@ -99,12 +99,16 @@ export async function acceptInvitation(partnershipId: string): Promise<string | 
   return error?.message ?? null
 }
 
-/** Avslutter partnerskap (setter status = rejected). */
+/** Avslutter partnerskap (setter status = rejected). Kun inviter eller invitee kan kalle. */
 export async function disconnectPartner(partnershipId: string): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return 'Ikke innlogget'
+
   const { error } = await supabase
     .from('partnerships')
     .update({ status: 'rejected' })
     .eq('id', partnershipId)
+    .or(`inviter_id.eq.${user.id},invitee_id.eq.${user.id}`)
 
   return error?.message ?? null
 }
