@@ -20,7 +20,7 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
 }
 import {
   LayoutDashboard, Receipt, Palmtree, Clipboard,
-  PiggyBank, CreditCard, FileText, TrendingUp,
+  PiggyBank, CreditCard, FileText, TrendingUp, HeartPulse,
 } from 'lucide-react'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { EconomyStoreProvider } from '@/contexts/EconomyStoreContext'
@@ -53,8 +53,11 @@ const AbsencePage = lazy(() =>
 const TaxSettlementPage = lazy(() =>
   import('./TaxSettlementPage').then((m) => ({ default: m.TaxSettlementPage }))
 )
+const IVFPage = lazy(() =>
+  import('./IVFPage').then((m) => ({ default: m.IVFPage }))
+)
 
-type Tab = 'dashbord' | 'lonn' | 'feriepenger' | 'budsjett' | 'sparing' | 'gjeld' | 'fravaer' | 'skatt'
+type Tab = 'dashbord' | 'lonn' | 'feriepenger' | 'budsjett' | 'sparing' | 'gjeld' | 'fravaer' | 'skatt' | 'prosjekt'
 
 const TABS: { key: Tab; label: string; Icon: React.FC<{ className?: string }> }[] = [
   { key: 'dashbord',    label: 'Dashbord',    Icon: LayoutDashboard },
@@ -65,6 +68,7 @@ const TABS: { key: Tab; label: string; Icon: React.FC<{ className?: string }> }[
   { key: 'gjeld',       label: 'Gjeld',       Icon: CreditCard },
   { key: 'fravaer',     label: 'Fravær',      Icon: FileText },
   { key: 'skatt',       label: 'Skatt',       Icon: TrendingUp },
+  { key: 'prosjekt',    label: 'Prosjekt',    Icon: HeartPulse },
 ]
 
 function PageFallback() {
@@ -143,6 +147,7 @@ export function PartnerPage() {
             {tab === 'gjeld'       && <DebtPage />}
             {tab === 'fravaer'     && <AbsencePage />}
             {tab === 'skatt'       && <TaxSettlementPage />}
+            {tab === 'prosjekt'    && <IVFPage />}
           </Suspense>
         </div>
       </div>

@@ -390,6 +390,23 @@ function ProfileForm({
     atfEnabled: true,
     ...initial,
   })
+  const [taxCalcStatus, setTaxCalcStatus] = useState<'idle' | 'calculating' | 'done'>('idle')
+
+  useEffect(() => {
+    if (!form.tabellnummer || form.baseMonthly <= 0) { setTaxCalcStatus('idle'); return }
+    setTaxCalcStatus('calculating')
+    const grunnlag = form.baseMonthly + form.fixedAdditions.reduce((s, a) => s + Math.max(0, a.amount), 0)
+    slaaOppTrekk(form.tabellnummer, grunnlag, 1)
+      .then(trekk => {
+        if (trekk !== null) {
+          setForm(f => ({ ...f, lastKnownTaxWithholding: trekk }))
+          setTaxCalcStatus('done')
+        } else {
+          setTaxCalcStatus('idle')
+        }
+      })
+      .catch(() => setTaxCalcStatus('idle'))
+  }, [form.tabellnummer, form.baseMonthly]) // fixedAdditions not editable here
 
   function field(k: keyof EmploymentProfile) {
     return {
@@ -399,15 +416,37 @@ function ProfileForm({
     }
   }
 
+  function fieldInt(k: keyof EmploymentProfile) {
+    return {
+      value: form[k] != null ? String(form[k]) : '',
+      onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+        const v = parseInt(e.target.value)
+        setForm((f) => ({ ...f, [k]: isNaN(v) ? undefined : v }))
+      },
+    }
+  }
+
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <Label className="text-xs">Trekktabellnummer</Label>
+          <Input type="number" placeholder="f.eks. 7100" {...fieldInt('tabellnummer')} />
+        </div>
         <div className="space-y-1">
           <Label className="text-xs">Grunnlønn/mnd</Label>
           <Input type="number" {...field('baseMonthly')} />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Skattetrekk/mnd</Label>
+          <div className="flex items-center justify-between">
+            <Label className="text-xs">Skattetrekk/mnd</Label>
+            {taxCalcStatus === 'calculating' && (
+              <span className="text-[10px] text-muted-foreground">Beregner…</span>
+            )}
+            {taxCalcStatus === 'done' && (
+              <span className="text-[10px] text-green-500">Fra tabell {form.tabellnummer}</span>
+            )}
+          </div>
           <Input type="number" {...field('lastKnownTaxWithholding')} />
         </div>
         <div className="space-y-1">
@@ -418,13 +457,15 @@ function ProfileForm({
           <Label className="text-xs">Husleietrekk/mnd</Label>
           <Input type="number" {...field('housingDeduction')} />
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Pensjonstrekk %</Label>
-          <Input type="number" {...field('pensionPercent')} />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Fagforeningskontingent/mnd</Label>
-          <Input type="number" {...field('unionFee')} />
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">Pensjonstrekk %</Label>
+            <Input type="number" {...field('pensionPercent')} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Fagforening/mnd</Label>
+            <Input type="number" {...field('unionFee')} />
+          </div>
         </div>
       </div>
       <div className="flex gap-2 justify-end">

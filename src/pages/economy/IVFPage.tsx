@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Plus, Trash2, ChevronDown, ChevronUp, Pencil, Check, X } from 'lucide-react'
-import { useEconomyStore } from '@/application/useEconomyStore'
+import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
 import type { IVFTransactionType } from '@/types/economy'
 import { cn } from '@/lib/utils'
 
@@ -39,7 +39,7 @@ const TYPE_COLORS: Record<IVFTransactionType, string> = {
 // ------------------------------------------------------------
 
 function StatsCard() {
-  const ivfTransactions = useEconomyStore((s) => s.ivfTransactions)
+  const ivfTransactions = useActiveEconomyStore((s) => s.ivfTransactions)
   const today = new Date().toISOString().split('T')[0]
 
   function calcStats(txs: typeof ivfTransactions) {
@@ -84,8 +84,13 @@ function StatsCard() {
     dim?: boolean
   }) {
     return (
-      <div className={cn('flex flex-col gap-1.5', dim && 'opacity-60')}>
-        <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className={cn('flex flex-col gap-1.5', dim && 'opacity-70')}>
+        <div className={cn(
+          'text-sm font-bold px-2 py-1 rounded',
+          dim
+            ? 'bg-muted/30 text-muted-foreground'
+            : 'bg-violet-500/15 text-violet-300'
+        )}>
           {label}
         </div>
         <div className="flex justify-between items-baseline">
@@ -151,8 +156,9 @@ function StatsCard() {
   return (
     <div className="rounded-lg border border-border bg-card p-4 flex flex-col gap-4">
       <h3 className="text-sm font-semibold text-foreground">Oversikt</h3>
-      <Section label="Bokført (hittil)" stats={past} />
-      <Section label="Inkl. planlagt (hele året)" stats={all} dim />
+      <Section label="Hittil i år" stats={past} />
+      <div className="border-t border-border" />
+      <Section label="Tilsammen (inkl. planlagt)" stats={all} dim />
     </div>
   )
 }
@@ -247,7 +253,7 @@ function EditRow({
 // ------------------------------------------------------------
 
 function AddTransactionForm({ onClose }: { onClose: () => void }) {
-  const addIvfTransaction = useEconomyStore((s) => s.addIvfTransaction)
+  const addIvfTransaction = useActiveEconomyStore((s) => s.addIvfTransaction)
   const today = new Date().toISOString().split('T')[0]
   const [date, setDate] = useState(today)
   const [label, setLabel] = useState('')
@@ -355,7 +361,7 @@ function AddTransactionForm({ onClose }: { onClose: () => void }) {
 // ------------------------------------------------------------
 
 function TransactionTable() {
-  const { ivfTransactions, removeIvfTransaction, updateIvfTransaction } = useEconomyStore()
+  const { ivfTransactions, removeIvfTransaction, updateIvfTransaction } = useActiveEconomyStore()
   const [showAll, setShowAll] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
@@ -505,7 +511,7 @@ function TransactionTable() {
 // ------------------------------------------------------------
 
 function SummaryStats() {
-  const ivfTransactions = useEconomyStore((s) => s.ivfTransactions)
+  const ivfTransactions = useActiveEconomyStore((s) => s.ivfTransactions)
   const today = new Date().toISOString().split('T')[0]
 
   const pastTx = ivfTransactions.filter((t) => t.date <= today)
@@ -541,7 +547,7 @@ function SummaryStats() {
 
 export function IVFPage() {
   const [showAddForm, setShowAddForm] = useState(false)
-  const { ivfSettings, setIvfSettings } = useEconomyStore()
+  const { ivfSettings, setIvfSettings } = useActiveEconomyStore()
 
   return (
     <div className="flex flex-col gap-4 p-4 overflow-y-auto h-full">
