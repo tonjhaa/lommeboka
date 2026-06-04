@@ -6,7 +6,7 @@ const APP_ORIGIN = (Deno.env.get('APP_ORIGIN') ?? 'https://tonjhaa.github.io').r
 serve(async (req) => {
   const corsHeaders = {
     'Access-Control-Allow-Origin': APP_ORIGIN,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, baggage, sentry-trace',
   }
 
   if (req.method === 'OPTIONS') {
