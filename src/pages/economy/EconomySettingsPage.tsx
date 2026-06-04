@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Download, Upload, Trash2, Smartphone, User, ShieldCheck } from 'lucide-react'
+import { Download, Upload, Trash2, Smartphone, User, ShieldCheck, Plus, X } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useEconomyStore } from '@/application/useEconomyStore'
+import { DEFAULT_BANK_PRESETS } from '@/config/bankPresets'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -678,6 +679,197 @@ function ModulesSection() {
 }
 
 
+function BankPresetsSection() {
+  const bankPresets = useEconomyStore((s) => s.bankPresets)
+  const updateBankPreset = useEconomyStore((s) => s.updateBankPreset)
+  const addBankPreset = useEconomyStore((s) => s.addBankPreset)
+  const removeBankPreset = useEconomyStore((s) => s.removeBankPreset)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [newBank, setNewBank] = useState({ bankName: '', accountTypeName: '', freq: 'monthly' as 'monthly' | 'yearly' })
+
+  const grouped = bankPresets.reduce<Record<string, typeof bankPresets>>((acc, p) => {
+    if (!acc[p.bankName]) acc[p.bankName] = []
+    acc[p.bankName].push(p)
+    return acc
+  }, {})
+
+  function resetToDefault(bankName: string) {
+    DEFAULT_BANK_PRESETS
+      .filter((p) => p.bankName === bankName)
+      .forEach((p) => updateBankPreset(p.id, { tieredRates: p.tieredRates, enabled: p.enabled }))
+  }
+
+  return (
+    <Section title="Banker og rentesatser" description="Konfigurer bankpresets som brukes i bankvelgeren når du oppretter sparekontoer.">
+      <div className="space-y-4">
+        {Object.entries(grouped).map(([bankName, presets]) => (
+          <div key={bankName} className="rounded-lg border border-border bg-card/40 overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-2 bg-muted/20 border-b border-border">
+              <p className="text-xs font-semibold">{bankName}</p>
+              <button
+                onClick={() => resetToDefault(bankName)}
+                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Tilbakestill
+              </button>
+            </div>
+            <div className="divide-y divide-border/40">
+              {presets.map((preset) => (
+                <div key={preset.id} className="px-3 py-2 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={preset.enabled}
+                        onChange={(e) => updateBankPreset(preset.id, { enabled: e.target.checked })}
+                        className="h-3.5 w-3.5 accent-primary"
+                      />
+                      <span className="text-xs font-medium">{preset.accountTypeName}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {preset.interestCreditFrequency === 'monthly' ? 'månedlig' : 'årlig'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setEditingId(editingId === preset.id ? null : preset.id)}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {editingId === preset.id ? 'Lukk' : 'Rediger'}
+                      </button>
+                      <button
+                        onClick={() => removeBankPreset(preset.id)}
+                        className="text-muted-foreground hover:text-red-400 transition-colors p-0.5"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                  {editingId !== preset.id && (
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                      {[...preset.tieredRates]
+                        .sort((a, b) => a.fromBalance - b.fromBalance)
+                        .map((t) => (
+                          <span key={t.fromBalance} className="text-[10px] text-muted-foreground font-mono">
+                            {t.fromBalance === 0 ? '0' : `${(t.fromBalance / 1000).toFixed(0)}k`}+: {t.rate}%
+                          </span>
+                        ))}
+                    </div>
+                  )}
+                  {editingId === preset.id && (
+                    <div className="space-y-1.5 pl-2">
+                      {[...preset.tieredRates]
+                        .sort((a, b) => a.fromBalance - b.fromBalance)
+                        .map((tier, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              step={10000}
+                              disabled={idx === 0}
+                              value={tier.fromBalance || ''}
+                              placeholder="0"
+                              onChange={(e) => {
+                                const updated = [...preset.tieredRates].sort((a, b) => a.fromBalance - b.fromBalance)
+                                updated[idx] = { ...tier, fromBalance: parseFloat(e.target.value) || 0 }
+                                updateBankPreset(preset.id, { tieredRates: updated })
+                              }}
+                              className="h-6 text-xs w-24 font-mono"
+                            />
+                            <span className="text-xs text-muted-foreground">kr →</span>
+                            <Input
+                              type="number"
+                              step={0.05}
+                              value={tier.rate || ''}
+                              onChange={(e) => {
+                                const updated = [...preset.tieredRates].sort((a, b) => a.fromBalance - b.fromBalance)
+                                updated[idx] = { ...tier, rate: parseFloat(e.target.value) || 0 }
+                                updateBankPreset(preset.id, { tieredRates: updated })
+                              }}
+                              className="h-6 text-xs w-16 font-mono"
+                            />
+                            <span className="text-xs text-muted-foreground">%</span>
+                            {idx > 0 && (
+                              <button
+                                onClick={() => {
+                                  const updated = [...preset.tieredRates].sort((a, b) => a.fromBalance - b.fromBalance).filter((_, i) => i !== idx)
+                                  updateBankPreset(preset.id, { tieredRates: updated })
+                                }}
+                                className="text-muted-foreground hover:text-red-400 transition-colors"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      <button
+                        onClick={() => {
+                          const sorted = [...preset.tieredRates].sort((a, b) => a.fromBalance - b.fromBalance)
+                          const last = sorted.at(-1)
+                          updateBankPreset(preset.id, {
+                            tieredRates: [...sorted, { fromBalance: (last?.fromBalance ?? 0) + 100_000, rate: 0 }],
+                          })
+                        }}
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Plus className="h-3 w-3" /> Legg til trinn
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {adding ? (
+          <div className="rounded-lg border border-border bg-card/40 p-3 space-y-2">
+            <p className="text-xs font-medium">Ny kontotype</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                placeholder="Banknavn"
+                value={newBank.bankName}
+                onChange={(e) => setNewBank((b) => ({ ...b, bankName: e.target.value }))}
+                className="h-7 text-xs"
+              />
+              <Input
+                placeholder="Kontotype"
+                value={newBank.accountTypeName}
+                onChange={(e) => setNewBank((b) => ({ ...b, accountTypeName: e.target.value }))}
+                className="h-7 text-xs"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                disabled={!newBank.bankName.trim() || !newBank.accountTypeName.trim()}
+                onClick={() => {
+                  addBankPreset({
+                    id: crypto.randomUUID(),
+                    bankName: newBank.bankName.trim(),
+                    accountTypeName: newBank.accountTypeName.trim(),
+                    tieredRates: [{ fromBalance: 0, rate: 0 }],
+                    interestCreditFrequency: newBank.freq,
+                    enabled: true,
+                  })
+                  setNewBank({ bankName: '', accountTypeName: '', freq: 'monthly' })
+                  setAdding(false)
+                }}
+              >
+                Legg til
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setAdding(false)}>Avbryt</Button>
+            </div>
+          </div>
+        ) : (
+          <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
+            <Plus className="h-3.5 w-3.5 mr-1" /> Legg til kontotype
+          </Button>
+        )}
+      </div>
+    </Section>
+  )
+}
+
 export function EconomySettingsPage() {
   return (
     <div className="h-full overflow-y-auto p-6 space-y-8 max-w-2xl">
@@ -696,6 +888,9 @@ export function EconomySettingsPage() {
 
       <Separator />
       <ModulesSection />
+
+      <Separator />
+      <BankPresetsSection />
 
       <Separator />
       <TidsbegrensetTilleggSection />
