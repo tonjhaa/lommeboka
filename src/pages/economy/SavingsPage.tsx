@@ -26,6 +26,7 @@ import {
   computeYearlyInterestIncome,
   computeBSUForecast,
   computeEffectiveBalance,
+  getEffectiveRateFromTiers,
 } from '@/domain/economy/savingsCalculator'
 import { calcMaxPurchase, BSU_MAX_TOTAL } from '@/hooks/useVeikart'
 import type {
@@ -724,6 +725,7 @@ function MånedsoversiktTable({
       type: acc.type,
       startBalance: contribOverrides[`start-${acc.id}`] ?? computeEffectiveBalance(acc, now),
       rate: contribOverrides[`rate-${acc.id}`] ?? ([...acc.rateHistory].sort((a, b) => b.fromDate.localeCompare(a.fromDate))[0]?.rate ?? 0),
+      tieredRates: acc.tieredRates,
       getBase: (year: number, month: number) => getBaseContribForMonth(acc, year, month, nowISO),
     }))
 
@@ -765,7 +767,10 @@ function MånedsoversiktTable({
           interest = 0
         } else {
           // Renter beregnes månedlig, krediteres i januar (norsk bankstandard)
-          const monthlyInterest = bal0 * acc.rate / 100 / 12
+          const effectiveRate = (acc.tieredRates?.length && !(`rate-${acc.id}` in contribOverrides))
+            ? getEffectiveRateFromTiers(acc.tieredRates, bal0)
+            : acc.rate
+          const monthlyInterest = bal0 * effectiveRate / 100 / 12
           interest = monthlyInterest
           if (month === 1) {
             bal = bal0 + accruedInterest[j] + contrib
@@ -798,7 +803,9 @@ function MånedsoversiktTable({
         const baseContrib = active ? Math.round(acc.monthlyContribution) : 0
         const overrideKey = `p-${acc.id}-${year}-${month}`
         const contrib = overrideKey in contribOverrides ? contribOverrides[overrideKey] : baseContrib
-        const rate = acc.rate || SAVINGS_RATE_TABLE
+        const rate = (acc.tieredRates?.length && !(`rate-p-${acc.id}` in contribOverrides))
+          ? getEffectiveRateFromTiers(acc.tieredRates, acc.runningBal)
+          : (acc.rate || SAVINGS_RATE_TABLE)
         const monthlyInterest = acc.runningBal * rate / 100 / 12
         let bal: number
         if (month === 1) {
