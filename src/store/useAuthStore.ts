@@ -79,7 +79,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signUp: async (email, password) => {
     set({ loading: true })
-    const { error } = await supabase.auth.signUp({ email, password })
+    const inviteId = new URLSearchParams(window.location.search).get('invite')
+    if (inviteId) localStorage.setItem('pendingInvite', inviteId)
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: window.location.href },
+    })
     set({ loading: false })
     return error?.message ?? null
   },

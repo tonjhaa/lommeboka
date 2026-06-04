@@ -95,7 +95,8 @@ function MfaForm() {
 }
 
 function AuthForm() {
-  const [mode, setMode] = useState<'login' | 'signup'>('login')
+  const hasInvite = new URLSearchParams(window.location.search).has('invite')
+  const [mode, setMode] = useState<'login' | 'signup'>(hasInvite ? 'signup' : 'login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)

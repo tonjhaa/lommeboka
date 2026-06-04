@@ -117,10 +117,10 @@ function App() {
     // Initialiser partnerskap og håndter eventuelle invite-lenker
     const initPartnership = async () => {
       const params = new URLSearchParams(window.location.search)
-      const inviteId = params.get('invite')
+      const inviteId = params.get('invite') ?? localStorage.getItem('pendingInvite')
       if (inviteId) {
+        localStorage.removeItem('pendingInvite')
         await usePartnershipStore.getState().accept(inviteId)
-        // Fjern ?invite= fra URL uten reload
         const url = new URL(window.location.href)
         url.searchParams.delete('invite')
         window.history.replaceState({}, '', url.toString())
