@@ -91,4 +91,29 @@ describe('buildPartnerVeikartPatch', () => {
     const patch = buildPartnerVeikartPatch([], [paid], null, stubVeikart, now)
     expect(patch.debts).toHaveLength(0)
   })
+
+  it('kopierer tieredRates til PartnerAccount', () => {
+    const acc = makeSavingsAccount({
+      tieredRates: [
+        { fromBalance: 0,       rate: 3.25 },
+        { fromBalance: 100_000, rate: 3.55 },
+      ],
+    })
+    const patch = buildPartnerVeikartPatch([acc], [], null, stubVeikart, now)
+    expect(patch.accounts[0].tieredRates).toHaveLength(2)
+    expect(patch.accounts[0].tieredRates![0].rate).toBe(3.25)
+  })
+
+  it('bruker getEffectiveRate for rate-feltet når tieredRates finnes', () => {
+    const acc = makeSavingsAccount({
+      openingBalance: 150_000,
+      tieredRates: [
+        { fromBalance: 0,       rate: 3.25 },
+        { fromBalance: 100_000, rate: 3.55 },
+      ],
+    })
+    const patch = buildPartnerVeikartPatch([acc], [], null, stubVeikart, now)
+    // Saldo > 100k → skal bruke 3.55
+    expect(patch.accounts[0].rate).toBe(3.55)
+  })
 })

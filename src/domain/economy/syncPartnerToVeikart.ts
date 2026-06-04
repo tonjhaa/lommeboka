@@ -1,4 +1,4 @@
-import { computeEffectiveBalance, projectBalanceMonthly } from './savingsCalculator'
+import { computeEffectiveBalance, projectBalanceMonthly, getEffectiveRate } from './savingsCalculator'
 import type {
   SavingsAccount, DebtAccount, EmploymentProfile,
   PartnerVeikart, PartnerAccount, PartnerDebt,
@@ -26,13 +26,17 @@ export function buildPartnerVeikartPatch(
 
   const accounts: PartnerAccount[] = savingsAccounts
     .filter((a) => a.type !== 'BSU' && a.type !== 'fond')
-    .map((a) => ({
-      id: a.id,
-      label: a.label,
-      balance: projectedBalance(a),
-      rate: [...a.rateHistory].sort((x, y) => y.fromDate.localeCompare(x.fromDate))[0]?.rate ?? 0,
-      monthlyContribution: a.monthlyContribution ?? 0,
-    }))
+    .map((a) => {
+      const balance = projectedBalance(a)
+      return {
+        id: a.id,
+        label: a.label,
+        balance,
+        rate: getEffectiveRate(a, balance),
+        monthlyContribution: a.monthlyContribution ?? 0,
+        ...(a.tieredRates?.length ? { tieredRates: a.tieredRates } : {}),
+      }
+    })
 
   const bsuAcc = savingsAccounts.find((a) => a.type === 'BSU')
 
