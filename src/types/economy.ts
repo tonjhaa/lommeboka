@@ -256,6 +256,20 @@ export interface ATFEntry {
 
 export type SavingsAccountType = 'BSU' | 'fond' | 'krypto' | 'sparekonto' | 'annet'
 
+export interface TieredRate {
+  fromBalance: number  // terskel i kr (0 = første trinn)
+  rate: number         // % per år — gjelder hele saldoen når balance >= fromBalance
+}
+
+export interface BankAccountPreset {
+  id: string
+  bankName: string
+  accountTypeName: string
+  tieredRates: TieredRate[]
+  interestCreditFrequency: 'monthly' | 'yearly'
+  enabled: boolean
+}
+
 export interface RateHistoryEntry {
   fromDate: string         // ISO-dato
   rate: number             // prosent, f.eks. 6.3
@@ -308,6 +322,8 @@ export interface SavingsAccount {
   monthlyContributionFromDate?: string
   /** Sluttdato for fast månedssparing (ISO "YYYY-MM-DD"). Ingen dato = ingen sluttdato. */
   monthlyContributionToDate?: string
+  /** Trinnvis rente — overstyrer rateHistory for saldobasert renteberegning */
+  tieredRates?: TieredRate[]
   /** Fleksible spareperioder — overskriver monthlyContribution når tilstede */
   contributionPeriods?: ContributionPeriod[]
 }
@@ -675,6 +691,7 @@ export interface PartnerAccount {
   rate: number   // % per år
   fromDate?: string   // ISO "YYYY-MM-DD" — innskudd starter fra denne måneden
   toDate?: string     // ISO "YYYY-MM-DD" — innskudd slutter etter denne måneden
+  tieredRates?: TieredRate[]
 }
 
 export interface PartnerDebt {
