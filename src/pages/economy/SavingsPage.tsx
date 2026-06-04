@@ -43,6 +43,8 @@ import type {
   BudgetTemplate,
   PartnerAccount,
   ContributionPeriod,
+  BankAccountPreset,
+  TieredRate,
 } from '@/types/economy'
 import { partnerNonBsuEquity } from '@/types/economy'
 import { SavingsImporter } from '@/features/savings/SavingsImporter'
@@ -96,6 +98,7 @@ export function SavingsPage() {
   } = useActiveEconomyStore()
 
   const { savingsTab: tab, setSavingsTab: setTab } = useAppStore()
+  const bankPresets = useEconomyStore((s) => s.bankPresets)
 
   const [showAddAccount, setShowAddAccount] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -171,7 +174,8 @@ export function SavingsPage() {
         <div className="p-4 space-y-4 overflow-y-auto flex-1">
           {showImport && <SavingsImporter onDone={() => setShowImport(false)} />}
           {showAddAccount && (
-            <AddAccountForm
+            <AccountForm
+              bankPresets={bankPresets}
               onSave={(a) => { addSavingsAccount(a); setShowAddAccount(false) }}
               onCancel={() => setShowAddAccount(false)}
             />
@@ -217,6 +221,7 @@ export function SavingsPage() {
                   key={account.id}
                   account={account}
                   now={now}
+                  bankPresets={bankPresets}
                   onRemove={() => removeSavingsAccount(account.id)}
                   onUpdate={(patch) => updateSavingsAccount(account.id, patch)}
                   onUpdateBalance={(entry) => updateSavingsBalance(account.id, entry)}
@@ -1456,6 +1461,7 @@ type AccountTab = 'innskudd' | 'uttak' | 'saldo' | 'rente'
 function AccountCard({
   account,
   now,
+  bankPresets,
   onRemove,
   onUpdate,
   onUpdateBalance,
@@ -1469,6 +1475,7 @@ function AccountCard({
 }: {
   account: SavingsAccount
   now: Date
+  bankPresets: BankAccountPreset[]
   onRemove: () => void
   onUpdate: (patch: Partial<SavingsAccount>) => void
   onUpdateBalance: (e: BalanceHistoryEntry) => void
@@ -1568,9 +1575,21 @@ function AccountCard({
       </CardHeader>
       <CardContent className="space-y-3">
         {editingAccount && (
-          <EditAccountForm
-            account={account}
-            onSave={(patch) => { onUpdate(patch); setEditingAccount(false) }}
+          <AccountForm
+            initial={account}
+            bankPresets={bankPresets}
+            onSave={(updated) => {
+              onUpdate({
+                label: updated.label,
+                type: updated.type,
+                accountNumber: updated.accountNumber,
+                tieredRates: updated.tieredRates,
+                rateHistory: updated.rateHistory,
+                contributionPeriods: updated.contributionPeriods,
+                monthlyContribution: updated.monthlyContribution,
+              })
+              setEditingAccount(false)
+            }}
             onCancel={() => setEditingAccount(false)}
           />
         )}
@@ -2317,157 +2336,355 @@ function UpdateRateForm({ onSave, onCancel }: { onSave: (e: RateHistoryEntry) =>
   )
 }
 
-function AddAccountForm({ onSave, onCancel }: { onSave: (a: SavingsAccount) => void; onCancel: () => void }) {
-  const [form, setForm] = useState({
-    label: '',
-    type: 'BSU' as SavingsAccountType,
-    openingBalance: 0,
-    monthlyContribution: 0,
-    rate: 5.5,
-    birthYear: '' as string | number,
-  })
+function AccountForm({
+  initial,
+  bankPresets,
+  onSave,
+  onCancel,
+}: {
+  initial?: SavingsAccount
+  bankPresets: BankAccountPreset[]
+  onSave: (a: SavingsAccount) => void
+  onCancel: () => void
+}) {
+  const isEdit = !!initial
+
+  const [label, setLabel] = useState(initial?.label ?? '')
+  const [type, setType] = useState<SavingsAccountType>(initial?.type ?? 'sparekonto')
+  const [openingBalance, setOpeningBalance] = useState(initial?.openingBalance ?? 0)
+  const [openingDate, setOpeningDate] = useState(
+    initial?.openingDate ?? new Date().toISOString().split('T')[0]
+  )
+  const [accountNumber, setAccountNumber] = useState(initial?.accountNumber ?? '')
+  const [birthYear, setBirthYear] = useState(String(initial?.birthYear ?? ''))
+
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('manual')
+  const [tieredRates, setTieredRates] = useState<TieredRate[]>(
+    initial?.tieredRates ?? [{ fromBalance: 0, rate: initial?.rateHistory?.slice().sort((a, b) => b.fromDate.localeCompare(a.fromDate))[0]?.rate ?? 3.5 }]
+  )
+  const [interestFreq, setInterestFreq] = useState<'monthly' | 'yearly'>(
+    initial?.interestCreditFrequency ?? 'monthly'
+  )
+
+  const [periods, setPeriods] = useState<ContributionPeriod[]>(
+    initial?.contributionPeriods ?? []
+  )
+  const [defaultMonthly, setDefaultMonthly] = useState(initial?.monthlyContribution ?? 0)
+
+  const [showDeposits, setShowDeposits] = useState(false)
+  const [deposits, setDeposits] = useState<SavingsContribution[]>(
+    initial?.contributions ?? []
+  )
+
+  const isBSU = type === 'BSU'
+  const enabledPresets = bankPresets.filter((p) => p.enabled)
+
+  function applyPreset(presetId: string) {
+    setSelectedPresetId(presetId)
+    if (presetId === 'manual') return
+    const preset = enabledPresets.find((p) => p.id === presetId)
+    if (!preset) return
+    setTieredRates([...preset.tieredRates])
+    setInterestFreq(preset.interestCreditFrequency)
+  }
+
+  function updateTier(idx: number, field: 'fromBalance' | 'rate', value: number) {
+    setTieredRates((prev) => prev.map((t, i) => i === idx ? { ...t, [field]: value } : t))
+  }
+
+  function removeTier(idx: number) {
+    if (idx === 0) return
+    setTieredRates((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  function addTier() {
+    const lastBalance = tieredRates.at(-1)?.fromBalance ?? 0
+    setTieredRates((prev) => [...prev, { fromBalance: lastBalance + 100_000, rate: 0 }])
+  }
+
+  function addPeriod() {
+    setPeriods((prev) => [...prev, {
+      id: crypto.randomUUID(),
+      amount: 0,
+      fromDate: new Date().toISOString().split('T')[0],
+    }])
+  }
+
+  function updatePeriod(id: string, patch: Partial<ContributionPeriod>) {
+    setPeriods((prev) => prev.map((p) => p.id === id ? { ...p, ...patch } : p))
+  }
+
+  function removePeriod(id: string) {
+    setPeriods((prev) => prev.filter((p) => p.id !== id))
+  }
+
+  function addDeposit() {
+    setDeposits((prev) => [...prev, {
+      id: crypto.randomUUID(),
+      date: new Date().toISOString().split('T')[0],
+      amount: 0,
+    }])
+  }
+
+  function updateDeposit(id: string, patch: Partial<SavingsContribution>) {
+    setDeposits((prev) => prev.map((d) => d.id === id ? { ...d, ...patch } : d))
+  }
+
+  function removeDeposit(id: string) {
+    setDeposits((prev) => prev.filter((d) => d.id !== id))
+  }
 
   function handleSave() {
-    if (!form.label.trim()) return
-    const isBSU = form.type === 'BSU'
-    const birthYear = typeof form.birthYear === 'string' ? parseInt(form.birthYear) || undefined : form.birthYear || undefined
-    onSave({
-      id: crypto.randomUUID(),
-      type: form.type,
-      label: form.label.trim(),
-      openingBalance: form.openingBalance,
-      openingDate: new Date().toISOString().split('T')[0],
-      monthlyContribution: form.monthlyContribution,
-      interestCreditFrequency: isBSU ? 'yearly' : 'monthly',
-      rateHistory: [{ fromDate: new Date().toISOString().split('T')[0], rate: form.rate }],
-      balanceHistory: [],
-      withdrawals: [],
-      contributions: [],
-      ...(isBSU ? { maxYearlyContribution: 27500, maxTotalBalance: 300000 } : {}),
-      ...(birthYear ? { birthYear } : {}),
-    })
+    if (!label.trim()) return
+    const hasMultipleTiers = tieredRates.length > 1 ||
+      (tieredRates.length === 1 && tieredRates[0].fromBalance > 0)
+    const effectiveTieredRates = hasMultipleTiers ? tieredRates : undefined
+    const flatRate = tieredRates[0]?.rate ?? 3.5
+
+    const account: SavingsAccount = {
+      id: initial?.id ?? crypto.randomUUID(),
+      label: label.trim(),
+      type,
+      openingBalance,
+      openingDate,
+      accountNumber: accountNumber || undefined,
+      birthYear: isBSU && birthYear ? parseInt(birthYear) : undefined,
+      interestCreditFrequency: isBSU ? 'yearly' : interestFreq,
+      rateHistory: initial?.rateHistory ?? [{ fromDate: openingDate, rate: flatRate }],
+      tieredRates: effectiveTieredRates,
+      monthlyContribution: periods.length > 0 ? 0 : defaultMonthly,
+      contributionPeriods: periods.length > 0 ? periods : undefined,
+      balanceHistory: initial?.balanceHistory ?? [],
+      withdrawals: initial?.withdrawals ?? [],
+      contributions: deposits.filter((d) => d.amount > 0),
+      ...(isBSU ? { maxYearlyContribution: 27500, maxTotalBalance: 300_000 } : {}),
+    }
+    onSave(account)
   }
 
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm">Ny sparekonto</CardTitle>
+        <CardTitle className="text-sm">{isEdit ? 'Rediger konto' : 'Ny sparekonto'}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2 space-y-1">
-            <Label className="text-xs">Navn</Label>
-            <Input value={form.label} onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Type</Label>
-            <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v as SavingsAccountType }))}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(ACCOUNT_TYPE_LABELS) as SavingsAccountType[]).map((t) => (
-                  <SelectItem key={t} value={t} className="text-xs">
-                    {ACCOUNT_TYPE_LABELS[t]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Rentesats %</Label>
-            <Input
-              type="number"
-              step="0.1"
-              value={form.rate}
-              onChange={(e) => setForm((f) => ({ ...f, rate: parseFloat(e.target.value) || 0 }))}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Nåværende saldo</Label>
-            <Input
-              type="number"
-              placeholder="0"
-              value={form.openingBalance || ''}
-              onChange={(e) => setForm((f) => ({ ...f, openingBalance: parseFloat(e.target.value) || 0 }))}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Månedlig innskudd (planlagt)</Label>
-            <Input
-              type="number"
-              placeholder="0"
-              value={form.monthlyContribution || ''}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, monthlyContribution: parseFloat(e.target.value) || 0 }))
-              }
-            />
-          </div>
-          {form.type === 'BSU' && (
+      <CardContent className="space-y-4">
+
+        {/* Seksjon A: Grunninfo */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Grunninfo</p>
+          <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 space-y-1">
-              <Label className="text-xs">Fødselsår (for aldersgrense)</Label>
-              <Input
-                type="number"
-                placeholder="f.eks. 1995"
-                value={form.birthYear || ''}
-                onChange={(e) => setForm((f) => ({ ...f, birthYear: e.target.value }))}
-              />
+              <Label className="text-xs">Navn</Label>
+              <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="f.eks. Sparekonto DNB" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Type</Label>
+              <Select value={type} onValueChange={(v) => setType(v as SavingsAccountType)}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(ACCOUNT_TYPE_LABELS) as SavingsAccountType[]).map((t) => (
+                    <SelectItem key={t} value={t} className="text-xs">{ACCOUNT_TYPE_LABELS[t]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Nåværende saldo</Label>
+              <Input type="number" placeholder="0" value={openingBalance || ''} onChange={(e) => setOpeningBalance(parseFloat(e.target.value) || 0)} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Åpningsdato</Label>
+              <Input type="date" value={openingDate} onChange={(e) => setOpeningDate(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Kontonummer (valgfritt)</Label>
+              <Input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} placeholder="xxxx.xx.xxxxx" />
+            </div>
+            {isBSU && (
+              <div className="col-span-2 space-y-1">
+                <Label className="text-xs">Fødselsår (for aldersgrense)</Label>
+                <Input type="number" placeholder="f.eks. 1995" value={birthYear} onChange={(e) => setBirthYear(e.target.value)} />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Seksjon B: Rente */}
+        {!isBSU && (
+          <div className="space-y-2 border-t border-border/30 pt-3">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Rente</p>
+            {enabledPresets.length > 0 && (
+              <div className="space-y-1">
+                <Label className="text-xs">Bank / kontotype</Label>
+                <Select value={selectedPresetId} onValueChange={applyPreset}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Velg bank…" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manual" className="text-xs">Manuell innlegging</SelectItem>
+                    {enabledPresets.map((p) => (
+                      <SelectItem key={p.id} value={p.id} className="text-xs">
+                        {p.bankName} — {p.accountTypeName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-1">
+              <Label className="text-xs">Rentesatser</Label>
+              <div className="space-y-1">
+                {tieredRates.map((tier, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 flex-1">
+                      <span className="text-xs text-muted-foreground w-16">Fra saldo</span>
+                      <Input
+                        type="number"
+                        step={10000}
+                        disabled={idx === 0}
+                        value={tier.fromBalance || ''}
+                        placeholder="0"
+                        onChange={(e) => updateTier(idx, 'fromBalance', parseFloat(e.target.value) || 0)}
+                        className="h-7 text-xs w-28"
+                      />
+                      <span className="text-xs text-muted-foreground">kr →</span>
+                      <Input
+                        type="number"
+                        step={0.05}
+                        value={tier.rate || ''}
+                        placeholder="0.00"
+                        onChange={(e) => updateTier(idx, 'rate', parseFloat(e.target.value) || 0)}
+                        className="h-7 text-xs w-20"
+                      />
+                      <span className="text-xs text-muted-foreground">%</span>
+                    </div>
+                    {idx > 0 && (
+                      <button onClick={() => removeTier(idx)} className="text-muted-foreground hover:text-red-400 transition-colors">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {tieredRates.length < 6 && (
+                <button onClick={addTier} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mt-1">
+                  <Plus className="h-3 w-3" /> Legg til trinn
+                </button>
+              )}
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Rentekreditering</Label>
+              <Select value={interestFreq} onValueChange={(v) => setInterestFreq(v as 'monthly' | 'yearly')}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="monthly" className="text-xs">Månedlig</SelectItem>
+                  <SelectItem value="yearly" className="text-xs">Årlig (31. des)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
+
+        {/* Seksjon C: Spareplaner */}
+        <div className="space-y-2 border-t border-border/30 pt-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Spareplaner</p>
+          {periods.length === 0 ? (
+            <div className="space-y-1">
+              <Label className="text-xs">Standard månedlig beløp</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  step={100}
+                  placeholder="0"
+                  value={defaultMonthly || ''}
+                  onChange={(e) => setDefaultMonthly(parseFloat(e.target.value) || 0)}
+                  className="w-36"
+                />
+                <span className="text-xs text-muted-foreground">kr/mnd</span>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {periods.map((p) => (
+                <div key={p.id} className="flex items-center gap-2 rounded border border-border/40 bg-muted/10 px-2 py-1.5">
+                  <Input
+                    type="number"
+                    step={100}
+                    placeholder="Beløp"
+                    value={p.amount || ''}
+                    onChange={(e) => updatePeriod(p.id, { amount: parseFloat(e.target.value) || 0 })}
+                    className="h-7 text-xs w-24 font-mono"
+                  />
+                  <span className="text-xs text-muted-foreground shrink-0">kr/mnd fra</span>
+                  <Input
+                    type="date"
+                    value={p.fromDate ?? ''}
+                    onChange={(e) => updatePeriod(p.id, { fromDate: e.target.value || undefined })}
+                    className="h-7 text-xs w-32"
+                  />
+                  <span className="text-xs text-muted-foreground shrink-0">til</span>
+                  <Input
+                    type="date"
+                    value={p.toDate ?? ''}
+                    onChange={(e) => updatePeriod(p.id, { toDate: e.target.value || undefined })}
+                    className="h-7 text-xs w-32"
+                  />
+                  <button onClick={() => removePeriod(p.id)} className="text-muted-foreground hover:text-red-400 transition-colors shrink-0">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
             </div>
           )}
+          <button onClick={addPeriod} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <Plus className="h-3 w-3" /> Legg til periode
+          </button>
         </div>
-        <div className="flex gap-2 justify-end">
-          <Button variant="outline" size="sm" onClick={onCancel}>Avbryt</Button>
-          <Button size="sm" onClick={handleSave} disabled={!form.label.trim()}>Lagre</Button>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
 
-function EditAccountForm({ account, onSave, onCancel }: {
-  account: SavingsAccount
-  onSave: (patch: Partial<SavingsAccount>) => void
-  onCancel: () => void
-}) {
-  const [label, setLabel] = useState(account.label)
-  const [accountNumber, setAccountNumber] = useState(account.accountNumber ?? '')
-  const [type, setType] = useState<SavingsAccountType>(account.type)
-
-  return (
-    <Card className="border-primary/20 bg-primary/3">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm">Rediger konto</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2 space-y-1">
-            <Label className="text-xs">Navn</Label>
-            <Input value={label} onChange={e => setLabel(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Type</Label>
-            <Select value={type} onValueChange={v => setType(v as SavingsAccountType)}>
-              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {(Object.keys(ACCOUNT_TYPE_LABELS) as SavingsAccountType[]).map(t => (
-                  <SelectItem key={t} value={t} className="text-xs">{ACCOUNT_TYPE_LABELS[t]}</SelectItem>
+        {/* Seksjon D: Enkeltinnskudd */}
+        {!isEdit && (
+          <div className="border-t border-border/30 pt-3">
+            <button
+              onClick={() => setShowDeposits((v) => !v)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronDown className={`h-3 w-3 transition-transform ${showDeposits ? 'rotate-180' : ''}`} />
+              Legg til historiske innskudd (valgfritt)
+            </button>
+            {showDeposits && (
+              <div className="mt-2 space-y-1.5">
+                {deposits.map((d) => (
+                  <div key={d.id} className="flex items-center gap-2">
+                    <Input
+                      type="date"
+                      value={d.date}
+                      onChange={(e) => updateDeposit(d.id, { date: e.target.value })}
+                      className="h-7 text-xs w-32"
+                    />
+                    <Input
+                      type="number"
+                      step={100}
+                      placeholder="Beløp"
+                      value={d.amount || ''}
+                      onChange={(e) => updateDeposit(d.id, { amount: parseFloat(e.target.value) || 0 })}
+                      className="h-7 text-xs w-28 font-mono"
+                    />
+                    <span className="text-xs text-muted-foreground">kr</span>
+                    <button onClick={() => removeDeposit(d.id)} className="text-muted-foreground hover:text-red-400 transition-colors">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 ))}
-              </SelectContent>
-            </Select>
+                <button onClick={addDeposit} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                  <Plus className="h-3 w-3" /> Legg til innskudd
+                </button>
+              </div>
+            )}
           </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Kontonummer</Label>
-            <Input
-              value={accountNumber}
-              onChange={e => setAccountNumber(e.target.value)}
-              placeholder="xxxx.xx.xxxxx"
-            />
-          </div>
-        </div>
-        <div className="flex gap-2 justify-end">
+        )}
+
+        <div className="flex gap-2 justify-end pt-2 border-t border-border/30">
           <Button variant="outline" size="sm" onClick={onCancel}>Avbryt</Button>
-          <Button size="sm" onClick={() => onSave({ label: label.trim(), accountNumber: accountNumber || undefined, type })} disabled={!label.trim()}>
-            Lagre
+          <Button size="sm" onClick={handleSave} disabled={!label.trim()}>
+            {isEdit ? 'Lagre endringer' : 'Opprett konto'}
           </Button>
         </div>
       </CardContent>
