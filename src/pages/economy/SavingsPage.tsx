@@ -1166,9 +1166,11 @@ function MånedsoversiktTable({
                                 onFillDown={v => fillDown(acc.id, row.year, row.month, v)}
                               />
                             </span>
-                            <span className="flex-1 px-3 py-1 text-right font-mono whitespace-nowrap">
-                              {fmtNOK(ab.balance)}
-                              {ab.interest > 0 && <span className="text-[10px] text-green-400/60 ml-1">(+{Math.round(ab.interest).toLocaleString('no-NO')})</span>}
+                            <span className="flex-1 px-3 py-1 flex items-baseline justify-end font-mono whitespace-nowrap">
+                              <span>{fmtNOK(ab.balance)}</span>
+                              <span className="text-[10px] text-green-400/60 ml-1 inline-block min-w-[3.5rem] text-right shrink-0">
+                                {ab.interest > 0 ? `(+${Math.round(ab.interest).toLocaleString('no-NO')})` : ''}
+                              </span>
                             </span>
                           </div>
                         </td>
@@ -1200,9 +1202,11 @@ function MånedsoversiktTable({
                             />
                             )}
                           </span>
-                          <span className="flex-1 px-3 py-1 text-right font-mono text-teal-400 whitespace-nowrap">
-                            {fmtNOK(row.fondBalance)}
-                            {row.fondInterest > 0 && <span className="text-[10px] text-green-400/60 ml-1">(+{row.fondInterest.toLocaleString('no-NO')})</span>}
+                          <span className="flex-1 px-3 py-1 flex items-baseline justify-end font-mono text-teal-400 whitespace-nowrap">
+                            <span>{fmtNOK(row.fondBalance)}</span>
+                            <span className="text-[10px] text-green-400/60 ml-1 inline-block min-w-[3.5rem] text-right shrink-0">
+                              {row.fondInterest > 0 ? `(+${row.fondInterest.toLocaleString('no-NO')})` : ''}
+                            </span>
                           </span>
                         </div>
                       </td>
@@ -1226,9 +1230,11 @@ function MånedsoversiktTable({
                                 onFillDown={v => fillDown(`p-${ab.id}`, row.year, row.month, v)}
                               />
                             </span>
-                            <span className="flex-1 px-3 py-1 text-right font-mono text-violet-300 whitespace-nowrap">
-                              {fmtNOK(ab.balance)}
-                              {ab.interest > 0 && <span className="text-[10px] text-green-400/60 ml-1">(+{Math.round(ab.interest).toLocaleString('no-NO')})</span>}
+                            <span className="flex-1 px-3 py-1 flex items-baseline justify-end font-mono text-violet-300 whitespace-nowrap">
+                              <span>{fmtNOK(ab.balance)}</span>
+                              <span className="text-[10px] text-green-400/60 ml-1 inline-block min-w-[3.5rem] text-right shrink-0">
+                                {ab.interest > 0 ? `(+${Math.round(ab.interest).toLocaleString('no-NO')})` : ''}
+                              </span>
                             </span>
                           </div>
                         </td>
