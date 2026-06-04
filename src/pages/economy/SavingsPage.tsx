@@ -1577,11 +1577,32 @@ function AccountCard({
         {/* Stats grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
           <MiniStat label="Saldo" value={fmtNOK(currentBalance)} highlight />
-          <MiniStat
-            label="Rentesats"
-            value={`${currentRate.toFixed(2)} %`}
-            subvalue={isBSU ? 'krediteres 31. des' : 'månedlig kreditering'}
-          />
+          {account.tieredRates && account.tieredRates.length > 1 ? (
+            <div className="rounded-lg border border-border bg-muted/10 p-2 space-y-0.5">
+              <p className="text-xs text-muted-foreground">Rentesats (trinnvis)</p>
+              {[...account.tieredRates]
+                .sort((a, b) => a.fromBalance - b.fromBalance)
+                .map((t, i, arr) => {
+                  const isActive = currentBalance >= t.fromBalance &&
+                    (i === arr.length - 1 || currentBalance < arr[i + 1].fromBalance)
+                  return (
+                    <div key={t.fromBalance} className={`flex justify-between text-xs ${isActive ? 'text-primary font-semibold' : 'text-muted-foreground'}`}>
+                      <span>
+                        {t.fromBalance === 0 ? '0' : `${(t.fromBalance / 1000).toFixed(0)}k`}
+                        {i < arr.length - 1 ? `–${(arr[i + 1].fromBalance / 1000).toFixed(0)}k` : '+'}
+                      </span>
+                      <span>{t.rate.toFixed(2)} %{isActive ? ' ◀' : ''}</span>
+                    </div>
+                  )
+                })}
+            </div>
+          ) : (
+            <MiniStat
+              label="Rentesats"
+              value={`${currentRate.toFixed(2)} %`}
+              subvalue={isBSU ? 'krediteres 31. des' : 'månedlig kreditering'}
+            />
+          )}
           <MiniStat label="Årets innskudd" value={fmtNOK(ytdContribs || 0)} />
           {interestForecast > 0 ? (
             <MiniStat
