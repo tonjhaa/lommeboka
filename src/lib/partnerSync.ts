@@ -8,6 +8,7 @@ import { usePartnerStore } from '@/application/usePartnerStore'
 export interface Partnership {
   id: string
   inviter_id: string
+  inviter_email: string | null
   invitee_email: string
   invitee_id: string | null
   status: 'pending' | 'accepted' | 'rejected'
@@ -66,7 +67,7 @@ export async function invitePartner(email: string): Promise<{ error: string | nu
 
   const { data, error } = await supabase
     .from('partnerships')
-    .insert({ inviter_id: user.id, invitee_email: email.toLowerCase() })
+    .insert({ inviter_id: user.id, inviter_email: user.email, invitee_email: email.toLowerCase() })
     .select()
     .single()
 

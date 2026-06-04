@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { usePartnershipStore } from '@/store/usePartnershipStore'
 import { sendInviteEmail } from '@/lib/partnerSync'
+import { useAuthStore } from '@/store/useAuthStore'
 
 export function PartnerLinkSection() {
   const { partnership, status, inviteLink, loading, error, invite, disconnect, clearError } =
@@ -31,8 +32,13 @@ export function PartnerLinkSection() {
   }
 
   // ---- Koblet ----
+  const { user } = useAuthStore()
+
   if (status === 'connected' && partnership) {
-    const partnerEmail = partnership.invitee_email
+    const isInviter = user?.id === partnership.inviter_id
+    const partnerEmail = isInviter
+      ? partnership.invitee_email
+      : (partnership.inviter_email ?? 'din partner')
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3">
