@@ -32,6 +32,7 @@ export function Header() {
 
       <button
         onClick={goHome}
+        aria-label="Gå til forsiden"
         className="flex items-center gap-2.5 flex-1 hover:opacity-80 transition-opacity text-left"
       >
         <img src={`${import.meta.env.BASE_URL}lb-logo.svg`} alt="LB" className="h-8 w-8" />
