@@ -445,6 +445,13 @@ export const usePartnerStore = create<EconomyState>()(
       // ── Spareplan ──────────────────────────────────────────────────────────
       // (already declared above in sparing section)
 
+      // ── Bankpresets — stubs ────────────────────────────────────────────────
+      bankPresets: [],
+      setBankPresets: () => {},
+      updateBankPreset: () => {},
+      addBankPreset: () => {},
+      removeBankPreset: () => {},
+
       // ── Brukerinnstillinger ────────────────────────────────────────────────
       userPreferences: {
         onboardingCompleted: true,

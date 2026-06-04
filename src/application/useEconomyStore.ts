@@ -32,8 +32,10 @@ import type {
   PartnerVeikart,
   PartnerAccount,
   PartnerDebt,
+  BankAccountPreset,
 } from '@/types/economy'
 import { POLICY_RATE_HISTORY } from '@/config/economy.config'
+import { DEFAULT_BANK_PRESETS } from '@/config/bankPresets'
 
 // ------------------------------------------------------------
 // STATE INTERFACE
@@ -100,6 +102,13 @@ export interface EconomyState {
   savingsPlanHorizon: number
   setSavingsPlanTarget: (price: number) => void
   setSavingsPlanHorizon: (months: number) => void
+
+  // Bankpresets
+  bankPresets: BankAccountPreset[]
+  setBankPresets: (presets: BankAccountPreset[]) => void
+  updateBankPreset: (id: string, updates: Partial<BankAccountPreset>) => void
+  addBankPreset: (preset: BankAccountPreset) => void
+  removeBankPreset: (id: string) => void
 
   // Actions
   setProfile: (profile: EmploymentProfile) => void
@@ -307,6 +316,17 @@ export const useEconomyStore = create<EconomyState>()(
       savingsPlanHorizon: 48,
       setSavingsPlanTarget: (price) => set({ savingsPlanTarget: price }),
       setSavingsPlanHorizon: (months) => set({ savingsPlanHorizon: months }),
+
+      bankPresets: DEFAULT_BANK_PRESETS,
+      setBankPresets: (presets) => set({ bankPresets: presets }),
+      updateBankPreset: (id, updates) =>
+        set((s) => ({
+          bankPresets: s.bankPresets.map((p) => p.id === id ? { ...p, ...updates } : p),
+        })),
+      addBankPreset: (preset) =>
+        set((s) => ({ bankPresets: [...s.bankPresets, preset] })),
+      removeBankPreset: (id) =>
+        set((s) => ({ bankPresets: s.bankPresets.filter((p) => p.id !== id) })),
 
       // --- Profil ---
       setProfile: (profile) => set({ profile }),
@@ -1117,7 +1137,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 14,
+      version: 15,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v1 → v2: inkluder artskode 1501 (husleiekompensasjon) i fixedAdditions
@@ -1237,6 +1257,11 @@ export const useEconomyStore = create<EconomyState>()(
         }
         // Alltid: sørg for fond
         if (!state.fondPortfolio) state.fondPortfolio = DEFAULT_FOND_PORTFOLIO
+        if (fromVersion < 15) {
+          if (!Array.isArray(state.bankPresets) || (state.bankPresets as unknown[]).length === 0) {
+            state.bankPresets = DEFAULT_BANK_PRESETS
+          }
+        }
         return state
       },
       partialize: (state) => ({
@@ -1266,6 +1291,7 @@ export const useEconomyStore = create<EconomyState>()(
         partnerVeikart: state.partnerVeikart,
         savingsPlanTarget: state.savingsPlanTarget,
         savingsPlanHorizon: state.savingsPlanHorizon,
+        bankPresets: state.bankPresets,
       }),
     }
   )
