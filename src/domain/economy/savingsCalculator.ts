@@ -5,6 +5,7 @@ import type {
   GoalProgress,
   BalanceHistoryEntry,
   RateHistoryEntry,
+  TieredRate,
 } from '@/types/economy'
 import { BSU_MAX_YEARLY, BSU_MAX_TOTAL } from '@/config/economy.config'
 
@@ -183,6 +184,18 @@ function getCurrentRateForDate(rateHistory: RateHistoryEntry[] | undefined, date
     }
   }
   return rate
+}
+
+export function getEffectiveRateFromTiers(tiers: TieredRate[], balance: number): number {
+  const sorted = [...tiers].sort((a, b) => b.fromBalance - a.fromBalance)
+  return sorted.find(t => balance >= t.fromBalance)?.rate ?? sorted.at(-1)!.rate
+}
+
+export function getEffectiveRate(account: SavingsAccount, balance: number): number {
+  if (account.tieredRates?.length) {
+    return getEffectiveRateFromTiers(account.tieredRates, balance)
+  }
+  return getCurrentRateForDate(account.rateHistory, new Date())
 }
 
 /** Konverterer year/month til en Date (første dag i måneden) */
@@ -398,7 +411,9 @@ export function computeYearlyInterestIncome(account: SavingsAccount, year: numbe
     balance += contrib
 
     const date = new Date(year, m - 1, 1)
-    const rate = getCurrentRateForDate(account.rateHistory, date)
+    const rate = account.tieredRates?.length
+      ? getEffectiveRateFromTiers(account.tieredRates, balance)
+      : getCurrentRateForDate(account.rateHistory, date)
     const monthlyInterest = balance * (rate / 100 / 12)
 
     if (account.interestCreditFrequency === 'yearly') {

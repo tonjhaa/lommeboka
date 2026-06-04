@@ -97,6 +97,62 @@ describe('calculateGoalProgress', () => {
   })
 })
 
+import { getEffectiveRateFromTiers, getEffectiveRate } from '../savingsCalculator'
+import type { TieredRate } from '@/types/economy'
+
+describe('getEffectiveRateFromTiers', () => {
+  const tiers: TieredRate[] = [
+    { fromBalance: 0,         rate: 3.25 },
+    { fromBalance: 100_000,   rate: 3.55 },
+    { fromBalance: 500_000,   rate: 3.80 },
+    { fromBalance: 1_000_000, rate: 4.05 },
+  ]
+
+  it('bruker første trinn for saldo 0', () => {
+    expect(getEffectiveRateFromTiers(tiers, 0)).toBe(3.25)
+  })
+
+  it('bruker riktig trinn for saldo 50 000', () => {
+    expect(getEffectiveRateFromTiers(tiers, 50_000)).toBe(3.25)
+  })
+
+  it('bruker neste trinn ved eksakt terskel 100 000', () => {
+    expect(getEffectiveRateFromTiers(tiers, 100_000)).toBe(3.55)
+  })
+
+  it('bruker riktig trinn for saldo 450 000', () => {
+    expect(getEffectiveRateFromTiers(tiers, 450_000)).toBe(3.55)
+  })
+
+  it('bruker øverste trinn for saldo over 1M', () => {
+    expect(getEffectiveRateFromTiers(tiers, 1_500_000)).toBe(4.05)
+  })
+
+  it('håndterer enkelt trinn (flat rente)', () => {
+    expect(getEffectiveRateFromTiers([{ fromBalance: 0, rate: 4.10 }], 999_999)).toBe(4.10)
+  })
+})
+
+describe('getEffectiveRate', () => {
+  it('faller tilbake på rateHistory når tieredRates mangler', () => {
+    const acc = makeBSUAccount({
+      rateHistory: [{ fromDate: '2025-01-01', rate: 6.3 }],
+    })
+    expect(getEffectiveRate(acc, 50_000)).toBe(6.3)
+  })
+
+  it('bruker tieredRates når tilstede', () => {
+    const acc = makeBSUAccount({
+      rateHistory: [{ fromDate: '2025-01-01', rate: 6.3 }],
+      tieredRates: [
+        { fromBalance: 0,       rate: 3.25 },
+        { fromBalance: 100_000, rate: 3.55 },
+      ],
+    })
+    expect(getEffectiveRate(acc, 150_000)).toBe(3.55)
+  })
+})
+
 describe('projectSavingsGrowth — BSU rente krediteres yearly', () => {
   it('krediterer rente i desember, ikke månedlig', () => {
     const account = makeBSUAccount({
