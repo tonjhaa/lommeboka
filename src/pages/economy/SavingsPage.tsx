@@ -1,5 +1,9 @@
 import { useState, useMemo, Fragment } from 'react'
 import { useAppStore } from '@/store/useAppStore'
+import { usePartnerStore } from '@/application/usePartnerStore'
+import { usePartnershipStore } from '@/store/usePartnershipStore'
+import { buildPartnerVeikartPatch } from '@/domain/economy/syncPartnerToVeikart'
+import { useEconomyStore } from '@/application/useEconomyStore'
 import { Plus, Trash2, Upload, ChevronDown, ChevronUp, Repeat2, Pencil, Check, X, AlertTriangle } from 'lucide-react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -660,9 +664,28 @@ function MånedsoversiktTable({
   now: Date
 }) {
   const HORIZON = 72
-  const { setSavingsTab, setCurrentEconomyPage } = useAppStore()
+  const { setSavingsTab } = useAppStore()
   const { savingsOverrides: contribOverrides, setSavingsOverride, clearAllSavingsOverrides } = useActiveEconomyStore()
   const [editingRateId, setEditingRateId] = useState<string | null>(null)
+
+  const setCurrentView = useAppStore((s) => s.setCurrentView)
+  const partnerStatus = usePartnershipStore((s) => s.status)
+  const setPartnerVeikart = useEconomyStore((s) => s.setPartnerVeikart)
+  const [syncDone, setSyncDone] = useState(false)
+
+  function syncPartner() {
+    const ps = usePartnerStore.getState()
+    const patch = buildPartnerVeikartPatch(
+      ps.savingsAccounts,
+      ps.debts,
+      ps.profile,
+      partnerVeikart,
+      now,
+    )
+    setPartnerVeikart({ ...partnerVeikart, ...patch })
+    setSyncDone(true)
+    setTimeout(() => setSyncDone(false), 2000)
+  }
 
   function setMonthOverride(accId: string, year: number, month: number, value: number) {
     setSavingsOverride(`${accId}-${year}-${month}`, value)
@@ -866,11 +889,19 @@ function MånedsoversiktTable({
           + Fond
         </button>
         <button
-          onClick={() => setCurrentEconomyPage('settings')}
+          onClick={() => setCurrentView('partner')}
           className="flex items-center gap-1 px-2 py-1 rounded border border-border hover:bg-muted/40 transition-colors text-violet-400"
         >
-          Rediger partner →
+          + Partner konto
         </button>
+        {partnerStatus === 'connected' && (
+          <button
+            onClick={syncPartner}
+            className="flex items-center gap-1 px-2 py-1 rounded border border-border hover:bg-muted/40 transition-colors text-violet-400"
+          >
+            {syncDone ? '✓ Importert' : '⟳ Synk'}
+          </button>
+        )}
         {!partnerVeikart.enabled && (
           <span className="text-muted-foreground italic ml-1">Partner ikke aktivert — aktiver i Innstillinger</span>
         )}
@@ -1141,11 +1172,11 @@ function MånedsoversiktTable({
                       </td>
                     )
                   })}
-                  <td className="px-3 py-2 text-right text-blue-400 font-semibold border-r border-border whitespace-nowrap">{fmtNOK(last.totalEK)}</td>
-                  <td className="px-3 py-2 text-right text-red-400/70 font-semibold border-r border-border whitespace-nowrap">{last.debtBalance > 0 ? '-' + fmtNOK(last.debtBalance) : '—'}</td>
-                  <td className="px-3 py-2 text-right text-green-400 font-semibold border-r border-border whitespace-nowrap">{last.maxKjøpesum > 0 ? fmtNOK(last.maxKjøpesum) : '—'}</td>
-                  {myAnnualIncome > 0 && <td className="px-3 py-2 text-right text-green-400/70 font-semibold border-r border-border whitespace-nowrap">{last.maxKjøpesumMeg > 0 ? fmtNOK(last.maxKjøpesumMeg) : '—'}</td>}
-                  {hasPartner && partnerOnlyAnnualIncome > 0 && <td className="px-3 py-2 text-right text-violet-400/70 font-semibold whitespace-nowrap">{last.maxKjøpesumPartner > 0 ? fmtNOK(last.maxKjøpesumPartner) : '—'}</td>}
+                  <td className="px-3 py-2 text-right font-mono text-blue-400 font-semibold border-r border-border whitespace-nowrap">{fmtNOK(last.totalEK)}</td>
+                  <td className="px-3 py-2 text-right font-mono text-red-400/70 font-semibold border-r border-border whitespace-nowrap">{last.debtBalance > 0 ? '-' + fmtNOK(last.debtBalance) : '—'}</td>
+                  <td className="px-3 py-2 text-right font-mono text-green-400 font-semibold border-r border-border whitespace-nowrap">{last.maxKjøpesum > 0 ? fmtNOK(last.maxKjøpesum) : '—'}</td>
+                  {myAnnualIncome > 0 && <td className="px-3 py-2 text-right font-mono text-green-400/70 font-semibold border-r border-border whitespace-nowrap">{last.maxKjøpesumMeg > 0 ? fmtNOK(last.maxKjøpesumMeg) : '—'}</td>}
+                  {hasPartner && partnerOnlyAnnualIncome > 0 && <td className="px-3 py-2 text-right font-mono text-violet-400/70 font-semibold whitespace-nowrap">{last.maxKjøpesumPartner > 0 ? fmtNOK(last.maxKjøpesumPartner) : '—'}</td>}
                 </tr>
                 {/* Monthly rows */}
                 {yearData.map(row => (
@@ -1240,10 +1271,10 @@ function MånedsoversiktTable({
                         </td>
                     ))}
                     <td className="px-3 py-1 text-right font-mono text-blue-300 border-r border-border whitespace-nowrap">{fmtNOK(row.totalEK)}</td>
-                    <td className="px-3 py-1 text-right text-red-400/50 border-r border-border whitespace-nowrap">{row.debtBalance > 0 ? '-' + fmtNOK(row.debtBalance) : '—'}</td>
-                    <td className="px-3 py-1 text-right text-green-300/60 border-r border-border whitespace-nowrap">{row.maxKjøpesum > 0 ? fmtNOK(row.maxKjøpesum) : '—'}</td>
-                    {myAnnualIncome > 0 && <td className="px-3 py-1 text-right text-green-300/40 border-r border-border whitespace-nowrap">{row.maxKjøpesumMeg > 0 ? fmtNOK(row.maxKjøpesumMeg) : '—'}</td>}
-                    {hasPartner && partnerOnlyAnnualIncome > 0 && <td className="px-3 py-1 text-right text-violet-300/40 whitespace-nowrap">{row.maxKjøpesumPartner > 0 ? fmtNOK(row.maxKjøpesumPartner) : '—'}</td>}
+                    <td className="px-3 py-1 text-right font-mono text-red-400/50 border-r border-border whitespace-nowrap">{row.debtBalance > 0 ? '-' + fmtNOK(row.debtBalance) : '—'}</td>
+                    <td className="px-3 py-1 text-right font-mono text-green-300/60 border-r border-border whitespace-nowrap">{row.maxKjøpesum > 0 ? fmtNOK(row.maxKjøpesum) : '—'}</td>
+                    {myAnnualIncome > 0 && <td className="px-3 py-1 text-right font-mono text-green-300/40 border-r border-border whitespace-nowrap">{row.maxKjøpesumMeg > 0 ? fmtNOK(row.maxKjøpesumMeg) : '—'}</td>}
+                    {hasPartner && partnerOnlyAnnualIncome > 0 && <td className="px-3 py-1 text-right font-mono text-violet-300/40 whitespace-nowrap">{row.maxKjøpesumPartner > 0 ? fmtNOK(row.maxKjøpesumPartner) : '—'}</td>}
                   </tr>
                 ))}
               </Fragment>
