@@ -64,7 +64,7 @@ export function PartnerLinkSection() {
     async function handleResend() {
       if (!partnership || !inviteLink) return
       setResending(true)
-      await sendInviteEmail(partnership.invitee_email, inviteLink)
+      await sendInviteEmail(partnership.id)
       setResending(false)
       setResent(true)
       setTimeout(() => setResent(false), 3000)

@@ -162,13 +162,13 @@ export function buildInviteLink(partnershipId: string): string {
   return `${base}?invite=${partnershipId}`
 }
 
-/** Sender invitasjonse-post direkte fra appen via Supabase Edge Function + Resend. */
-export async function sendInviteEmail(toEmail: string, inviteLink: string): Promise<string | null> {
+/** Sender invitasjonse-post via Supabase Edge Function + Resend. */
+export async function sendInviteEmail(partnershipId: string): Promise<string | null> {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) return 'Ikke innlogget'
 
   const { error } = await supabase.functions.invoke('send-partner-invite', {
-    body: { to: toEmail, inviteLink },
+    body: { partnershipId },
   })
 
   if (error) return error.message ?? 'Kunne ikke sende e-post'
