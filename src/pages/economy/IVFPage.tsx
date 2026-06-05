@@ -581,6 +581,7 @@ function SummaryStats() {
 export function IVFPage() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [migrating, setMigrating] = useState(false)
+  const [nameSaved, setNameSaved] = useState(false)
   const { ivfSettings, setIvfSettings } = useEconomyStore()
   const { isShared, personalTxs, migrated, migrateFrom } = useIVFData()
   const needsMigration = isShared && personalTxs.length > 0 && !migrated
@@ -606,8 +607,20 @@ export function IVFPage() {
               className="h-7 w-24 text-xs rounded border border-border bg-background px-2"
               placeholder="f.eks. Tonje"
               value={ivfSettings?.selfLabel ?? ''}
-              onChange={(e) => setIvfSettings({ selfLabel: e.target.value || undefined })}
+              onChange={(e) => {
+                setIvfSettings({ selfLabel: e.target.value || undefined })
+                setNameSaved(false)
+              }}
+              onBlur={() => {
+                if (ivfSettings?.selfLabel) {
+                  setNameSaved(true)
+                  setTimeout(() => setNameSaved(false), 2500)
+                }
+              }}
             />
+            {nameSaved && (
+              <span className="text-[10px] text-green-500">Lagret ✓</span>
+            )}
           </div>
           {!showAddForm && (
             <button
