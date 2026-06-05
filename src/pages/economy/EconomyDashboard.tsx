@@ -321,6 +321,24 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
   if (atfSum > 0) {
     chips.push({ icon: '🎖️', text: `ATF-bonus i år: ${Math.round(atfSum).toLocaleString('no-NO')} kr` })
   }
+
+  // ATF-validering: sjekk om forventet utbetaling mangler importert slipp
+  const atfMissingSlip = atfEntries.filter((e) => {
+    const payYear = e.payoutYear ?? e.year
+    const payMonth = e.payoutMonth ?? 12
+    if (payYear > currentYear || (payYear === currentYear && payMonth > currentMonth)) return false
+    const cutoff = new Date(now.getFullYear(), now.getMonth() - 1, 1) // 1 mnd tilbake
+    const payDate = new Date(payYear, payMonth - 1, 1)
+    if (payDate > cutoff) return false
+    return !monthHistory.some((m) => m.source === 'imported_slip' && m.year === payYear && m.month === payMonth)
+  })
+  if (atfMissingSlip.length > 0) {
+    chips.push({
+      icon: '⚠️',
+      text: `${atfMissingSlip.length} ATF-utbetaling${atfMissingSlip.length > 1 ? 'er' : ''} mangler importert slipp`,
+      accent: 'yellow',
+    })
+  }
   // Boligkjøp-chip fra Veikart (vises når bruker har registrert inntekt og sparing)
   if (veikartData.maxPurchase > 0) {
     const now12mScenario = veikartData.scenarios.find(s => s.years === 1)

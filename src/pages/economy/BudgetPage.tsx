@@ -1351,18 +1351,24 @@ function DataRow({
         if (meta.hasSlip || cell.actual !== null) {
           const actual = cell.actual ?? 0
           const deviation = !isHidden && actual !== 0 && cell.budget !== 0 ? actual - cell.budget : null
+          const deviationPct = deviation !== null && cell.budget !== 0 ? Math.abs(deviation) / Math.abs(cell.budget) : 0
+          const bigDeviation = deviationPct > 0.1
+          const deviationDir = deviation !== null && deviation > 0 ? 'over' : 'under'
           return (
             <td
               key={`${meta.month}-fak`}
               colSpan={2}
               className={cn(
-                'px-2 py-1.5 text-right border-r border-border/40 font-medium tabular-nums',
+                'px-2 py-1.5 text-right border-r border-border/40 font-medium tabular-nums relative',
                 isHidden ? 'line-through text-muted-foreground/50' :
                   actual < 0 ? 'text-red-400' : actual > 0 ? 'text-foreground' : 'text-muted-foreground',
-                deviation !== null && Math.abs(deviation) > Math.abs(cell.budget) * 0.1 && 'underline decoration-dotted',
-                hl && 'bg-sky-500/15',
+                !isHidden && bigDeviation && deviationDir === 'over' && 'bg-emerald-500/8',
+                !isHidden && bigDeviation && deviationDir === 'under' && 'bg-red-500/8',
+                hl && '!bg-sky-500/15',
               )}
-              title={deviation !== null ? `Avvik: ${Math.round(deviation).toLocaleString('no-NO')}` : undefined}
+              title={deviation !== null
+                ? `Avvik fra budsjett: ${deviation > 0 ? '+' : ''}${Math.round(deviation).toLocaleString('no-NO')} kr (${deviationPct >= 0.01 ? (deviationPct * 100).toFixed(0) + '%' : '<1%'})`
+                : undefined}
               onMouseEnter={(e) => onCellHover?.(meta.month, e.currentTarget.getBoundingClientRect())}
               onMouseLeave={() => onCellLeave?.()}
             >
