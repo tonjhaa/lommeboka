@@ -152,6 +152,13 @@ export function SalaryPage() {
 
   const latestSlipRecord = importedSlips[0] ?? null
 
+  // Sjekk om profil-grunnlønn avviker fra siste lønnsoppgjør
+  const latestOppgjor = [...lonnsoppgjor]
+    .filter(r => r.maanedslonn > 0 && r.effectiveDate <= new Date().toISOString().split('T')[0])
+    .sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate))[0] ?? null
+  const oppgjorBase = latestOppgjor ? latestOppgjor.maanedslonn - (latestOppgjor.htaTillegg ?? 0) : null
+  const profileMismatch = profile && oppgjorBase && Math.abs(oppgjorBase - profile.baseMonthly) > 100
+
   // CAGR fra lønnsoppgjør
   const sortedOppgjor = [...lonnsoppgjor]
     .filter((r) => r.maanedslonn > 0)
@@ -234,6 +241,17 @@ export function SalaryPage() {
               />
             ) : profile ? (
               <div className="space-y-2 text-sm">
+                {profileMismatch && oppgjorBase && (
+                  <div className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300 flex items-center justify-between gap-2">
+                    <span>Profil-grunnlønn ({profile.baseMonthly.toLocaleString('no-NO')} kr) avviker fra siste oppgjør ({oppgjorBase.toLocaleString('no-NO')} kr)</span>
+                    <button
+                      className="underline underline-offset-2 shrink-0"
+                      onClick={() => setProfile({ ...profile, baseMonthly: oppgjorBase })}
+                    >
+                      Oppdater
+                    </button>
+                  </div>
+                )}
                 <InfoRow label="Arbeidsgiver" value={profile.employer === 'forsvaret' ? 'Forsvaret' : 'Annen'} />
                 <InfoRow
                   label="Grunnlønn/mnd"
@@ -326,6 +344,8 @@ export function SalaryPage() {
               onDerive={deriveLonnsoppgjorFromSlips}
               onBookEtterbetaling={bookEtterbetaling}
               onRemoveEtterbetalingBooking={removeEtterbetalingBooking}
+              currentBaseMonthly={profile?.baseMonthly ?? 0}
+              onUpdateBaseMonthly={(base) => profile && setProfile({ ...profile, baseMonthly: base })}
             />
           </CardContent>
         </Card>
@@ -699,6 +719,8 @@ function LonnsoppgjorSection({
   onDerive,
   onBookEtterbetaling,
   onRemoveEtterbetalingBooking,
+  currentBaseMonthly,
+  onUpdateBaseMonthly,
 }: {
   records: LonnsoppgjorRecord[]
   monthHistory: MonthRecord[]
@@ -709,10 +731,13 @@ function LonnsoppgjorSection({
   onDerive: () => void
   onBookEtterbetaling: (recordId: string, etterbetalingDate: string) => void
   onRemoveEtterbetalingBooking: (recordId: string) => void
+  currentBaseMonthly: number
+  onUpdateBaseMonthly: (base: number) => void
 }) {
   const currentYear = new Date().getFullYear()
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [pendingBase, setPendingBase] = useState<number | null>(null)
   const [form, setForm] = useState({
     year: currentYear,
     effectiveDate: `${currentYear}-05-01`,
@@ -747,6 +772,10 @@ function LonnsoppgjorSection({
       source: form.source,
     })
     setAdding(false)
+    const newBase = form.maanedslonn - (form.htaTillegg ?? 0)
+    if (newBase > 0 && newBase !== currentBaseMonthly) {
+      setPendingBase(newBase)
+    }
     setForm({ year: currentYear, effectiveDate: `${currentYear}-05-01`, maanedslonn: 0, htaTillegg: 0, notes: '', source: 'forventet', pct: '' })
   }
 
@@ -762,6 +791,19 @@ function LonnsoppgjorSection({
 
   return (
     <div className="space-y-3">
+      {pendingBase !== null && (
+        <div className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 flex items-center justify-between gap-3 text-xs">
+          <span className="text-amber-300">
+            Ny grunnlønn er <strong>{pendingBase.toLocaleString('no-NO')} kr/mnd</strong> — avviker fra profilen ({currentBaseMonthly.toLocaleString('no-NO')} kr). Vil du oppdatere profilen?
+          </span>
+          <div className="flex gap-2 shrink-0">
+            <Button size="sm" className="h-6 text-xs" onClick={() => { onUpdateBaseMonthly(pendingBase); setPendingBase(null) }}>
+              Ja, oppdater
+            </Button>
+            <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setPendingBase(null)}>Ikke nå</Button>
+          </div>
+        </div>
+      )}
       {/* Toolbar */}
       <div className="flex items-center gap-2 justify-between">
         <div className="flex gap-2">

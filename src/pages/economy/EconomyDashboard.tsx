@@ -1,5 +1,6 @@
 import { AlertTriangle, Zap, Home } from 'lucide-react'
 import { useMemo } from 'react'
+import { useSharedProjectStore } from '@/store/useSharedProjectStore'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
@@ -153,7 +154,11 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
   const sparingKontoer = savingsAccounts.reduce((s, a) => s + computeEffectiveBalance(a, now), 0)
   const sortedFondSnapshots = [...(fondPortfolio?.snapshots ?? [])].sort((a, b) => b.date.localeCompare(a.date))
   const fondVerdi = sortedFondSnapshots[0]?.totalValue ?? 0
-  const totalSparing = sparingKontoer + fondVerdi
+  const sharedIvfTxs = useSharedProjectStore((s) => s.transactions)
+  const todayStr = now.toISOString().split('T')[0]
+  const ivfSrcTxs = sharedIvfTxs.length > 0 ? sharedIvfTxs : ivfTransactions
+  const ivfSaldo = ivfSrcTxs.filter(t => t.date <= todayStr).reduce((s, t) => s + t.amount, 0)
+  const totalSparing = sparingKontoer + fondVerdi + Math.max(0, ivfSaldo)
   const totalGjeld = debts.filter(d => d.status !== 'nedbetalt').reduce((s, d) => s + d.currentBalance, 0)
   const nettoFormue = totalSparing - totalGjeld
 
@@ -270,14 +275,26 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
   if (sparerate12m !== null) {
     chips.push({
       icon: '💰',
-      text: `Din sparerate: ${sparerate12m}% av netto (siste 12 mnd)`,
+      text: `Sparerate ${sparerate12m}% av netto (siste 12 mnd faktisk)`,
       accent: sparerate12m >= 20 ? 'green' : sparerate12m >= 10 ? 'yellow' : 'red',
     })
   } else if (nettoFraBudsjett > 0 && overskuddFraBudsjett !== null) {
     chips.push({
       icon: '💰',
-      text: `Sparerate: ${sparerate}% av netto`,
+      text: `Sparerate ${sparerate}% av netto (budsjettestimert)`,
       accent: sparerate >= 20 ? 'green' : sparerate >= 10 ? 'yellow' : 'red',
+    })
+  }
+  if (ivfSaldo > 0) {
+    chips.push({
+      icon: '🫀',
+      text: `Prosjekt-kassen: ${fmtNOK(ivfSaldo)} (inngår i formue)`,
+    })
+  } else if (ivfSaldo < -500) {
+    chips.push({
+      icon: '🫀',
+      text: `Prosjektet er netto ${fmtNOK(Math.abs(ivfSaldo))} i underskudd`,
+      accent: 'red',
     })
   }
   if (juneForecast) {
