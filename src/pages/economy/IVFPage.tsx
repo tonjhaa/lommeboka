@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Plus, Trash2, ChevronDown, ChevronUp, Pencil, Check, X, Share2 } from 'lucide-react'
 import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
+import { useEconomyStore } from '@/application/useEconomyStore'
 import { useSharedProjectStore } from '@/store/useSharedProjectStore'
 import type { IVFTransactionType } from '@/types/economy'
 import { cn } from '@/lib/utils'
@@ -580,7 +581,7 @@ function SummaryStats() {
 export function IVFPage() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [migrating, setMigrating] = useState(false)
-  const { ivfSettings, setIvfSettings } = useActiveEconomyStore()
+  const { ivfSettings, setIvfSettings } = useEconomyStore()
   const { isShared, personalTxs, migrated, migrateFrom } = useIVFData()
   const needsMigration = isShared && personalTxs.length > 0 && !migrated
 
