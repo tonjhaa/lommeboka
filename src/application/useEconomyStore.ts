@@ -1090,7 +1090,9 @@ export const useEconomyStore = create<EconomyState>()(
             policyRateHistory: data.policyRateHistory ?? POLICY_RATE_HISTORY,
             temporaryPayEntries: data.temporaryPayEntries ?? [],
             lonnsoppgjor: data.lonnsoppgjor ?? [],
-            ivfTransactions: data.ivfTransactions ?? INITIAL_IVF_TRANSACTIONS,
+            ivfTransactions: (data.ivfTransactions ?? INITIAL_IVF_TRANSACTIONS).map(
+              (t: Record<string, unknown>) => t.type === 'FAKTURA' ? { ...t, type: 'SVEA' } : t
+            ),
             ivfSettings: data.ivfSettings ?? DEFAULT_IVF_SETTINGS,
             fondPortfolio: data.fondPortfolio ?? DEFAULT_FOND_PORTFOLIO,
             budgetOverrides: data.budgetOverrides ?? {},
@@ -1137,7 +1139,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 15,
+      version: 16,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v1 → v2: inkluder artskode 1501 (husleiekompensasjon) i fixedAdditions
@@ -1261,6 +1263,12 @@ export const useEconomyStore = create<EconomyState>()(
           if (!Array.isArray(state.bankPresets) || (state.bankPresets as unknown[]).length === 0) {
             state.bankPresets = DEFAULT_BANK_PRESETS
           }
+        }
+        // v15 → v16: rename IVF type FAKTURA → SVEA (SVEA er nå eget type, FAKTURA = generisk faktura)
+        if (fromVersion < 16 && Array.isArray(state.ivfTransactions)) {
+          state.ivfTransactions = (state.ivfTransactions as Array<Record<string, unknown>>).map((t) =>
+            t.type === 'FAKTURA' ? { ...t, type: 'SVEA' } : t
+          )
         }
         return state
       },

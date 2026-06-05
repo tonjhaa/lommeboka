@@ -22,15 +22,17 @@ function fmtDate(iso: string) {
 
 const TYPE_LABELS: Record<IVFTransactionType, string> = {
   SPARING: 'Sparing',
-  FAKTURA: 'Faktura',
+  SVEA: 'SVEA',
   KJØP: 'Kjøp',
+  FAKTURA: 'Faktura',
   ANNET: 'Annet',
 }
 
 const TYPE_COLORS: Record<IVFTransactionType, string> = {
   SPARING: 'text-emerald-400',
-  FAKTURA: 'text-red-400',
+  SVEA: 'text-red-400',
   KJØP: 'text-orange-400',
+  FAKTURA: 'text-red-300',
   ANNET: 'text-sky-400',
 }
 
@@ -50,25 +52,18 @@ function StatsCard() {
     const andreKjop = txs
       .filter((t) => t.type === 'KJØP' && !t.label.toLowerCase().includes('medisin'))
       .reduce((s, t) => s + Math.abs(t.amount), 0)
-    const donorFaktura = txs
-      .filter((t) => t.type === 'FAKTURA' && t.label.toLowerCase().includes('donor'))
-      .reduce((s, t) => s + Math.abs(t.amount), 0)
     const svea = txs
-      .filter((t) => t.type === 'FAKTURA' && t.label.toUpperCase().includes('DELBETALING'))
+      .filter((t) => t.type === 'SVEA')
       .reduce((s, t) => s + Math.abs(t.amount), 0)
-    const sveaCount = txs.filter(
-      (t) => t.type === 'FAKTURA' && t.label.toUpperCase().includes('DELBETALING')
-    ).length
+    const sveaCount = txs.filter((t) => t.type === 'SVEA').length
     const andreFakturaer = txs
-      .filter(
-        (t) =>
-          t.type === 'FAKTURA' &&
-          !t.label.toLowerCase().includes('donor') &&
-          !t.label.toUpperCase().includes('DELBETALING')
-      )
+      .filter((t) => t.type === 'FAKTURA')
       .reduce((s, t) => s + Math.abs(t.amount), 0)
-    const sumUtgifter = medisin + andreKjop + donorFaktura + svea + andreFakturaer
-    return { sumSpart, medisin, andreKjop, donorFaktura, svea, sveaCount, andreFakturaer, sumUtgifter }
+    const annet = txs
+      .filter((t) => t.type === 'ANNET')
+      .reduce((s, t) => s + Math.abs(t.amount), 0)
+    const sumUtgifter = medisin + andreKjop + svea + andreFakturaer + annet
+    return { sumSpart, medisin, andreKjop, svea, sveaCount, andreFakturaer, annet, sumUtgifter }
   }
 
   const past = calcStats(ivfTransactions.filter((t) => t.date <= today))
@@ -108,33 +103,31 @@ function StatsCard() {
               <span className="text-xs tabular-nums text-orange-400">{fmt(stats.medisin, 2)} kr</span>
             </div>
           )}
-          {stats.donorFaktura > 0 && (
-            <div className="flex justify-between items-baseline pl-3">
-              <span className="text-xs text-muted-foreground">Donor faktura</span>
-              <span className="text-xs tabular-nums text-red-400">{fmt(stats.donorFaktura, 2)} kr</span>
-            </div>
-          )}
-          {stats.svea > 0 && (
-            <div className="flex justify-between items-baseline pl-3">
-              <span className="text-xs text-muted-foreground">
-                SVEA
-                {stats.sveaCount > 0 && (
-                  <span className="block text-[10px] opacity-60">{stats.sveaCount} av 6 betalt</span>
-                )}
-              </span>
-              <span className="text-xs tabular-nums text-red-400">{fmt(stats.svea, 2)} kr</span>
-            </div>
-          )}
           {stats.andreKjop > 0 && (
             <div className="flex justify-between items-baseline pl-3">
               <span className="text-xs text-muted-foreground">Andre kjøp</span>
               <span className="text-xs tabular-nums text-orange-400">{fmt(stats.andreKjop, 2)} kr</span>
             </div>
           )}
+          {stats.svea > 0 && (
+            <div className="flex justify-between items-baseline pl-3">
+              <span className="text-xs text-muted-foreground">
+                SVEA
+                <span className="block text-[10px] opacity-60">{stats.sveaCount} betaling{stats.sveaCount !== 1 ? 'er' : ''}</span>
+              </span>
+              <span className="text-xs tabular-nums text-red-400">{fmt(stats.svea, 2)} kr</span>
+            </div>
+          )}
           {stats.andreFakturaer > 0 && (
             <div className="flex justify-between items-baseline pl-3">
-              <span className="text-xs text-muted-foreground">Andre fakturaer</span>
-              <span className="text-xs tabular-nums text-red-400">{fmt(stats.andreFakturaer, 2)} kr</span>
+              <span className="text-xs text-muted-foreground">Fakturaer</span>
+              <span className="text-xs tabular-nums text-red-300">{fmt(stats.andreFakturaer, 2)} kr</span>
+            </div>
+          )}
+          {stats.annet > 0 && (
+            <div className="flex justify-between items-baseline pl-3">
+              <span className="text-xs text-muted-foreground">Annet</span>
+              <span className="text-xs tabular-nums text-sky-400">{fmt(stats.annet, 2)} kr</span>
             </div>
           )}
         </div>
