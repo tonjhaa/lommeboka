@@ -32,9 +32,10 @@ const DEBT_TYPE_LABELS: Record<DebtAccount['type'], string> = {
 }
 
 export function DebtPage() {
-  const { debts, addDebt, removeDebt, updateDebtRate, markDebtPaid } = useActiveEconomyStore()
+  const { debts, addDebt, removeDebt, updateDebt, updateDebtRate, markDebtPaid } = useActiveEconomyStore()
   const [showAddForm, setShowAddForm] = useState(false)
   const [updatingRateFor, setUpdatingRateFor] = useState<string | null>(null)
+  const [editingDebt, setEditingDebt] = useState<DebtAccount | null>(null)
   const [showAmortFor, setShowAmortFor] = useState<string | null>(null)
   const [confirmDeleteFor, setConfirmDeleteFor] = useState<string | null>(null)
   const [paidOffDate, setPaidOffDate] = useState(new Date().toISOString().split('T')[0])
@@ -85,6 +86,14 @@ export function DebtPage() {
         <AddDebtForm
           onSave={(d) => { addDebt(d); setShowAddForm(false) }}
           onCancel={() => setShowAddForm(false)}
+        />
+      )}
+
+      {editingDebt && (
+        <EditDebtForm
+          debt={editingDebt}
+          onSave={(updates) => { updateDebt(editingDebt.id, updates); setEditingDebt(null) }}
+          onCancel={() => setEditingDebt(null)}
         />
       )}
 
@@ -212,7 +221,17 @@ export function DebtPage() {
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
                     <MiniStat label="Saldo" value={fmtNOK(debt.currentBalance)} />
-                    <MiniStat label="Rente" value={`${currentRate.toFixed(2)}%`} />
+                    <div
+                      className="rounded-lg bg-muted/30 px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors group"
+                      title="Klikk for å registrere renteendring"
+                      onClick={() => setUpdatingRateFor(updatingRateFor === debt.id ? null : debt.id)}
+                    >
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        Rente
+                        <span className="opacity-0 group-hover:opacity-100 text-[10px] text-primary transition-opacity">✎</span>
+                      </p>
+                      <p className="font-semibold tabular-nums">{currentRate.toFixed(2)}%</p>
+                    </div>
                     <MiniStat label="Terminbeløp" value={fmtNOK(debt.monthlyPayment)} />
                     <MiniStat label="Renter/år" value={fmtNOK(Math.round(interestNext12))} highlight />
                     <MiniStat label="Innfris" value={`${String(payoffMonth).padStart(2, '0')}/${payoffYear}`} />
@@ -265,8 +284,8 @@ export function DebtPage() {
                     )
                   })()}
 
-                  <div className="flex gap-2">
-                    {updatingRateFor === debt.id ? (
+                  <div className="flex gap-2 flex-wrap">
+                    {updatingRateFor === debt.id && (
                       <UpdateRateForm
                         onSave={(entry) => {
                           updateDebtRate(debt.id, entry)
@@ -274,16 +293,15 @@ export function DebtPage() {
                         }}
                         onCancel={() => setUpdatingRateFor(null)}
                       />
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-xs"
-                        onClick={() => setUpdatingRateFor(debt.id)}
-                      >
-                        Registrer renteendring
-                      </Button>
                     )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => setEditingDebt(debt)}
+                    >
+                      Innstillinger
+                    </Button>
                   </div>
 
                   <p className="text-xs text-muted-foreground">
@@ -642,6 +660,70 @@ function ExtraPaymentCalc({ debt, basePlan, currentRate }: { debt: DebtAccount; 
         )}
       </div>
     </div>
+  )
+}
+
+function EditDebtForm({
+  debt, onSave, onCancel,
+}: {
+  debt: DebtAccount
+  onSave: (updates: Partial<DebtAccount>) => void
+  onCancel: () => void
+}) {
+  const currentRate = [...debt.rateHistory].sort((a, b) => b.fromDate.localeCompare(a.fromDate))[0]?.nominalRate ?? 0
+  const [currentBalance, setCurrentBalance] = useState(debt.currentBalance)
+  const [monthlyPayment, setMonthlyPayment] = useState(debt.monthlyPayment)
+  const [termFee, setTermFee] = useState(debt.termFee ?? 0)
+  const [rate, setRate] = useState(currentRate)
+  const [paymentDay, setPaymentDay] = useState(debt.paymentDay ?? 15)
+  const rateChanged = Math.abs(rate - currentRate) > 0.001
+  const today = new Date().toISOString().split('T')[0]
+
+  function handleSave() {
+    const updates: Partial<DebtAccount> = { currentBalance, monthlyPayment, termFee, paymentDay }
+    if (rateChanged) {
+      updates.rateHistory = [...debt.rateHistory, { fromDate: today, nominalRate: rate }]
+    }
+    onSave(updates)
+  }
+
+  return (
+    <Card className="border-primary/40">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm">Innstillinger — {debt.creditor}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">Nåværende saldo</Label>
+            <NumberInput suffix="kr" step={1000} value={currentBalance} onChange={setCurrentBalance} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Rente %{rateChanged && <span className="text-amber-400 ml-1">(endret)</span>}</Label>
+            <NumberInput suffix="%" step={0.01} value={rate} onChange={setRate} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Terminbeløp/mnd</Label>
+            <NumberInput suffix="kr" step={100} value={monthlyPayment} onChange={setMonthlyPayment} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">herav termingebyr</Label>
+            <NumberInput suffix="kr" step={10} value={termFee} onChange={setTermFee} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Forfallsdag (dag i mnd)</Label>
+            <NumberInput min={1} max={31} step={1} value={paymentDay} onChange={(v) => setPaymentDay(Math.round(v))} />
+          </div>
+        </div>
+        {rateChanged && (
+          <p className="text-xs text-amber-400">Renten lagres som ny post i rentehistorikken fra {today}</p>
+        )}
+        <div className="flex gap-2 justify-end">
+          <Button variant="outline" size="sm" onClick={onCancel}>Avbryt</Button>
+          <Button size="sm" onClick={handleSave}>Lagre</Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
