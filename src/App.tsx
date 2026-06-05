@@ -25,6 +25,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store/useAppStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { usePartnershipStore } from '@/store/usePartnershipStore'
+import { useSharedProjectStore } from '@/store/useSharedProjectStore'
 import { LoginPage } from '@/pages/LoginPage'
 import { loadFromSupabase, startAutoSync } from '@/lib/syncEconomyData'
 import { useEconomyStore } from '@/application/useEconomyStore'
@@ -126,6 +127,11 @@ function App() {
         window.history.replaceState({}, '', url.toString())
       } else {
         await usePartnershipStore.getState().initialize()
+      }
+      // Initialiser delt prosjekt om partnerskap er koblet
+      const partnership = usePartnershipStore.getState().partnership
+      if (partnership?.status === 'accepted') {
+        useSharedProjectStore.getState().initialize(partnership.id)
       }
     }
     initPartnership()

@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
-import { Plus, Trash2, ChevronDown, ChevronUp, Pencil, Check, X } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronUp, Pencil, Check, X, Share2 } from 'lucide-react'
 import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
+import { useSharedProjectStore } from '@/store/useSharedProjectStore'
 import type { IVFTransactionType } from '@/types/economy'
 import { cn } from '@/lib/utils'
 
@@ -25,6 +26,7 @@ const TYPE_LABELS: Record<IVFTransactionType, string> = {
   SVEA: 'SVEA',
   KJØP: 'Kjøp',
   FAKTURA: 'Faktura',
+  FAKTURA_DONOR: 'Faktura donor',
   ANNET: 'Annet',
 }
 
@@ -33,7 +35,38 @@ const TYPE_COLORS: Record<IVFTransactionType, string> = {
   SVEA: 'text-red-400',
   KJØP: 'text-orange-400',
   FAKTURA: 'text-red-300',
+  FAKTURA_DONOR: 'text-pink-400',
   ANNET: 'text-sky-400',
+}
+
+// ------------------------------------------------------------
+// DATA-HOOK — velger delt prosjekt om tilkoblet, ellers personlig
+// ------------------------------------------------------------
+
+type IVFTx = { id: string; date: string; label: string; type: IVFTransactionType; amount: number; merknad?: string }
+
+function useIVFData() {
+  const shared = useSharedProjectStore()
+  const personalTxs = useActiveEconomyStore((s) => s.ivfTransactions)
+  const addPersonal = useActiveEconomyStore((s) => s.addIvfTransaction)
+  const updatePersonal = useActiveEconomyStore((s) => s.updateIvfTransaction)
+  const removePersonal = useActiveEconomyStore((s) => s.removeIvfTransaction)
+  const isShared = shared.partnershipId !== null
+
+  return {
+    transactions: isShared ? shared.transactions : personalTxs,
+    isShared,
+    loading: isShared ? shared.loading : false,
+    addTransaction: (tx: IVFTx) =>
+      isShared ? shared.addTransaction(tx) : addPersonal(tx),
+    updateTransaction: (id: string, updates: Partial<IVFTx>) =>
+      isShared ? shared.updateTransaction(id, updates) : updatePersonal(id, updates),
+    removeTransaction: (id: string) =>
+      isShared ? shared.removeTransaction(id) : removePersonal(id),
+    personalTxs,
+    migrated: shared.migrated,
+    migrateFrom: shared.migrateFrom,
+  }
 }
 
 // ------------------------------------------------------------
@@ -41,7 +74,7 @@ const TYPE_COLORS: Record<IVFTransactionType, string> = {
 // ------------------------------------------------------------
 
 function StatsCard() {
-  const ivfTransactions = useActiveEconomyStore((s) => s.ivfTransactions)
+  const { transactions: ivfTransactions } = useIVFData()
   const today = new Date().toISOString().split('T')[0]
 
   function calcStats(txs: typeof ivfTransactions) {
@@ -52,18 +85,13 @@ function StatsCard() {
     const andreKjop = txs
       .filter((t) => t.type === 'KJØP' && !t.label.toLowerCase().includes('medisin'))
       .reduce((s, t) => s + Math.abs(t.amount), 0)
-    const svea = txs
-      .filter((t) => t.type === 'SVEA')
-      .reduce((s, t) => s + Math.abs(t.amount), 0)
+    const svea = txs.filter((t) => t.type === 'SVEA').reduce((s, t) => s + Math.abs(t.amount), 0)
     const sveaCount = txs.filter((t) => t.type === 'SVEA').length
-    const andreFakturaer = txs
-      .filter((t) => t.type === 'FAKTURA')
-      .reduce((s, t) => s + Math.abs(t.amount), 0)
-    const annet = txs
-      .filter((t) => t.type === 'ANNET')
-      .reduce((s, t) => s + Math.abs(t.amount), 0)
-    const sumUtgifter = medisin + andreKjop + svea + andreFakturaer + annet
-    return { sumSpart, medisin, andreKjop, svea, sveaCount, andreFakturaer, annet, sumUtgifter }
+    const donorFaktura = txs.filter((t) => t.type === 'FAKTURA_DONOR').reduce((s, t) => s + Math.abs(t.amount), 0)
+    const andreFakturaer = txs.filter((t) => t.type === 'FAKTURA').reduce((s, t) => s + Math.abs(t.amount), 0)
+    const annet = txs.filter((t) => t.type === 'ANNET').reduce((s, t) => s + Math.abs(t.amount), 0)
+    const sumUtgifter = medisin + andreKjop + svea + donorFaktura + andreFakturaer + annet
+    return { sumSpart, medisin, andreKjop, svea, sveaCount, donorFaktura, andreFakturaer, annet, sumUtgifter }
   }
 
   const past = calcStats(ivfTransactions.filter((t) => t.date <= today))
@@ -107,6 +135,12 @@ function StatsCard() {
             <div className="flex justify-between items-baseline pl-3">
               <span className="text-xs text-muted-foreground">Andre kjøp</span>
               <span className="text-xs tabular-nums text-orange-400">{fmt(stats.andreKjop, 2)} kr</span>
+            </div>
+          )}
+          {stats.donorFaktura > 0 && (
+            <div className="flex justify-between items-baseline pl-3">
+              <span className="text-xs text-muted-foreground">Donor faktura</span>
+              <span className="text-xs tabular-nums text-pink-400">{fmt(stats.donorFaktura, 2)} kr</span>
             </div>
           )}
           {stats.svea > 0 && (
@@ -246,7 +280,7 @@ function EditRow({
 // ------------------------------------------------------------
 
 function AddTransactionForm({ onClose }: { onClose: () => void }) {
-  const addIvfTransaction = useActiveEconomyStore((s) => s.addIvfTransaction)
+  const { addTransaction } = useIVFData()
   const today = new Date().toISOString().split('T')[0]
   const [date, setDate] = useState(today)
   const [label, setLabel] = useState('')
@@ -258,7 +292,7 @@ function AddTransactionForm({ onClose }: { onClose: () => void }) {
     e.preventDefault()
     const parsedAmount = parseFloat(amount.replace(',', '.'))
     if (!label || isNaN(parsedAmount)) return
-    addIvfTransaction({
+    addTransaction({
       id: crypto.randomUUID(),
       date,
       label,
@@ -354,7 +388,7 @@ function AddTransactionForm({ onClose }: { onClose: () => void }) {
 // ------------------------------------------------------------
 
 function TransactionTable() {
-  const { ivfTransactions, removeIvfTransaction, updateIvfTransaction } = useActiveEconomyStore()
+  const { transactions: ivfTransactions, updateTransaction: updateIvfTransaction, removeTransaction: removeIvfTransaction } = useIVFData()
   const [showAll, setShowAll] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
@@ -504,14 +538,15 @@ function TransactionTable() {
 // ------------------------------------------------------------
 
 function SummaryStats() {
-  const ivfTransactions = useActiveEconomyStore((s) => s.ivfTransactions)
+  const { transactions: ivfTransactions } = useIVFData()
   const today = new Date().toISOString().split('T')[0]
 
   const pastTx = ivfTransactions.filter((t) => t.date <= today)
   const saldo = pastTx.reduce((s, t) => s + t.amount, 0)
   const sumSpart = pastTx.filter((t) => t.type === 'SPARING').reduce((s, t) => s + t.amount, 0)
+  const UTGIFT_TYPES: IVFTransactionType[] = ['SVEA', 'KJØP', 'FAKTURA', 'FAKTURA_DONOR', 'ANNET']
   const sumUtgifter = pastTx
-    .filter((t) => t.type === 'FAKTURA' || t.type === 'KJØP')
+    .filter((t) => UTGIFT_TYPES.includes(t.type))
     .reduce((s, t) => s + t.amount, 0)
 
   const cards = [
@@ -540,7 +575,19 @@ function SummaryStats() {
 
 export function IVFPage() {
   const [showAddForm, setShowAddForm] = useState(false)
+  const [migrating, setMigrating] = useState(false)
   const { ivfSettings, setIvfSettings } = useActiveEconomyStore()
+  const { isShared, personalTxs, migrated, migrateFrom } = useIVFData()
+  const needsMigration = isShared && personalTxs.length > 0 && !migrated
+
+  async function handleMigrate() {
+    setMigrating(true)
+    try {
+      await migrateFrom(personalTxs)
+    } finally {
+      setMigrating(false)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4 p-4 overflow-y-auto h-full">
@@ -568,6 +615,27 @@ export function IVFPage() {
           )}
         </div>
       </div>
+
+      {needsMigration && (
+        <div className="rounded-lg border border-violet-500/40 bg-violet-500/10 px-4 py-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-violet-300 flex items-center gap-1.5">
+              <Share2 className="h-4 w-4" />
+              Del Tonjes data med Ane
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {personalTxs.length} transaksjoner er klare til å flyttes til det felles prosjektet.
+            </p>
+          </div>
+          <button
+            onClick={handleMigrate}
+            disabled={migrating}
+            className="text-xs px-3 py-1.5 rounded bg-violet-600 hover:bg-violet-500 text-white font-medium transition-colors disabled:opacity-50 whitespace-nowrap"
+          >
+            {migrating ? 'Flytter…' : 'Flytt til felles'}
+          </button>
+        </div>
+      )}
 
       <SummaryStats />
 
