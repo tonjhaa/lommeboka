@@ -36,7 +36,6 @@ import {
   FileText,
   RefreshCw,
   Palmtree,
-  HeartPulse,
   Umbrella,
   Map,
   Gift,
@@ -74,9 +73,6 @@ const SubscriptionsPage = lazyWithRetry(() =>
 const FeriepengePage = lazyWithRetry(() =>
   import('./FeriepengePage').then((m) => ({ default: m.FeriepengePage }))
 )
-const IVFPage = lazyWithRetry(() =>
-  import('./IVFPage').then((m) => ({ default: m.IVFPage }))
-)
 const VacationPage = lazyWithRetry(() =>
   import('./VacationPage').then((m) => ({ default: m.VacationPage }))
 )
@@ -110,7 +106,6 @@ const NAV_ITEMS: NavItem[] = [
   { page: 'absence', label: 'Fravær', Icon: FileText },
   { page: 'tax', label: 'Skatt', Icon: TrendingUp },
   { page: 'subscriptions', label: 'Abo & Fors.', Icon: RefreshCw },
-  { page: 'ivf', label: 'Prosjekt', Icon: HeartPulse },
   { page: 'vacation', label: 'Ferie', Icon: Umbrella },
   { page: 'veikart', label: 'Veikart', Icon: Map },
   { page: 'gaver', label: 'Gaver', Icon: Gift },
@@ -230,7 +225,6 @@ export function EconomyPage() {
           {currentPage === 'tax' && <TaxSettlementPage />}
           {currentPage === 'subscriptions' && <SubscriptionsPage />}
           {currentPage === 'feriepenger' && <FeriepengePage />}
-          {currentPage === 'ivf' && <IVFPage />}
           {currentPage === 'vacation' && <VacationPage />}
           {currentPage === 'veikart' && <VeikartPage />}
           {currentPage === 'gaver' && <GiftPage />}
