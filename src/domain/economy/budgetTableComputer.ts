@@ -196,7 +196,9 @@ export function computeBudgetTable(
     if (slip) return slip.maanedslonn
     // Fungering aktiv: vis basislønn — mellomlegget håndteres i Fungering-raden
     if (fungeringByMonth.has(month)) return profile.baseMonthly ?? projectMonthlySalary(trend, year, month)
-    return projectMonthlySalary(trend, year, month)
+    // Ingen slipphistorikk (f.eks. ny bruker): fall tilbake på profil-grunnlønn
+    const projected = projectMonthlySalary(trend, year, month)
+    return projected > 0 ? projected : (profile.baseMonthly ?? 0)
   }
 
   // ---- ATF: summer per utbetalingsmåned ----
