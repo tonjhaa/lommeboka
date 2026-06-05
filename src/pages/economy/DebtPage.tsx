@@ -3,6 +3,7 @@ import { Plus, Trash2, ChevronDown, ChevronUp, CheckCircle2, Calculator } from '
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { NumberInput } from '@/components/ui/number-input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
@@ -516,38 +517,19 @@ function AddDebtForm({ onSave, onCancel }: { onSave: (d: DebtAccount) => void; o
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Rente %</Label>
-            <Input
-              type="number"
-              step="0.1"
-              value={form.rate}
-              onChange={(e) => setForm((f) => ({ ...f, rate: parseFloat(e.target.value) || 0 }))}
-            />
+            <NumberInput suffix="%" step={0.1} value={form.rate} onChange={(v) => setForm((f) => ({ ...f, rate: v }))} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Nåværende saldo</Label>
-            <Input
-              type="number"
-              value={form.currentBalance}
-              onChange={(e) => setForm((f) => ({ ...f, currentBalance: parseFloat(e.target.value) || 0 }))}
-            />
+            <NumberInput suffix="kr" step={1000} value={form.currentBalance} onChange={(v) => setForm((f) => ({ ...f, currentBalance: v }))} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Terminbeløp/mnd (total faktura)</Label>
-            <Input
-              type="number"
-              placeholder="inkl. renter, avdrag og gebyr"
-              value={form.monthlyPayment}
-              onChange={(e) => setForm((f) => ({ ...f, monthlyPayment: parseFloat(e.target.value) || 0 }))}
-            />
+            <NumberInput suffix="kr" placeholder="inkl. renter, avdrag og gebyr" value={form.monthlyPayment} onChange={(v) => setForm((f) => ({ ...f, monthlyPayment: v }))} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">herav termingebyr</Label>
-            <Input
-              type="number"
-              placeholder="f.eks. 50"
-              value={form.termFee}
-              onChange={(e) => setForm((f) => ({ ...f, termFee: parseFloat(e.target.value) || 0 }))}
-            />
+            <NumberInput suffix="kr" placeholder="f.eks. 50" value={form.termFee} onChange={(v) => setForm((f) => ({ ...f, termFee: v }))} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Startdato</Label>
@@ -555,12 +537,7 @@ function AddDebtForm({ onSave, onCancel }: { onSave: (d: DebtAccount) => void; o
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Forfallsdag (dag i mnd)</Label>
-            <Input
-              type="number"
-              min={1} max={31}
-              value={form.paymentDay}
-              onChange={(e) => setForm((f) => ({ ...f, paymentDay: parseInt(e.target.value) || 1 }))}
-            />
+            <NumberInput min={1} max={31} step={1} value={form.paymentDay} onChange={(v) => setForm((f) => ({ ...f, paymentDay: Math.round(v) }))} />
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -643,12 +620,12 @@ function ExtraPaymentCalc({ debt, basePlan, currentRate }: { debt: DebtAccount; 
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5">
           <Label className="text-xs text-muted-foreground whitespace-nowrap">kr/mnd ekstra</Label>
-          <Input
-            type="number"
-            className="h-7 text-xs w-28"
+          <NumberInput
+            min={0} step={100}
             placeholder="f.eks. 500"
-            value={extra || ''}
-            onChange={(e) => setExtra(Math.max(0, parseFloat(e.target.value) || 0))}
+            value={extra}
+            onChange={(v) => setExtra(Math.max(0, v))}
+            className="h-7 text-xs w-28"
           />
         </div>
         {result && extra > 0 && (
@@ -674,13 +651,12 @@ function UpdateRateForm({ onSave, onCancel }: { onSave: (e: DebtRateHistory) => 
   return (
     <div className="flex items-center gap-2 flex-1">
       <Input type="date" className="h-8 text-xs w-36" value={date} onChange={(e) => setDate(e.target.value)} />
-      <Input
-        type="number"
-        step="0.1"
-        className="h-8 text-xs w-20"
+      <NumberInput
+        step={0.1}
         placeholder="Rente %"
         value={rate}
-        onChange={(e) => setRate(parseFloat(e.target.value) || 0)}
+        onChange={setRate}
+        className="h-8 text-xs w-20"
       />
       <Button size="sm" className="h-8 text-xs" onClick={() => onSave({ fromDate: date, nominalRate: rate })}>OK</Button>
       <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={onCancel}>×</Button>
