@@ -1139,7 +1139,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 16,
+      version: 17,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v1 → v2: inkluder artskode 1501 (husleiekompensasjon) i fixedAdditions
@@ -1269,6 +1269,12 @@ export const useEconomyStore = create<EconomyState>()(
           state.ivfTransactions = (state.ivfTransactions as Array<Record<string, unknown>>).map((t) =>
             t.type === 'FAKTURA' ? { ...t, type: 'SVEA' } : t
           )
+        }
+        // v16 → v17: overstyr DEFAULT-presets med oppdaterte satser; behold egendefinerte presets
+        if (fromVersion < 17 && Array.isArray(state.bankPresets)) {
+          const defaultIds = new Set(DEFAULT_BANK_PRESETS.map((p) => p.id))
+          const customPresets = (state.bankPresets as BankAccountPreset[]).filter((p) => !defaultIds.has(p.id))
+          state.bankPresets = [...DEFAULT_BANK_PRESETS, ...customPresets]
         }
         return state
       },

@@ -2358,12 +2358,17 @@ function AccountForm({
   const [accountNumber, setAccountNumber] = useState(initial?.accountNumber ?? '')
   const [birthYear, setBirthYear] = useState(String(initial?.birthYear ?? ''))
 
-  const [selectedPresetId, setSelectedPresetId] = useState<string>('manual')
+  const initialPresetId = initial?.bankPresetId ?? 'manual'
+  const [selectedPresetId, setSelectedPresetId] = useState<string>(initialPresetId)
+  const enabledPresets = bankPresets.filter((p) => p.enabled)
+  const initialPreset = initialPresetId !== 'manual' ? enabledPresets.find((p) => p.id === initialPresetId) : undefined
   const [tieredRates, setTieredRates] = useState<TieredRate[]>(
-    initial?.tieredRates ?? [{ fromBalance: 0, rate: initial?.rateHistory?.slice().sort((a, b) => b.fromDate.localeCompare(a.fromDate))[0]?.rate ?? 3.5 }]
+    initialPreset?.tieredRates
+      ? [...initialPreset.tieredRates]
+      : (initial?.tieredRates ?? [{ fromBalance: 0, rate: initial?.rateHistory?.slice().sort((a, b) => b.fromDate.localeCompare(a.fromDate))[0]?.rate ?? 3.5 }])
   )
   const [interestFreq, setInterestFreq] = useState<'monthly' | 'yearly'>(
-    initial?.interestCreditFrequency ?? 'monthly'
+    initialPreset?.interestCreditFrequency ?? initial?.interestCreditFrequency ?? 'monthly'
   )
 
   const [periods, setPeriods] = useState<ContributionPeriod[]>(
@@ -2377,7 +2382,6 @@ function AccountForm({
   )
 
   const isBSU = type === 'BSU'
-  const enabledPresets = bankPresets.filter((p) => p.enabled)
 
   function applyPreset(presetId: string) {
     setSelectedPresetId(presetId)
@@ -2452,6 +2456,7 @@ function AccountForm({
       interestCreditFrequency: isBSU ? 'yearly' : interestFreq,
       rateHistory: initial?.rateHistory ?? [{ fromDate: openingDate, rate: flatRate }],
       tieredRates: effectiveTieredRates,
+      bankPresetId: selectedPresetId !== 'manual' ? selectedPresetId : undefined,
       monthlyContribution: periods.length > 0 ? 0 : defaultMonthly,
       contributionPeriods: periods.length > 0 ? periods : undefined,
       balanceHistory: initial?.balanceHistory ?? [],

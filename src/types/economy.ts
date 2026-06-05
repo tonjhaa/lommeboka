@@ -324,6 +324,8 @@ export interface SavingsAccount {
   monthlyContributionToDate?: string
   /** Trinnvis rente — overstyrer rateHistory for saldobasert renteberegning */
   tieredRates?: TieredRate[]
+  /** ID til bankpreset som ble valgt ved opprettelse/sist redigering */
+  bankPresetId?: string
   /** Fleksible spareperioder — overskriver monthlyContribution når tilstede */
   contributionPeriods?: ContributionPeriod[]
 }
