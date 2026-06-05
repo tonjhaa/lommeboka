@@ -1,7 +1,7 @@
 import { computeEffectiveBalance, projectBalanceMonthly, getEffectiveRate } from './savingsCalculator'
 import type {
   SavingsAccount, DebtAccount, EmploymentProfile,
-  PartnerVeikart, PartnerAccount, PartnerDebt,
+  PartnerVeikart, PartnerAccount, PartnerDebt, PartnerFondHolding, FondPortfolio,
 } from '@/types/economy'
 
 export function buildPartnerVeikartPatch(
@@ -10,6 +10,7 @@ export function buildPartnerVeikartPatch(
   profile: EmploymentProfile | null,
   existing: PartnerVeikart,
   now: Date,
+  fondPortfolio?: FondPortfolio | null,
 ): Partial<PartnerVeikart> & Pick<PartnerVeikart, 'enabled' | 'accounts' | 'bsu' | 'bsuMonthlyContribution' | 'annualIncome' | 'debts'> {
   function projectedBalance(a: SavingsAccount): number {
     const effectiveBalance = computeEffectiveBalance(a, now)
@@ -50,6 +51,25 @@ export function buildPartnerVeikartPatch(
       monthlyPayment: d.monthlyPayment,
     }))
 
+  // Fond — synker totalverdi fra siste snapshot i partners fondPortfolio
+  const lastSnapshot = fondPortfolio?.snapshots?.length
+    ? [...fondPortfolio.snapshots].sort((a, b) => b.date.localeCompare(a.date))[0]
+    : null
+  const syncedFondValue = lastSnapshot?.totalValue ?? existing.fondCurrentValue
+
+  // Beregn per-fond verdier fra allokering × totalverdi
+  const fondHoldings: PartnerFondHolding[] | undefined =
+    fondPortfolio?.funds?.length && lastSnapshot?.totalValue
+      ? fondPortfolio.funds.map((f) => ({
+          id: f.id,
+          name: f.name,
+          type: f.type as PartnerFondHolding['type'],
+          currentValue: Math.round(lastSnapshot.totalValue * (f.allocationPercent / 100)),
+          returnPct: f.returnPercent,
+          monthlyContribution: undefined,
+        }))
+      : existing.fondHoldings
+
   return {
     enabled: true,
     accounts,
@@ -57,5 +77,7 @@ export function buildPartnerVeikartPatch(
     bsuMonthlyContribution: bsuAcc?.monthlyContribution ?? existing.bsuMonthlyContribution,
     annualIncome: profile ? (profile.baseMonthly ?? 0) * 12 : existing.annualIncome,
     debts: activeDebts,
+    ...(fondHoldings ? { fondHoldings } : {}),
+    ...(syncedFondValue != null ? { fondCurrentValue: syncedFondValue } : {}),
   }
 }

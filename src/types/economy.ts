@@ -731,6 +731,15 @@ export interface PartnerTaxSettlement {
   paidDate?: string
 }
 
+export interface PartnerFondHolding {
+  id: string
+  name: string
+  type: 'indeks' | 'aktivt' | 'rente' | 'annet'
+  currentValue: number   // kr
+  returnPct?: number     // avkastning % (positiv eller negativ)
+  monthlyContribution?: number
+}
+
 /** Partners tall brukt i Veikart og Dashboard */
 export interface PartnerVeikart {
   enabled: boolean
@@ -752,6 +761,10 @@ export interface PartnerVeikart {
   // Feriepenger
   feriepengerGrunnlag?: number // brutto lønn forrige år
   feriepengerRate?: number     // sats, f.eks. 10.2 eller 12
+  // Fond
+  fondCurrentValue?: number       // total fondverdi (manuelt eller synket)
+  fondMonthlyContribution?: number // månedlig fondinnskudd
+  fondHoldings?: PartnerFondHolding[]
   // Budsjett — månedlige utgiftsposter
   budgetLines?: PartnerBudgetLine[]
   // Fravær

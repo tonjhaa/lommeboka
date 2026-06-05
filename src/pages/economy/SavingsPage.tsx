@@ -440,7 +440,7 @@ function RådTab({
     insights.push({ icon: '⚖️', color: 'amber', text: `Gjelden (${fmtNOK(totalDebt)}) er høy relativt til sparingen. Vurder ekstra nedbetaling av dyr gjeld.` })
 
   const totalEKNow = savingsAccounts.reduce((s, a) => s + computeEffectiveBalance(a, now), 0) + fondCurrentValue
-    + (partnerVeikart?.enabled ? partnerNonBsuEquity(partnerVeikart) + (partnerVeikart.bsu ?? 0) : 0)
+    + (partnerVeikart?.enabled ? partnerNonBsuEquity(partnerVeikart) + (partnerVeikart.bsu ?? 0) + (partnerVeikart.fondCurrentValue ?? 0) : 0)
   const requiredEK = savingsPlanTarget > 0 ? Math.max(savingsPlanTarget * 0.1, 0) : 0
   if (requiredEK > 0) {
     const pctGoal = Math.min(100, (totalEKNow / requiredEK) * 100)
@@ -687,6 +687,7 @@ function MånedsoversiktTable({
       ps.profile,
       partnerVeikart,
       now,
+      ps.fondPortfolio,
     )
     setPartnerVeikart({ ...partnerVeikart, ...patch })
     setSyncDone(true)
@@ -830,10 +831,11 @@ function MånedsoversiktTable({
       const partnerBsuMnd = Math.min(rawPartnerBsuMnd, partnerBsuRoom)
       if (hasPartner) partnerBsuBal = partnerBsuBal + partnerBsuMnd
 
+      const partnerFondVal = hasPartner ? (partnerVeikart.fondCurrentValue ?? 0) : 0
       const totalEK =
         accountBalances.reduce((s, a) => s + a.balance, 0) +
         (hasFond ? fondBal : 0) +
-        (hasPartner ? partnerAccBalances.reduce((s, a) => s + a.balance, 0) + partnerBsuBal : 0)
+        (hasPartner ? partnerAccBalances.reduce((s, a) => s + a.balance, 0) + partnerBsuBal + partnerFondVal : 0)
 
       const partnerDebtBase = hasPartner
         ? ((partnerVeikart.debts ?? []).length > 0
@@ -850,7 +852,7 @@ function MånedsoversiktTable({
       const projectedPartnerIncome = partnerOnlyAnnualIncome * growthFactor
       const projectedAnnualIncome = projectedMyIncome + projectedPartnerIncome
       const myEK = accountBalances.reduce((s, a) => s + a.balance, 0) + (hasFond ? fondBal : 0)
-      const partnerEK = hasPartner ? partnerAccBalances.reduce((s, a) => s + a.balance, 0) + partnerBsuBal : 0
+      const partnerEK = hasPartner ? partnerAccBalances.reduce((s, a) => s + a.balance, 0) + partnerBsuBal + partnerFondVal : 0
       const maxKjøpesum = projectedAnnualIncome > 0 ? calcMaxPurchase(totalEK, projectedAnnualIncome, debtBalance) : 0
       const maxKjøpesumMeg = projectedMyIncome > 0 ? calcMaxPurchase(myEK, projectedMyIncome, debtBalance) : 0
       const maxKjøpesumPartner = projectedPartnerIncome > 0 ? calcMaxPurchase(partnerEK, projectedPartnerIncome, debtBalance) : 0
@@ -939,21 +941,39 @@ function MånedsoversiktTable({
               ? (partnerVeikart.debts ?? []).reduce((s, d) => s + d.currentBalance, 0)
               : partnerVeikart.debt ?? 0
             return (
-              <span className="flex items-center gap-1 text-violet-400/80">
-                <span>Partner gjeld:</span>
-                <input
-                  type="number"
-                  min={0}
-                  step={10000}
-                  value={contribOverrides['partner-debt'] ?? debtBase}
-                  onChange={e => {
-                    const val = parseFloat(e.target.value) || 0
-                    setSavingsOverride('partner-debt', val)
-                  }}
-                  className="w-20 bg-muted/30 text-right rounded px-1 py-0.5 text-xs outline-none border border-border focus:border-primary text-violet-300"
-                />
-                <span>kr</span>
-              </span>
+              <>
+                <span className="flex items-center gap-1 text-violet-400/80">
+                  <span>Partner gjeld:</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={10000}
+                    value={contribOverrides['partner-debt'] ?? debtBase}
+                    onChange={e => {
+                      const val = parseFloat(e.target.value) || 0
+                      setSavingsOverride('partner-debt', val)
+                    }}
+                    className="w-20 bg-muted/30 text-right rounded px-1 py-0.5 text-xs outline-none border border-border focus:border-primary text-violet-300"
+                  />
+                  <span>kr</span>
+                </span>
+                <span className="flex items-center gap-1 text-violet-400/80">
+                  <span>Partner fond:</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1000}
+                    placeholder="0"
+                    value={partnerVeikart.fondCurrentValue ?? ''}
+                    onChange={e => {
+                      const val = parseFloat(e.target.value) || 0
+                      setPartnerVeikart({ ...partnerVeikart, fondCurrentValue: val || undefined })
+                    }}
+                    className="w-20 bg-muted/30 text-right rounded px-1 py-0.5 text-xs outline-none border border-border focus:border-primary text-violet-300"
+                  />
+                  <span>kr</span>
+                </span>
+              </>
             )
           })()}
         </span>
