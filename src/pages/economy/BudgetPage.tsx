@@ -406,7 +406,7 @@ export function BudgetPage() {
           <thead className="sticky top-0 z-30">
             {/* Row 1: Month names (each spans 2 cols) */}
             <tr className="bg-muted/90 border-b border-border">
-              <th className="sticky left-0 z-40 bg-muted/90 px-3 py-2 text-left font-medium min-w-[160px] border-r border-border">
+              <th className="sticky left-0 z-40 bg-muted/90 px-3 py-2 text-left font-medium w-[180px] min-w-[180px] border-r border-border">
                 Post
               </th>
               {metas.map((meta) => (
@@ -414,11 +414,11 @@ export function BudgetPage() {
                   key={meta.month}
                   colSpan={2}
                   className={cn(
-                    'px-1 py-2 text-center font-medium min-w-[100px] border-r border-border/40',
+                    'px-2 py-2 text-right font-medium min-w-[96px] border-r border-border/40',
                     highlightedMonth === meta.month && 'bg-sky-500/15',
                   )}
                 >
-                  <div className="flex items-center justify-center gap-1">
+                  <div className="flex items-center justify-end gap-1">
                     <button
                       className={cn(
                         'hover:text-sky-400 transition-colors',
@@ -453,13 +453,13 @@ export function BudgetPage() {
 
             {/* Row 2: Sub-headers (Bud | Fak or Prog) */}
             <tr className="bg-muted/70 border-b border-border">
-              <th className="sticky left-0 z-40 bg-muted/70 px-3 py-1 border-r border-border" />
+              <th className="sticky left-0 z-40 bg-muted/70 px-3 py-1 w-[180px] min-w-[180px] border-r border-border" />
               {metas.map((meta) => (
                 meta.hasSlip ? (
                   <th
                     key={`${meta.month}-fak`}
                     colSpan={2}
-                    className={cn('px-2 py-1 text-center font-normal min-w-[100px] border-r border-border/40', highlightedMonth === meta.month && 'bg-sky-500/15')}
+                    className={cn('px-2 py-1 text-right font-normal min-w-[96px] border-r border-border/40', highlightedMonth === meta.month && 'bg-sky-500/15')}
                   >
                     Faktisk
                   </th>
@@ -468,7 +468,7 @@ export function BudgetPage() {
                     key={`${meta.month}-prog`}
                     colSpan={2}
                     className={cn(
-                      'px-2 py-1 text-center font-normal border-r border-border/40',
+                      'px-2 py-1 text-right font-normal min-w-[96px] border-r border-border/40',
                       meta.isLocked ? 'text-foreground' : 'text-muted-foreground italic',
                       highlightedMonth === meta.month && 'bg-sky-500/15',
                     )}
@@ -1195,7 +1195,7 @@ function DataRow({
   if (row.isCumulative) {
     return (
       <tr className="border-b border-border/20 hover:bg-muted/10">
-        <td className="sticky left-0 z-10 bg-background px-3 py-1.5 border-r border-border w-[190px] text-muted-foreground text-xs" title={row.label}>
+        <td className="sticky left-0 z-10 bg-background px-3 py-1.5 border-r border-border w-[180px] text-muted-foreground text-xs" title={row.label}>
           {row.label}
         </td>
         {metas.map((meta) => {
@@ -1241,7 +1241,7 @@ function DataRow({
       isHidden && 'opacity-40',
     )}>
       <td className={cn(
-        'sticky left-0 z-10 bg-background px-3 py-1.5 border-r border-border w-[190px]',
+        'sticky left-0 z-10 bg-background px-3 py-1.5 border-r border-border w-[180px]',
         row.isBold ? 'font-bold bg-muted/20 text-[11px] uppercase tracking-wide' : '',
         isGrunnlag && 'text-muted-foreground italic',
       )}>
