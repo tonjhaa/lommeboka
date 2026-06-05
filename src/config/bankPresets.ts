@@ -97,9 +97,12 @@ export const DEFAULT_BANK_PRESETS: BankAccountPreset[] = [
     bankName: 'Nordea',
     accountTypeName: 'Sparekonto Ekstra',
     tieredRates: [
-      { fromBalance: 0, rate: 4.35 },
+      { fromBalance: 0,         rate: 3.40 },
+      { fromBalance: 100_000,   rate: 3.70 },
+      { fromBalance: 500_000,   rate: 4.35 },
+      { fromBalance: 2_000_000, rate: 3.90 },
     ],
-    interestCreditFrequency: 'monthly',
+    interestCreditFrequency: 'yearly',
     enabled: true,
   },
   {
