@@ -18,8 +18,25 @@ import {
   Pie,
   Cell,
 } from 'recharts'
-import { useEconomyStore } from '@/application/useEconomyStore'
+import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
 import type { FondEntry, FondPortfolio, FondPortfolioSnapshot, ContributionPeriod } from '@/types/economy'
+
+// Ane sin startportefølje — brukes av midlertidig import-knapp
+const ANE_INITIAL_FOND: { name: string; type: FondEntry['type']; value: number; returnPct: number }[] = [
+  { name: 'Alfred Berg Obligasjon ACC R', type: 'rente',   value: 2476, returnPct:  6.1  },
+  { name: 'Kron Indeks Global',           type: 'indeks',  value: 2332, returnPct: 18.9  },
+  { name: 'Storebrand Norge N',           type: 'aktivt',  value: 1262, returnPct: 39.9  },
+  { name: 'Alfred Berg Nordic Investment Grade', type: 'rente', value: 788, returnPct: -1.6 },
+  { name: 'Veritas Global Focus Fund USD D', type: 'aktivt', value: 780, returnPct: -11.8 },
+  { name: 'Storebrand Indeks - Nye Markeder N', type: 'indeks', value: 696, returnPct: 42.3 },
+  { name: 'PGIM Jennison Global Equity Opp', type: 'aktivt', value: 562, returnPct: -1.2 },
+  { name: 'JPM Global Focus A (acc) EUR', type: 'aktivt',  value: 524, returnPct:  2.3  },
+  { name: 'Storebrand Fremtid 80 N',      type: 'aktivt',  value: 463, returnPct: 22.3  },
+  { name: 'KLP Obligasjon Global N',      type: 'rente',   value: 435, returnPct:  6.2  },
+  { name: 'T. Rowe Price Global High Income', type: 'rente', value: 435, returnPct: 10.6 },
+  { name: 'Alfred Berg Nordic High Yield C', type: 'rente', value: 208, returnPct: 11.3 },
+]
+const FOND_COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#14b8a6','#a78bfa','#fb7185']
 
 // ------------------------------------------------------------
 // HELPERS
@@ -786,7 +803,7 @@ function PortfolioSettings({
 // ------------------------------------------------------------
 
 export function FondPage() {
-  const { fondPortfolio, setFondPortfolio, addFondSnapshot, removeFondSnapshot } = useEconomyStore()
+  const { fondPortfolio, setFondPortfolio, addFondSnapshot, removeFondSnapshot } = useActiveEconomyStore()
 
   const [showSettings, setShowSettings] = useState(false)
   const [livePrices, setLivePrices] = useState<Record<string, LivePrice>>({})
@@ -823,6 +840,26 @@ export function FondPage() {
   const avkastning = naverdi - investert
   const avkastningPct = investert > 0 ? (avkastning / investert) * 100 : 0
 
+  function importAnesFond() {
+    const total = ANE_INITIAL_FOND.reduce((s, f) => s + f.value, 0)
+    const today = new Date().toISOString().split('T')[0]
+    const funds: FondEntry[] = ANE_INITIAL_FOND.map((f, i) => ({
+      id: crypto.randomUUID(),
+      name: f.name,
+      type: f.type,
+      allocationPercent: Math.round((f.value / total) * 10000) / 100,
+      color: FOND_COLORS[i % FOND_COLORS.length],
+      returnPercent: f.returnPct,
+    }))
+    const snapshot: FondPortfolioSnapshot = { date: today, totalValue: total }
+    setFondPortfolio({
+      monthlyDeposit: 0,
+      startDate: '2023-09-05',
+      funds,
+      snapshots: [snapshot],
+    })
+  }
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Animated ticker */}
@@ -840,6 +877,16 @@ export function FondPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {fondPortfolio.funds.length === 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-violet-400 border-violet-500/40 hover:bg-violet-500/10"
+                onClick={importAnesFond}
+              >
+                Importer Kron-portefølje
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"

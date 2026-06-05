@@ -941,39 +941,21 @@ function MånedsoversiktTable({
               ? (partnerVeikart.debts ?? []).reduce((s, d) => s + d.currentBalance, 0)
               : partnerVeikart.debt ?? 0
             return (
-              <>
-                <span className="flex items-center gap-1 text-violet-400/80">
-                  <span>Partner gjeld:</span>
-                  <input
-                    type="number"
-                    min={0}
-                    step={10000}
-                    value={contribOverrides['partner-debt'] ?? debtBase}
-                    onChange={e => {
-                      const val = parseFloat(e.target.value) || 0
-                      setSavingsOverride('partner-debt', val)
-                    }}
-                    className="w-20 bg-muted/30 text-right rounded px-1 py-0.5 text-xs outline-none border border-border focus:border-primary text-violet-300"
-                  />
-                  <span>kr</span>
-                </span>
-                <span className="flex items-center gap-1 text-violet-400/80">
-                  <span>Partner fond:</span>
-                  <input
-                    type="number"
-                    min={0}
-                    step={1000}
-                    placeholder="0"
-                    value={partnerVeikart.fondCurrentValue ?? ''}
-                    onChange={e => {
-                      const val = parseFloat(e.target.value) || 0
-                      setPartnerVeikart({ ...partnerVeikart, fondCurrentValue: val || undefined })
-                    }}
-                    className="w-20 bg-muted/30 text-right rounded px-1 py-0.5 text-xs outline-none border border-border focus:border-primary text-violet-300"
-                  />
-                  <span>kr</span>
-                </span>
-              </>
+              <span className="flex items-center gap-1 text-violet-400/80">
+                <span>Partner gjeld:</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={10000}
+                  value={contribOverrides['partner-debt'] ?? debtBase}
+                  onChange={e => {
+                    const val = parseFloat(e.target.value) || 0
+                    setSavingsOverride('partner-debt', val)
+                  }}
+                  className="w-20 bg-muted/30 text-right rounded px-1 py-0.5 text-xs outline-none border border-border focus:border-primary text-violet-300"
+                />
+                <span>kr</span>
+              </span>
             )
           })()}
         </span>
