@@ -53,16 +53,20 @@ function useIVFData() {
   const removePersonal = useActiveEconomyStore((s) => s.removeIvfTransaction)
   const isShared = shared.partnershipId !== null
 
+  // Bruk delt data kun etter at migrering er gjort ELLER delt tabell allerede har innhold
+  const sharedHasData = shared.transactions.length > 0 || shared.migrated
+  const useShared = isShared && sharedHasData
+
   return {
-    transactions: isShared ? shared.transactions : personalTxs,
+    transactions: useShared ? shared.transactions : personalTxs,
     isShared,
     loading: isShared ? shared.loading : false,
     addTransaction: (tx: IVFTx) =>
-      isShared ? shared.addTransaction(tx) : addPersonal(tx),
+      useShared ? shared.addTransaction(tx) : addPersonal(tx),
     updateTransaction: (id: string, updates: Partial<IVFTx>) =>
-      isShared ? shared.updateTransaction(id, updates) : updatePersonal(id, updates),
+      useShared ? shared.updateTransaction(id, updates) : updatePersonal(id, updates),
     removeTransaction: (id: string) =>
-      isShared ? shared.removeTransaction(id) : removePersonal(id),
+      useShared ? shared.removeTransaction(id) : removePersonal(id),
     personalTxs,
     migrated: shared.migrated,
     migrateFrom: shared.migrateFrom,
