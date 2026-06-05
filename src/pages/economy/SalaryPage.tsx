@@ -411,6 +411,7 @@ function ProfileForm({
     ...initial,
   })
   const [taxCalcStatus, setTaxCalcStatus] = useState<'idle' | 'calculating' | 'done'>('idle')
+  const [baseInputMode, setBaseInputMode] = useState<'monthly' | 'annual'>('monthly')
 
   useEffect(() => {
     if (!form.tabellnummer || form.baseMonthly <= 0) { setTaxCalcStatus('idle'); return }
@@ -454,8 +455,30 @@ function ProfileForm({
           <Input type="number" placeholder="f.eks. 7100" {...fieldInt('tabellnummer')} />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Grunnlønn/mnd</Label>
-          <Input type="number" {...field('baseMonthly')} />
+          <div className="flex items-center justify-between">
+            <Label className="text-xs">{baseInputMode === 'monthly' ? 'Grunnlønn/mnd' : 'Årslønn'}</Label>
+            <button
+              type="button"
+              className="text-[10px] text-muted-foreground hover:text-foreground underline underline-offset-2"
+              onClick={() => setBaseInputMode(m => m === 'monthly' ? 'annual' : 'monthly')}
+            >
+              {baseInputMode === 'monthly' ? 'Skriv årslønn' : 'Skriv månedslønn'}
+            </button>
+          </div>
+          <Input
+            type="number"
+            value={baseInputMode === 'monthly' ? (form.baseMonthly || '') : (form.baseMonthly ? Math.round(form.baseMonthly * 12) : '')}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value) || 0
+              setForm(f => ({ ...f, baseMonthly: baseInputMode === 'monthly' ? v : Math.round(v / 12) }))
+            }}
+          />
+          {baseInputMode === 'annual' && form.baseMonthly > 0 && (
+            <p className="text-[10px] text-muted-foreground">{form.baseMonthly.toLocaleString('no-NO')} kr/mnd</p>
+          )}
+          {baseInputMode === 'monthly' && form.baseMonthly > 0 && (
+            <p className="text-[10px] text-muted-foreground">{(form.baseMonthly * 12).toLocaleString('no-NO')} kr/år</p>
+          )}
         </div>
         <div className="space-y-1">
           <div className="flex items-center justify-between">
@@ -1142,6 +1165,7 @@ function LønnssimulatorCard({
 }) {
   const tillegg = profile.fixedAdditions.reduce((s, a) => s + Math.max(0, a.amount), 0)
   const [nyGrunnlonn, setNyGrunnlonn] = useState(profile.baseMonthly)
+  const [simInputMode, setSimInputMode] = useState<'monthly' | 'annual'>('monthly')
 
   const brutto = nyGrunnlonn + tillegg
   const pensjon = Math.round(brutto * (profile.pensionPercent / 100))
@@ -1165,13 +1189,27 @@ function LønnssimulatorCard({
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <Label className="text-xs text-muted-foreground w-36 shrink-0">Ny grunnlønn/mnd</Label>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-1">
+              <Label className="text-xs text-muted-foreground w-36 shrink-0">
+                {simInputMode === 'monthly' ? 'Ny grunnlønn/mnd' : 'Ny årslønn'}
+              </Label>
+              <button
+                type="button"
+                className="text-[10px] text-muted-foreground hover:text-foreground underline underline-offset-2 shrink-0"
+                onClick={() => setSimInputMode(m => m === 'monthly' ? 'annual' : 'monthly')}
+              >
+                {simInputMode === 'monthly' ? '/år' : '/mnd'}
+              </button>
+            </div>
             <Input
               type="number"
               className="h-7 text-xs w-36"
-              value={nyGrunnlonn || ''}
-              onChange={(e) => setNyGrunnlonn(parseFloat(e.target.value) || 0)}
+              value={simInputMode === 'monthly' ? (nyGrunnlonn || '') : (nyGrunnlonn ? Math.round(nyGrunnlonn * 12) : '')}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value) || 0
+                setNyGrunnlonn(simInputMode === 'monthly' ? v : Math.round(v / 12))
+              }}
             />
             {nyGrunnlonn !== profile.baseMonthly && (
               <button
@@ -1182,6 +1220,9 @@ function LønnssimulatorCard({
               </button>
             )}
           </div>
+          {simInputMode === 'annual' && nyGrunnlonn > 0 && (
+            <p className="text-[10px] text-muted-foreground -mt-1">{nyGrunnlonn.toLocaleString('no-NO')} kr/mnd</p>
+          )}
           <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
             <InfoRow label="Brutto (inkl. tillegg)" value={fmtNOK(brutto)} />
             <InfoRow label={`Skatt (~${Math.round(skatteRate * 100)} %)`} value={`−${fmtNOK(skatt)}`} />
