@@ -584,7 +584,8 @@ export function IVFPage() {
   const [nameSaved, setNameSaved] = useState(false)
   const { ivfSettings, setIvfSettings } = useEconomyStore()
   const { isShared, personalTxs, migrated, migrateFrom } = useIVFData()
-  const needsMigration = isShared && personalTxs.length > 0 && !migrated
+  const sharedIsEmpty = useSharedProjectStore((s) => s.transactions.length === 0 && !s.loading)
+  const needsMigration = isShared && personalTxs.length > 0 && sharedIsEmpty && !migrated
 
   async function handleMigrate() {
     setMigrating(true)
