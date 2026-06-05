@@ -25,7 +25,7 @@ function fmtDate(iso: string) {
 const TYPE_LABELS: Record<IVFTransactionType, string> = {
   SPARING: 'Sparing',
   SVEA: 'SVEA',
-  KJØP: 'Kjøp',
+  KJØP: 'Medisin',
   FAKTURA: 'Faktura',
   FAKTURA_DONOR: 'Faktura donor',
   ANNET: 'Annet',
