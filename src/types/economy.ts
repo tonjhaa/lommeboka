@@ -585,7 +585,7 @@ export interface PolicyRateEntry {
 // IVF-PROSJEKT
 // ------------------------------------------------------------
 
-export type IVFTransactionType = 'SPARING' | 'SVEA' | 'KJØP' | 'FAKTURA' | 'FAKTURA_DONOR' | 'ANNET'
+export type IVFTransactionType = 'SPARING' | 'SVEA' | 'KJØP' | 'FAKTURA' | 'FAKTURA_DONOR' | 'ANNET' | 'UTLEGG'
 
 export interface IVFTransaction {
   id: string

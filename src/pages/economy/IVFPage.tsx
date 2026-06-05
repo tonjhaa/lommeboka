@@ -29,6 +29,7 @@ const TYPE_LABELS: Record<IVFTransactionType, string> = {
   FAKTURA: 'Faktura',
   FAKTURA_DONOR: 'Faktura donor',
   ANNET: 'Annet',
+  UTLEGG: 'Utlegg',
 }
 
 const TYPE_COLORS: Record<IVFTransactionType, string> = {
@@ -38,6 +39,7 @@ const TYPE_COLORS: Record<IVFTransactionType, string> = {
   FAKTURA: 'text-red-300',
   FAKTURA_DONOR: 'text-pink-400',
   ANNET: 'text-sky-400',
+  UTLEGG: 'text-indigo-400',
 }
 
 // ------------------------------------------------------------
