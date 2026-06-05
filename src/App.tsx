@@ -51,6 +51,9 @@ const TaxCalculatorPage = lazyWithRetry(() =>
 const PartnerPage = lazyWithRetry(() =>
   import('@/pages/economy/PartnerPage').then((m) => ({ default: m.PartnerPage }))
 )
+const IVFPageTop = lazyWithRetry(() =>
+  import('@/pages/economy/IVFPage').then((m) => ({ default: m.IVFPage }))
+)
 
 function PageFallback() {
   return (
@@ -86,6 +89,11 @@ function AppContent() {
         {currentView === 'partner' && (
           <Suspense fallback={<PageFallback />}>
             <PartnerPage />
+          </Suspense>
+        )}
+        {currentView === 'ivf' && (
+          <Suspense fallback={<PageFallback />}>
+            <IVFPageTop />
           </Suspense>
         )}
       </div>
