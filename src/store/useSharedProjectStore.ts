@@ -45,7 +45,9 @@ export const useSharedProjectStore = create<SharedProjectState>((set, get) => ({
 
       const unsub = subscribeToSharedProject(
         partnershipId,
-        (tx) => set((s) => ({ transactions: [...s.transactions, tx] })),
+        (tx) => set((s) => s.transactions.find((t) => t.id === tx.id)
+          ? s
+          : { transactions: [...s.transactions, tx] }),
         (tx) => set((s) => ({ transactions: s.transactions.map((t) => t.id === tx.id ? tx : t) })),
         (id) => set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) })),
       )
