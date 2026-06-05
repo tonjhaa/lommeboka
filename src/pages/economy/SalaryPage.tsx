@@ -412,6 +412,7 @@ function ProfileForm({
   })
   const [taxCalcStatus, setTaxCalcStatus] = useState<'idle' | 'calculating' | 'done'>('idle')
   const [baseInputMode, setBaseInputMode] = useState<'monthly' | 'annual'>('monthly')
+  const [baseAnnualStr, setBaseAnnualStr] = useState('')
 
   useEffect(() => {
     if (!form.tabellnummer || form.baseMonthly <= 0) { setTaxCalcStatus('idle'); return }
@@ -460,17 +461,29 @@ function ProfileForm({
             <button
               type="button"
               className="text-[10px] text-muted-foreground hover:text-foreground underline underline-offset-2"
-              onClick={() => setBaseInputMode(m => m === 'monthly' ? 'annual' : 'monthly')}
+              onClick={() => {
+                if (baseInputMode === 'monthly') {
+                  setBaseAnnualStr(form.baseMonthly ? String(Math.round(form.baseMonthly * 12)) : '')
+                  setBaseInputMode('annual')
+                } else {
+                  setBaseInputMode('monthly')
+                }
+              }}
             >
               {baseInputMode === 'monthly' ? 'Skriv årslønn' : 'Skriv månedslønn'}
             </button>
           </div>
           <Input
             type="number"
-            value={baseInputMode === 'monthly' ? (form.baseMonthly || '') : (form.baseMonthly ? Math.round(form.baseMonthly * 12) : '')}
+            value={baseInputMode === 'monthly' ? (form.baseMonthly || '') : baseAnnualStr}
             onChange={(e) => {
-              const v = parseFloat(e.target.value) || 0
-              setForm(f => ({ ...f, baseMonthly: baseInputMode === 'monthly' ? v : Math.round(v / 12) }))
+              if (baseInputMode === 'monthly') {
+                setForm(f => ({ ...f, baseMonthly: parseFloat(e.target.value) || 0 }))
+              } else {
+                setBaseAnnualStr(e.target.value)
+                const v = parseFloat(e.target.value)
+                if (!isNaN(v) && v > 0) setForm(f => ({ ...f, baseMonthly: Math.round(v / 12) }))
+              }
             }}
           />
           {baseInputMode === 'annual' && form.baseMonthly > 0 && (
@@ -1166,6 +1179,7 @@ function LønnssimulatorCard({
   const tillegg = profile.fixedAdditions.reduce((s, a) => s + Math.max(0, a.amount), 0)
   const [nyGrunnlonn, setNyGrunnlonn] = useState(profile.baseMonthly)
   const [simInputMode, setSimInputMode] = useState<'monthly' | 'annual'>('monthly')
+  const [simAnnualStr, setSimAnnualStr] = useState('')
 
   const brutto = nyGrunnlonn + tillegg
   const pensjon = Math.round(brutto * (profile.pensionPercent / 100))
@@ -1197,7 +1211,14 @@ function LønnssimulatorCard({
               <button
                 type="button"
                 className="text-[10px] text-muted-foreground hover:text-foreground underline underline-offset-2 shrink-0"
-                onClick={() => setSimInputMode(m => m === 'monthly' ? 'annual' : 'monthly')}
+                onClick={() => {
+                  if (simInputMode === 'monthly') {
+                    setSimAnnualStr(nyGrunnlonn ? String(Math.round(nyGrunnlonn * 12)) : '')
+                    setSimInputMode('annual')
+                  } else {
+                    setSimInputMode('monthly')
+                  }
+                }}
               >
                 {simInputMode === 'monthly' ? '/år' : '/mnd'}
               </button>
@@ -1205,10 +1226,15 @@ function LønnssimulatorCard({
             <Input
               type="number"
               className="h-7 text-xs w-36"
-              value={simInputMode === 'monthly' ? (nyGrunnlonn || '') : (nyGrunnlonn ? Math.round(nyGrunnlonn * 12) : '')}
+              value={simInputMode === 'monthly' ? (nyGrunnlonn || '') : simAnnualStr}
               onChange={(e) => {
-                const v = parseFloat(e.target.value) || 0
-                setNyGrunnlonn(simInputMode === 'monthly' ? v : Math.round(v / 12))
+                if (simInputMode === 'monthly') {
+                  setNyGrunnlonn(parseFloat(e.target.value) || 0)
+                } else {
+                  setSimAnnualStr(e.target.value)
+                  const v = parseFloat(e.target.value)
+                  if (!isNaN(v) && v > 0) setNyGrunnlonn(Math.round(v / 12))
+                }
               }}
             />
             {nyGrunnlonn !== profile.baseMonthly && (
