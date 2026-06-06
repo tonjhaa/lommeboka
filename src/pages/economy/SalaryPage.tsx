@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { AlertTriangle, FileText, ExternalLink, Table2, Plus, Trash2, TrendingUp, Pencil, Check, X, RefreshCw, ChevronDown, ChevronUp, Calculator } from 'lucide-react'
+import { AlertTriangle, FileText, ExternalLink, Table2, Plus, Trash2, TrendingUp, Pencil, Check, X, RefreshCw, ChevronDown, ChevronUp, Calculator, Upload } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { SalaryWaterfallHero } from '@/components/economy/widgets/SalaryWaterfallHero'
 import { SalaryGrowthChart } from '@/components/economy/charts/SalaryGrowthChart'
 import { MonthlyNettoChart } from '@/components/economy/charts/MonthlyNettoChart'
@@ -141,6 +142,7 @@ export function SalaryPage() {
   const [editingProfile, setEditingProfile] = useState(false)
   const [storageKB, setStorageKB] = useState(0)
   const [advanced, setAdvanced] = useState(false)
+  const [showImporter, setShowImporter] = useState(false)
 
   useEffect(() => {
     setStorageKB(getLocalStorageKB())
@@ -192,96 +194,151 @@ export function SalaryPage() {
     : null
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="h-full overflow-y-auto">
 
-      {/* ── VENSTRE — Lønnssammensetning ── */}
-      <div className="w-[320px] shrink-0 border-r border-border overflow-y-auto p-4 space-y-4">
+      {/* ── IMPORTER-DIALOG ── */}
+      <Dialog open={showImporter} onOpenChange={setShowImporter}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Importer lønnsslipp</DialogTitle>
+          </DialogHeader>
+          <PayslipImporter />
+        </DialogContent>
+      </Dialog>
 
-        {/* Waterfall-hero */}
+      {/* ── HEADER ── */}
+      <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-2.5 border-b border-border bg-background/95 backdrop-blur">
+        <div className="flex items-center gap-3">
+          {profile && (
+            <button
+              onClick={() => setAdvanced(!advanced)}
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {advanced ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              {advanced ? 'Enkel visning' : 'Vis detaljer'}
+            </button>
+          )}
+          {storageKB > 4500 && (
+            <div className="flex items-center gap-1.5 text-xs text-yellow-400">
+              <AlertTriangle className="h-3 w-3" />
+              Lagringsplass nærmer seg grensen ({storageKB} KB)
+            </div>
+          )}
+        </div>
+        <Button size="sm" onClick={() => setShowImporter(true)} className="gap-1.5">
+          <Upload className="h-3.5 w-3.5" />
+          Importer lønnsslipp
+        </Button>
+      </div>
+
+      <div className="px-6 py-5 space-y-5 max-w-[1400px]">
+
+        {/* ── WATERFALL HERO ── */}
         <SalaryWaterfallHero
           profile={profile}
           latestSlip={latestSlipRecord?.slipData ?? null}
           advanced={advanced}
         />
 
-        {/* Advanced-toggle */}
-        {profile && (
-          <button
-            onClick={() => setAdvanced(!advanced)}
-            className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {advanced ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            {advanced ? 'Skjul detaljer' : 'Vis detaljer (SPK, fagforening, husleie)'}
-          </button>
-        )}
+        {/* ── KORTGRID (4 kolonner) ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
 
-        {/* Lønnsprofil */}
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm">Lønnsprofil</CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => setEditingProfile(!editingProfile)}>
-                {editingProfile ? 'Avbryt' : 'Rediger'}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {!profile && !editingProfile ? (
-              <div className="text-center py-4">
-                <p className="text-sm text-muted-foreground mb-3">
-                  Ingen lønnsprofil. Sett opp profilen din eller importer en lønnsslipp.
-                </p>
-                <Button size="sm" onClick={() => setEditingProfile(true)}>Sett opp profil</Button>
+          {/* Lønnsprofil */}
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm">Lønnsprofil</CardTitle>
+                <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setEditingProfile(!editingProfile)}>
+                  {editingProfile ? 'Avbryt' : 'Rediger'}
+                </Button>
               </div>
-            ) : editingProfile ? (
-              <ProfileForm
-                initial={profile}
-                onSave={(p) => { setProfile(p); setEditingProfile(false) }}
-                onCancel={() => setEditingProfile(false)}
-              />
-            ) : profile ? (
-              <div className="space-y-2 text-sm">
-                {profileMismatch && oppgjorBase && (
-                  <div className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300 flex items-center justify-between gap-2">
-                    <span>Profil-grunnlønn ({profile.baseMonthly.toLocaleString('no-NO')} kr) avviker fra siste oppgjør ({oppgjorBase.toLocaleString('no-NO')} kr)</span>
-                    <button
-                      className="underline underline-offset-2 shrink-0"
-                      onClick={() => setProfile({ ...profile, baseMonthly: oppgjorBase })}
-                    >
-                      Oppdater
-                    </button>
-                  </div>
-                )}
-                <InfoRow label="Arbeidsgiver" value={profile.employer === 'forsvaret' ? 'Forsvaret' : 'Annen'} />
-                <InfoRow
-                  label="Grunnlønn/mnd"
-                  value={fmtNOK(profile.baseMonthly)}
-                  sub={`${fmtNOK(profile.baseMonthly * 12)}/år`}
+            </CardHeader>
+            <CardContent>
+              {!profile && !editingProfile ? (
+                <div className="text-center py-4">
+                  <p className="text-sm text-muted-foreground mb-3">Ingen lønnsprofil. Sett opp profilen din eller importer en lønnsslipp.</p>
+                  <Button size="sm" onClick={() => setEditingProfile(true)}>Sett opp profil</Button>
+                </div>
+              ) : editingProfile ? (
+                <ProfileForm
+                  initial={profile}
+                  onSave={(p) => { setProfile(p); setEditingProfile(false) }}
+                  onCancel={() => setEditingProfile(false)}
                 />
-                {profile.fixedAdditions.filter((a) => a.amount > 0).map((a) => (
-                  <InfoRow key={a.kode} label={`${a.label} (${a.kode})`} value={`${fmtNOK(a.amount)}/mnd`} />
-                ))}
-                <InfoRow label="Skattetrekk/mnd" value={fmtNOK(profile.lastKnownTaxWithholding)} />
-                {profile.tabellnummer && <InfoRow label="Trekktabell" value={String(profile.tabellnummer)} />}
-                {profile.extraTaxWithholding > 0 && <InfoRow label="Ekstra trekk" value={`${fmtNOK(profile.extraTaxWithholding)}/mnd`} />}
-                {profile.housingDeduction > 0 && <InfoRow label="Husleietrekk" value={`${fmtNOK(profile.housingDeduction)}/mnd`} />}
-                <InfoRow label="Pensjon" value={`${profile.pensionPercent}%`} />
-                <InfoRow label="Fagforening" value={`${fmtNOK(profile.unionFee)}/mnd`} />
+              ) : profile ? (
+                <div className="space-y-1.5 text-sm">
+                  {profileMismatch && oppgjorBase && (
+                    <div className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300 flex items-center justify-between gap-2 mb-2">
+                      <span>Profil-grunnlønn avviker fra siste oppgjør ({oppgjorBase.toLocaleString('no-NO')} kr)</span>
+                      <button className="underline underline-offset-2 shrink-0" onClick={() => setProfile({ ...profile, baseMonthly: oppgjorBase })}>Oppdater</button>
+                    </div>
+                  )}
+                  <InfoRow label="Arbeidsgiver" value={profile.employer === 'forsvaret' ? 'Forsvaret' : 'Annen'} />
+                  <InfoRow label="Grunnlønn/mnd" value={fmtNOK(profile.baseMonthly)} sub={`${fmtNOK(profile.baseMonthly * 12)}/år`} />
+                  {profile.fixedAdditions.filter((a) => a.amount > 0).map((a) => (
+                    <InfoRow key={a.kode} label={`${a.label}`} value={`${fmtNOK(a.amount)}/mnd`} />
+                  ))}
+                  <InfoRow label="Skattetrekk/mnd" value={fmtNOK(profile.lastKnownTaxWithholding)} />
+                  {profile.tabellnummer && <InfoRow label="Trekktabell" value={String(profile.tabellnummer)} />}
+                  {profile.extraTaxWithholding > 0 && <InfoRow label="Ekstra trekk" value={`${fmtNOK(profile.extraTaxWithholding)}/mnd`} />}
+                  {profile.housingDeduction > 0 && <InfoRow label="Husleietrekk" value={`${fmtNOK(profile.housingDeduction)}/mnd`} />}
+                  <InfoRow label="Pensjon" value={`${profile.pensionPercent}%`} />
+                  <InfoRow label="Fagforening" value={`${fmtNOK(profile.unionFee)}/mnd`} />
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          {/* Trekktabell */}
+          {profile?.tabellnummer ? (
+            <TrekktabellKort
+              tabellnummer={profile.tabellnummer}
+              grunnlag={profile.baseMonthly + profile.fixedAdditions.reduce((s, a) => s + Math.max(0, a.amount), 0)}
+              faktiskTrekk={profile.lastKnownTaxWithholding}
+            />
+          ) : <div />}
+
+          {/* Netto per måned — kompakt, fast høyde */}
+          {importedSlips.length >= 2 ? (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Netto per måned</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0 pb-3">
+                <div className="h-[160px] overflow-hidden">
+                  <MonthlyNettoChart slips={importedSlips} />
+                </div>
+              </CardContent>
+            </Card>
+          ) : <div />}
+
+          {/* Lønnsoppgjør */}
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm">Lønnsoppgjør</CardTitle>
               </div>
-            ) : null}
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              <LonnsoppgjorSection
+                records={lonnsoppgjor}
+                monthHistory={monthHistory}
+                hasSlips={monthHistory.some((m) => m.source === 'imported_slip')}
+                onAdd={addLonnsoppgjor}
+                onUpdate={updateLonnsoppgjor}
+                onRemove={removeLonnsoppgjor}
+                onDerive={deriveLonnsoppgjorFromSlips}
+                onBookEtterbetaling={bookEtterbetaling}
+                onRemoveEtterbetalingBooking={removeEtterbetalingBooking}
+                currentBaseMonthly={profile?.baseMonthly ?? 0}
+                onUpdateBaseMonthly={(base) => profile && setProfile({ ...profile, baseMonthly: base })}
+              />
+            </CardContent>
+          </Card>
+        </div>
 
-        {/* Trekktabell */}
-        {profile?.tabellnummer && (
-          <TrekktabellKort
-            tabellnummer={profile.tabellnummer}
-            grunnlag={profile.baseMonthly + profile.fixedAdditions.reduce((s, a) => s + Math.max(0, a.amount), 0)}
-            faktiskTrekk={profile.lastKnownTaxWithholding}
-          />
-        )}
-
-        {/* Fungering */}
+        {/* ── FUNGERING — synlig seksjon ── */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Midlertidig lønn (fungering)</CardTitle>
@@ -295,23 +352,37 @@ export function SalaryPage() {
             />
           </CardContent>
         </Card>
-      </div>
 
-      {/* ── HØYRE — Grafer + historikk ── */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        {/* ── GRAFER — to kolonner, begrensede høyder ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Lønnsutvikling */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Lønnsutvikling</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 pb-3">
+              <div className="h-[200px] overflow-hidden">
+                <SalaryGrowthChart records={lonnsoppgjor} cagr={cagr} />
+              </div>
+            </CardContent>
+          </Card>
 
-        {/* Lønnsutvikling */}
-        <SalaryGrowthChart records={lonnsoppgjor} cagr={cagr} />
+          {/* Effektiv skattesats */}
+          {taxHistory.length >= 2 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Effektiv skattesats</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0 pb-3">
+                <div className="h-[200px] overflow-hidden">
+                  <TaxRateChart data={taxHistory} currentRate={currentTaxRate} />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
 
-        {/* Netto per måned */}
-        {importedSlips.length >= 2 && <MonthlyNettoChart slips={importedSlips} />}
-
-        {/* Effektiv skattesats */}
-        {taxHistory.length >= 2 && (
-          <TaxRateChart data={taxHistory} currentRate={currentTaxRate} />
-        )}
-
-        {/* Lønnssimulator */}
+        {/* ── LØNNSSIMULATOR ── */}
         {profile && (
           <LønnssimulatorCard
             profile={profile}
@@ -320,55 +391,12 @@ export function SalaryPage() {
           />
         )}
 
-        {/* Lønnshistorikk – slip-tabell */}
+        {/* ── LØNNSHISTORIKK ── */}
         {importedSlips.length > 0 && (
           <LønnshistorikkTabell slips={importedSlips} />
         )}
 
-        {/* Lønnsoppgjør & lønnsvekst */}
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              <CardTitle className="text-sm">Lønnsoppgjør & lønnsvekst</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <LonnsoppgjorSection
-              records={lonnsoppgjor}
-              monthHistory={monthHistory}
-              hasSlips={monthHistory.some((m) => m.source === 'imported_slip')}
-              onAdd={addLonnsoppgjor}
-              onUpdate={updateLonnsoppgjor}
-              onRemove={removeLonnsoppgjor}
-              onDerive={deriveLonnsoppgjorFromSlips}
-              onBookEtterbetaling={bookEtterbetaling}
-              onRemoveEtterbetalingBooking={removeEtterbetalingBooking}
-              currentBaseMonthly={profile?.baseMonthly ?? 0}
-              onUpdateBaseMonthly={(base) => profile && setProfile({ ...profile, baseMonthly: base })}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Importer slipp */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Importer lønnsslipp</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <PayslipImporter />
-          </CardContent>
-        </Card>
-
-        {/* Lagringsplass-advarsel */}
-        {storageKB > 4500 && (
-          <div className="flex items-center gap-2 rounded-md bg-yellow-500/10 border border-yellow-500/30 p-2 text-xs text-yellow-400">
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            Lagringsplass nærmer seg grensen ({storageKB} KB / ~5 120 KB). PDF-er for eldre slipper er automatisk fjernet.
-          </div>
-        )}
       </div>
-
     </div>
   )
 }
