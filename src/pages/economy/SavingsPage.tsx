@@ -622,24 +622,24 @@ function InnskuddCell({ value, onChange, isOverridden, onFillDown }: {
     )
   }
   return (
-    <span className="flex items-center group/cell gap-0.5 w-full">
+    <span className="relative flex items-center justify-end w-full group/cell">
+      {onFillDown && (
+        <button
+          onClick={() => onFillDown(rounded)}
+          title="Fyll ned til slutten av året med dette beløpet"
+          className="absolute left-0 opacity-0 group-hover/cell:opacity-100 px-0.5 text-muted-foreground hover:text-amber-400 transition-opacity text-[10px]"
+        >↓</button>
+      )}
       <button
         onClick={() => { setTmp(String(rounded)); setEditing(true) }}
-        title="Klikk for å endre. Hold inne ↓ for å fyll ned."
+        title="Klikk for å endre"
         className={cn(
-          'flex-1 text-right hover:text-foreground hover:underline decoration-dashed underline-offset-2 transition-colors',
+          'tabular-nums text-right hover:text-foreground hover:underline decoration-dashed underline-offset-2 transition-colors',
           isOverridden ? 'text-amber-400' : 'text-muted-foreground',
         )}
       >
         {rounded.toLocaleString('no-NO')}
       </button>
-      {onFillDown && (
-        <button
-          onClick={() => onFillDown(rounded)}
-          title="Fyll ned til slutten av året med dette beløpet"
-          className="shrink-0 opacity-0 group-hover/cell:opacity-100 px-0.5 text-muted-foreground hover:text-amber-400 transition-colors text-[10px]"
-        >↓</button>
-      )}
     </span>
   )
 }
@@ -1203,7 +1203,7 @@ function MånedsoversiktTable({
                       return (
                         <td key={acc.id} colSpan={2} className="border-r border-border p-0">
                           <div className="flex items-center">
-                            <span className="flex-1 px-3 py-1">
+                            <span className="flex-1 px-3 py-1 flex items-center justify-end">
                               <InnskuddCell
                                 value={ab.contribution}
                                 isOverridden={ab.overrideKey in contribOverrides}
@@ -1224,7 +1224,7 @@ function MånedsoversiktTable({
                     {hasFond && (
                       <td colSpan={2} className="border-r border-border p-0">
                         <div className="flex items-center">
-                          <span className="flex-1 px-3 py-1">
+                          <span className="flex-1 px-3 py-1 flex items-center justify-end">
                             {row.fondPeriod && !(`fond-${row.year}-${row.month}` in contribOverrides) ? (
                               <span
                                 className="flex items-center gap-1"
@@ -1267,7 +1267,7 @@ function MånedsoversiktTable({
                     {row.partnerAccBalances.map(ab => (
                         <td key={ab.id} colSpan={2} className="border-r border-border p-0">
                           <div className="flex items-center">
-                            <span className="flex-1 px-3 py-1">
+                            <span className="flex-1 px-3 py-1 flex items-center justify-end">
                               <InnskuddCell
                                 value={ab.contribution}
                                 isOverridden={ab.overrideKey in contribOverrides}
