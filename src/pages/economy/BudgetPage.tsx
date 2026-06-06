@@ -704,49 +704,29 @@ export function BudgetPage() {
       {contribDialog && (() => {
         const acc = savingsAccounts.find(a => a.id === contribDialog.accId)
         if (!acc) return null
-        const ym = `${activeYear}-${String(contribDialog.month).padStart(2, '0')}`
-        const monthContribs = (acc.contributions ?? []).filter(c => {
-          const d = new Date(c.date)
-          return d.getFullYear() === activeYear && d.getMonth() + 1 === contribDialog.month
-        })
-        const monthPeriods = (acc.contributionPeriods ?? []).filter(p => {
-          const from = p.fromDate ? p.fromDate.slice(0, 7) : '0000-00'
-          const to = p.toDate ? p.toDate.slice(0, 7) : '9999-99'
-          return ym >= from && ym <= to
-        })
-        const isEmpty = monthContribs.length === 0 && monthPeriods.length === 0
+        const allContribs = [...(acc.contributions ?? [])].sort((a, b) => b.date.localeCompare(a.date))
+        const allPeriods = [...(acc.contributionPeriods ?? [])].sort((a, b) =>
+          (b.fromDate ?? '').localeCompare(a.fromDate ?? ''))
+        const isEmpty = allContribs.length === 0 && allPeriods.length === 0
         return (
           <Dialog open onOpenChange={() => setContribDialog(null)}>
             <DialogContent className="max-w-sm">
               <DialogHeader>
-                <DialogTitle className="text-sm">{acc.label} — {MONTH_SHORT[contribDialog.month]} {activeYear}</DialogTitle>
+                <DialogTitle className="text-sm">{acc.label}</DialogTitle>
               </DialogHeader>
               {isEmpty ? (
-                <p className="text-xs text-muted-foreground italic">Ingen innskudd denne måneden.</p>
+                <p className="text-xs text-muted-foreground italic">Ingen registrerte innskudd eller perioder.</p>
               ) : (
-                <div className="space-y-2">
-                  {monthContribs.map(c => (
-                    <div key={c.id} className="flex items-center justify-between gap-3 rounded border border-border bg-muted/10 px-3 py-2">
-                      <div className="min-w-0 text-xs">
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-wide block mb-0.5">Enkeltinnskudd</span>
-                        <span className="font-mono font-medium">{c.amount.toLocaleString('no-NO')} kr</span>
-                        <span className="text-muted-foreground ml-2">{c.date}</span>
-                        {c.note && <p className="text-muted-foreground text-[11px] mt-0.5">{c.note}</p>}
-                      </div>
-                      <button
-                        onClick={() => { removeContribution(acc.id, c.id); setContribDialog(null) }}
-                        className="shrink-0 text-muted-foreground hover:text-red-400 transition-colors"
-                        title="Slett innskudd"
-                      ><X className="h-4 w-4" /></button>
-                    </div>
-                  ))}
-                  {monthPeriods.map(p => (
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {allPeriods.length > 0 && (
+                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Spareperioder</p>
+                  )}
+                  {allPeriods.map(p => (
                     <div key={p.id} className="flex items-center justify-between gap-3 rounded border border-border bg-muted/10 px-3 py-2">
                       <div className="min-w-0 text-xs">
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-wide block mb-0.5">Spareperiode</span>
                         <span className="font-mono font-medium">{Math.round(p.amount).toLocaleString('no-NO')} kr/mnd</span>
                         <span className="text-muted-foreground ml-2 text-[10px]">
-                          {p.fromDate ?? 'start'} → {p.toDate ?? 'ingen slutt'}
+                          {p.fromDate ? p.fromDate.slice(0, 7) : 'start'} → {p.toDate ? p.toDate.slice(0, 7) : 'ingen slutt'}
                         </span>
                       </div>
                       <button
@@ -758,6 +738,23 @@ export function BudgetPage() {
                         }}
                         className="shrink-0 text-muted-foreground hover:text-red-400 transition-colors"
                         title="Slett periode"
+                      ><X className="h-4 w-4" /></button>
+                    </div>
+                  ))}
+                  {allContribs.length > 0 && (
+                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide pt-1">Enkeltinnskudd</p>
+                  )}
+                  {allContribs.map(c => (
+                    <div key={c.id} className="flex items-center justify-between gap-3 rounded border border-border bg-muted/10 px-3 py-2">
+                      <div className="min-w-0 text-xs">
+                        <span className="font-mono font-medium">{c.amount.toLocaleString('no-NO')} kr</span>
+                        <span className="text-muted-foreground ml-2">{c.date}</span>
+                        {c.note && <p className="text-muted-foreground text-[11px] mt-0.5">{c.note}</p>}
+                      </div>
+                      <button
+                        onClick={() => { removeContribution(acc.id, c.id); setContribDialog(null) }}
+                        className="shrink-0 text-muted-foreground hover:text-red-400 transition-colors"
+                        title="Slett"
                       ><X className="h-4 w-4" /></button>
                     </div>
                   ))}
