@@ -970,7 +970,7 @@ function MånedsoversiktTable({
       </div>
       <div className="overflow-auto flex-1 text-xs">
       <table className="border-collapse w-full min-w-max">
-        <thead className="sticky top-0 z-10 bg-background">
+        <thead className="sticky top-0 z-10 bg-background backdrop-blur-none [&_th]:bg-background">
           {/* Row 1: Person groups */}
           <tr className="border-b border-border/40">
             <th className="sticky left-0 bg-background z-20 px-3 py-1 border-r border-border" />
