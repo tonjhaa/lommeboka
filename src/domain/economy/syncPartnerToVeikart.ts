@@ -14,31 +14,15 @@ export function buildPartnerVeikartPatch(
 ): Partial<PartnerVeikart> & Pick<PartnerVeikart, 'enabled' | 'accounts' | 'bsu' | 'bsuMonthlyContribution' | 'annualIncome' | 'debts'> {
   const nowISO = now.toISOString().slice(0, 10)
 
-  function currentRate(a: SavingsAccount): number {
-    return [...a.rateHistory].filter(r => r.fromDate <= nowISO).sort((x, y) => y.fromDate.localeCompare(x.fromDate))[0]?.rate ?? 0
-  }
-
   function projectedBalance(a: SavingsAccount): number {
     const effectiveBalance = computeEffectiveBalance(a, now)
-    const rate = currentRate(a)
-
-    if (a.balanceHistory.length > 0) {
-      // Project interest from the last balance entry to now
-      const sorted = [...a.balanceHistory].sort((x, y) => x.year !== y.year ? x.year - y.year : x.month - y.month)
-      const last = sorted.at(-1)!
-      const lastDate = new Date(last.year, last.month - 1, 1)
-      const monthsSinceEntry = Math.max(0, Math.round((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44)))
-      if (monthsSinceEntry > 0 && rate > 0) {
-        return Math.round(projectBalanceMonthly(effectiveBalance, 0, rate, monthsSinceEntry, a.type === 'BSU'))
-      }
-      return Math.round(effectiveBalance)
-    }
-
-    // No balance history: project forward from opening date
+    if (a.balanceHistory.length > 0) return effectiveBalance
+    // No balance history: project forward from opening date with interest
+    const rate = [...a.rateHistory].filter(r => r.fromDate <= nowISO).sort((x, y) => y.fromDate.localeCompare(x.fromDate))[0]?.rate ?? 0
     const monthly = getBaseContribForPeriod(a, now.getFullYear(), now.getMonth() + 1)
     const openingMs = new Date(a.openingDate).getTime()
     const months = Math.max(0, Math.round((now.getTime() - openingMs) / (1000 * 60 * 60 * 24 * 30.44)))
-    if (months === 0) return Math.round(effectiveBalance)
+    if (months === 0) return effectiveBalance
     return Math.round(projectBalanceMonthly(a.openingBalance, monthly, rate, months, a.type === 'BSU'))
   }
 
