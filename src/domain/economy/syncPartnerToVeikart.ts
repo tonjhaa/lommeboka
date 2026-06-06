@@ -1,4 +1,4 @@
-import { computeEffectiveBalance, projectBalanceMonthly, getEffectiveRate, getBaseContribForPeriod } from './savingsCalculator'
+import { computeEffectiveBalance, getEffectiveRate } from './savingsCalculator'
 import type {
   SavingsAccount, DebtAccount, EmploymentProfile,
   PartnerVeikart, PartnerAccount, PartnerDebt, PartnerFondHolding, FondPortfolio,
@@ -14,28 +14,36 @@ export function buildPartnerVeikartPatch(
 ): Partial<PartnerVeikart> & Pick<PartnerVeikart, 'enabled' | 'accounts' | 'bsu' | 'bsuMonthlyContribution' | 'annualIncome' | 'debts'> {
   const nowISO = now.toISOString().slice(0, 10)
 
-  function projectedBalance(a: SavingsAccount): number {
-    const effectiveBalance = computeEffectiveBalance(a, now)
-    if (a.balanceHistory.length > 0) return effectiveBalance
-    // No balance history: project forward from opening date with interest
-    const rate = [...a.rateHistory].filter(r => r.fromDate <= nowISO).sort((x, y) => y.fromDate.localeCompare(x.fromDate))[0]?.rate ?? 0
-    const monthly = getBaseContribForPeriod(a, now.getFullYear(), now.getMonth() + 1)
-    const openingMs = new Date(a.openingDate).getTime()
-    const months = Math.max(0, Math.round((now.getTime() - openingMs) / (1000 * 60 * 60 * 24 * 30.44)))
-    if (months === 0) return effectiveBalance
-    return Math.round(projectBalanceMonthly(a.openingBalance, monthly, rate, months, a.type === 'BSU'))
+  // Find the most relevant contribution period for an account:
+  // active this month, or if none, the next upcoming one.
+  function relevantPeriod(a: SavingsAccount) {
+    const periods = a.contributionPeriods ?? []
+    if (periods.length === 0) return null
+    const active = periods.find(p => {
+      const from = p.fromDate ? p.fromDate.slice(0, 7) : '0000-00'
+      const to = p.toDate ? p.toDate.slice(0, 7) : '9999-99'
+      return nowISO.slice(0, 7) >= from && nowISO.slice(0, 7) <= to
+    })
+    if (active) return active
+    return [...periods]
+      .filter(p => (p.fromDate ?? '0000-00') > nowISO.slice(0, 7))
+      .sort((x, y) => (x.fromDate ?? '').localeCompare(y.fromDate ?? ''))[0] ?? null
   }
 
   const accounts: PartnerAccount[] = savingsAccounts
     .filter((a) => a.type !== 'BSU' && a.type !== 'fond')
     .map((a) => {
-      const balance = projectedBalance(a)
+      const balance = Math.round(computeEffectiveBalance(a, now))
+      const period = relevantPeriod(a)
+      const legacy = a.monthlyContribution ?? 0
       return {
         id: a.id,
         label: a.label,
         balance,
         rate: getEffectiveRate(a, balance),
-        monthlyContribution: getBaseContribForPeriod(a, now.getFullYear(), now.getMonth() + 1),
+        monthlyContribution: period ? Math.round(period.amount) : legacy,
+        ...(period?.fromDate ? { fromDate: period.fromDate } : {}),
+        ...(period?.toDate ? { toDate: period.toDate } : {}),
         ...(a.tieredRates?.length ? { tieredRates: a.tieredRates } : {}),
       }
     })
@@ -74,7 +82,7 @@ export function buildPartnerVeikartPatch(
   return {
     enabled: true,
     accounts,
-    bsu: bsuAcc ? projectedBalance(bsuAcc) : existing.bsu,
+    bsu: bsuAcc ? Math.round(computeEffectiveBalance(bsuAcc, now)) : existing.bsu,
     bsuMonthlyContribution: bsuAcc?.monthlyContribution ?? existing.bsuMonthlyContribution,
     annualIncome: profile ? (profile.baseMonthly ?? 0) * 12 : existing.annualIncome,
     debts: activeDebts,
