@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Lock, LockOpen, Upload, Plus, LayoutDashboard, Table2, Pencil, Undo2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Lock, LockOpen, Upload, Plus, LayoutDashboard, Table2, Pencil, Undo2, ChevronDown, ChevronRight, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -81,6 +81,7 @@ export function BudgetPage() {
     clearBudgetOverride,
     _budgetUndoStack,
     undoBudget,
+    removeContribution,
   } = useActiveEconomyStore()
 
   const now = new Date()
@@ -91,6 +92,7 @@ export function BudgetPage() {
   const [addingLinePrefill, setAddingLinePrefill] = useState<Partial<BudgetLine> | null>(null)
   const [editingLine, setEditingLine] = useState<BudgetLine | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState<{ lineId: string; label: string } | null>(null)
+  const [contribPopover, setContribPopover] = useState<{ accId: string; month: number; rect: DOMRect } | null>(null)
   const [trekktabellLoaded, setTrekktabellLoaded] = useState(false)
 
   // Last trekktabelldata for brukerens tabellnummer inn i minne-cachen
@@ -586,6 +588,9 @@ export function BudgetPage() {
                       onDelete={deletableRowMap[row.id]
                         ? () => setConfirmingDelete({ lineId: deletableRowMap[row.id], label: row.label })
                         : undefined}
+                      onActualCellClick={row.id.startsWith('sav-') && !row.id.startsWith('sav-t-')
+                        ? (month, rect) => setContribPopover({ accId: row.id.slice(4), month, rect })
+                        : undefined}
                       onCellHover={(month, rect) => setHoveredCell({ row, month, rect })}
                       onCellLeave={() => setHoveredCell(null)}
                     />
@@ -763,6 +768,52 @@ export function BudgetPage() {
                 </p>
               </>
             )}
+          </div>
+        )
+      })()}
+
+      {/* Contributions popover for savings rows */}
+      {contribPopover && (() => {
+        const acc = savingsAccounts.find(a => a.id === contribPopover.accId)
+        if (!acc) return null
+        const monthContribs = (acc.contributions ?? []).filter(c => {
+          const d = new Date(c.date)
+          return d.getFullYear() === activeYear && d.getMonth() + 1 === contribPopover.month
+        })
+        const { rect } = contribPopover
+        const top = rect.bottom + 6 + 160 > window.innerHeight ? rect.top - 160 - 6 : rect.bottom + 6
+        const left = Math.min(rect.left, window.innerWidth - 220)
+        return (
+          <div
+            style={{ position: 'fixed', top, left, zIndex: 9999, width: 220 }}
+            className="bg-popover border border-border rounded-lg shadow-xl px-3 py-2.5 text-xs space-y-1.5"
+            onMouseLeave={() => setContribPopover(null)}
+          >
+            <p className="font-semibold text-foreground">{acc.label} — {MONTH_SHORT[contribPopover.month]}</p>
+            {monthContribs.length === 0 ? (
+              <p className="text-muted-foreground italic">Ingen enkeltinnskudd denne måneden.</p>
+            ) : (
+              <div className="space-y-1">
+                {monthContribs.map(c => (
+                  <div key={c.id} className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="font-mono text-foreground">{c.amount.toLocaleString('no-NO')} kr</span>
+                      {c.note && <span className="text-muted-foreground ml-1 truncate block text-[10px]">{c.note}</span>}
+                      <span className="text-muted-foreground text-[10px]">{c.date}</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        removeContribution(acc.id, c.id)
+                        setContribPopover(null)
+                      }}
+                      className="shrink-0 text-muted-foreground hover:text-red-400 transition-colors"
+                      title="Slett"
+                    ><X className="h-3.5 w-3.5" /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button className="text-[10px] text-muted-foreground hover:text-foreground" onClick={() => setContribPopover(null)}>Lukk</button>
           </div>
         )
       })()}
@@ -1129,6 +1180,7 @@ function DataRow({
   onEdit,
   onDelete,
   onCopyForward,
+  onActualCellClick,
   onCellHover,
   onCellLeave,
 }: {
@@ -1143,6 +1195,7 @@ function DataRow({
   onEdit?: () => void
   onDelete?: () => void
   onCopyForward?: (fromMonth: number, value: number) => void
+  onActualCellClick?: (month: number, rect: DOMRect) => void
   onCellHover?: (month: number, rect: DOMRect) => void
   onCellLeave?: () => void
 }) {
@@ -1365,10 +1418,12 @@ function DataRow({
                 !isHidden && bigDeviation && deviationDir === 'over' && 'bg-emerald-500/8',
                 !isHidden && bigDeviation && deviationDir === 'under' && 'bg-red-500/8',
                 hl && '!bg-sky-500/15',
+                onActualCellClick && !isHidden && 'cursor-pointer hover:bg-muted/20',
               )}
               title={deviation !== null
                 ? `Avvik fra budsjett: ${deviation > 0 ? '+' : ''}${Math.round(deviation).toLocaleString('no-NO')} kr (${deviationPct >= 0.01 ? (deviationPct * 100).toFixed(0) + '%' : '<1%'})`
                 : undefined}
+              onClick={onActualCellClick ? (e) => onActualCellClick(meta.month, e.currentTarget.getBoundingClientRect()) : undefined}
               onMouseEnter={(e) => onCellHover?.(meta.month, e.currentTarget.getBoundingClientRect())}
               onMouseLeave={() => onCellLeave?.()}
             >
