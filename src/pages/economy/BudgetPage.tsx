@@ -82,6 +82,7 @@ export function BudgetPage() {
     _budgetUndoStack,
     undoBudget,
     removeContribution,
+    updateSavingsAccount: updateSavingsAccountInBudget,
   } = useActiveEconomyStore()
 
   const now = new Date()
@@ -703,23 +704,31 @@ export function BudgetPage() {
       {contribDialog && (() => {
         const acc = savingsAccounts.find(a => a.id === contribDialog.accId)
         if (!acc) return null
+        const ym = `${activeYear}-${String(contribDialog.month).padStart(2, '0')}`
         const monthContribs = (acc.contributions ?? []).filter(c => {
           const d = new Date(c.date)
           return d.getFullYear() === activeYear && d.getMonth() + 1 === contribDialog.month
         })
+        const monthPeriods = (acc.contributionPeriods ?? []).filter(p => {
+          const from = p.fromDate ? p.fromDate.slice(0, 7) : '0000-00'
+          const to = p.toDate ? p.toDate.slice(0, 7) : '9999-99'
+          return ym >= from && ym <= to
+        })
+        const isEmpty = monthContribs.length === 0 && monthPeriods.length === 0
         return (
           <Dialog open onOpenChange={() => setContribDialog(null)}>
             <DialogContent className="max-w-sm">
               <DialogHeader>
                 <DialogTitle className="text-sm">{acc.label} — {MONTH_SHORT[contribDialog.month]} {activeYear}</DialogTitle>
               </DialogHeader>
-              {monthContribs.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">Ingen enkeltinnskudd denne måneden.</p>
+              {isEmpty ? (
+                <p className="text-xs text-muted-foreground italic">Ingen innskudd denne måneden.</p>
               ) : (
                 <div className="space-y-2">
                   {monthContribs.map(c => (
                     <div key={c.id} className="flex items-center justify-between gap-3 rounded border border-border bg-muted/10 px-3 py-2">
                       <div className="min-w-0 text-xs">
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wide block mb-0.5">Enkeltinnskudd</span>
                         <span className="font-mono font-medium">{c.amount.toLocaleString('no-NO')} kr</span>
                         <span className="text-muted-foreground ml-2">{c.date}</span>
                         {c.note && <p className="text-muted-foreground text-[11px] mt-0.5">{c.note}</p>}
@@ -728,6 +737,27 @@ export function BudgetPage() {
                         onClick={() => { removeContribution(acc.id, c.id); setContribDialog(null) }}
                         className="shrink-0 text-muted-foreground hover:text-red-400 transition-colors"
                         title="Slett innskudd"
+                      ><X className="h-4 w-4" /></button>
+                    </div>
+                  ))}
+                  {monthPeriods.map(p => (
+                    <div key={p.id} className="flex items-center justify-between gap-3 rounded border border-border bg-muted/10 px-3 py-2">
+                      <div className="min-w-0 text-xs">
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wide block mb-0.5">Spareperiode</span>
+                        <span className="font-mono font-medium">{Math.round(p.amount).toLocaleString('no-NO')} kr/mnd</span>
+                        <span className="text-muted-foreground ml-2 text-[10px]">
+                          {p.fromDate ?? 'start'} → {p.toDate ?? 'ingen slutt'}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          updateSavingsAccountInBudget(acc.id, {
+                            contributionPeriods: (acc.contributionPeriods ?? []).filter(x => x.id !== p.id),
+                          })
+                          setContribDialog(null)
+                        }}
+                        className="shrink-0 text-muted-foreground hover:text-red-400 transition-colors"
+                        title="Slett periode"
                       ><X className="h-4 w-4" /></button>
                     </div>
                   ))}
