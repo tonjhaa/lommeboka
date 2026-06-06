@@ -92,7 +92,7 @@ export function BudgetPage() {
   const [addingLinePrefill, setAddingLinePrefill] = useState<Partial<BudgetLine> | null>(null)
   const [editingLine, setEditingLine] = useState<BudgetLine | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState<{ lineId: string; label: string } | null>(null)
-  const [contribPopover, setContribPopover] = useState<{ accId: string; month: number; rect: DOMRect } | null>(null)
+  const [contribPopover, setContribPopover] = useState<{ accId: string; month: number } | null>(null)
   const [trekktabellLoaded, setTrekktabellLoaded] = useState(false)
 
   // Last trekktabelldata for brukerens tabellnummer inn i minne-cachen
@@ -589,7 +589,7 @@ export function BudgetPage() {
                         ? () => setConfirmingDelete({ lineId: deletableRowMap[row.id], label: row.label })
                         : undefined}
                       onActualCellClick={row.id.startsWith('sav-') && !row.id.startsWith('sav-t-')
-                        ? (month, rect) => setContribPopover({ accId: row.id.slice(4), month, rect })
+                        ? (month) => setContribPopover({ accId: row.id.slice(4), month })
                         : undefined}
                       onCellHover={(month, rect) => setHoveredCell({ row, month, rect })}
                       onCellLeave={() => setHoveredCell(null)}
@@ -772,7 +772,7 @@ export function BudgetPage() {
         )
       })()}
 
-      {/* Contributions popover for savings rows */}
+      {/* Contributions dialog for savings rows */}
       {contribPopover && (() => {
         const acc = savingsAccounts.find(a => a.id === contribPopover.accId)
         if (!acc) return null
@@ -780,41 +780,34 @@ export function BudgetPage() {
           const d = new Date(c.date)
           return d.getFullYear() === activeYear && d.getMonth() + 1 === contribPopover.month
         })
-        const { rect } = contribPopover
-        const top = rect.bottom + 6 + 160 > window.innerHeight ? rect.top - 160 - 6 : rect.bottom + 6
-        const left = Math.min(rect.left, window.innerWidth - 220)
         return (
-          <div
-            style={{ position: 'fixed', top, left, zIndex: 9999, width: 220 }}
-            className="bg-popover border border-border rounded-lg shadow-xl px-3 py-2.5 text-xs space-y-1.5"
-            onMouseLeave={() => setContribPopover(null)}
-          >
-            <p className="font-semibold text-foreground">{acc.label} — {MONTH_SHORT[contribPopover.month]}</p>
-            {monthContribs.length === 0 ? (
-              <p className="text-muted-foreground italic">Ingen enkeltinnskudd denne måneden.</p>
-            ) : (
-              <div className="space-y-1">
-                {monthContribs.map(c => (
-                  <div key={c.id} className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <span className="font-mono text-foreground">{c.amount.toLocaleString('no-NO')} kr</span>
-                      {c.note && <span className="text-muted-foreground ml-1 truncate block text-[10px]">{c.note}</span>}
-                      <span className="text-muted-foreground text-[10px]">{c.date}</span>
+          <Dialog open onOpenChange={() => setContribPopover(null)}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle className="text-sm">{acc.label} — {MONTH_SHORT[contribPopover.month]} {activeYear}</DialogTitle>
+              </DialogHeader>
+              {monthContribs.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">Ingen enkeltinnskudd denne måneden.</p>
+              ) : (
+                <div className="space-y-2">
+                  {monthContribs.map(c => (
+                    <div key={c.id} className="flex items-center justify-between gap-3 rounded border border-border bg-muted/10 px-3 py-2">
+                      <div className="min-w-0 text-xs">
+                        <span className="font-mono font-medium">{c.amount.toLocaleString('no-NO')} kr</span>
+                        <span className="text-muted-foreground ml-2">{c.date}</span>
+                        {c.note && <p className="text-muted-foreground text-[11px] mt-0.5">{c.note}</p>}
+                      </div>
+                      <button
+                        onClick={() => { removeContribution(acc.id, c.id); setContribPopover(null) }}
+                        className="shrink-0 text-muted-foreground hover:text-red-400 transition-colors"
+                        title="Slett innskudd"
+                      ><X className="h-4 w-4" /></button>
                     </div>
-                    <button
-                      onClick={() => {
-                        removeContribution(acc.id, c.id)
-                        setContribPopover(null)
-                      }}
-                      className="shrink-0 text-muted-foreground hover:text-red-400 transition-colors"
-                      title="Slett"
-                    ><X className="h-3.5 w-3.5" /></button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <button className="text-[10px] text-muted-foreground hover:text-foreground" onClick={() => setContribPopover(null)}>Lukk</button>
-          </div>
+                  ))}
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         )
       })()}
     </div>
@@ -1195,7 +1188,7 @@ function DataRow({
   onEdit?: () => void
   onDelete?: () => void
   onCopyForward?: (fromMonth: number, value: number) => void
-  onActualCellClick?: (month: number, rect: DOMRect) => void
+  onActualCellClick?: (month: number) => void
   onCellHover?: (month: number, rect: DOMRect) => void
   onCellLeave?: () => void
 }) {
@@ -1423,11 +1416,13 @@ function DataRow({
               title={deviation !== null
                 ? `Avvik fra budsjett: ${deviation > 0 ? '+' : ''}${Math.round(deviation).toLocaleString('no-NO')} kr (${deviationPct >= 0.01 ? (deviationPct * 100).toFixed(0) + '%' : '<1%'})`
                 : undefined}
-              onClick={onActualCellClick ? (e) => onActualCellClick(meta.month, e.currentTarget.getBoundingClientRect()) : undefined}
+              onClick={onActualCellClick ? () => onActualCellClick(meta.month) : undefined}
               onMouseEnter={(e) => onCellHover?.(meta.month, e.currentTarget.getBoundingClientRect())}
               onMouseLeave={() => onCellLeave?.()}
             >
-              {fmtNOK(actual)}
+              {onActualCellClick && actual !== 0
+                ? <span className="flex items-center justify-end gap-1"><span>{fmtNOK(actual)}</span><X className="h-3 w-3 opacity-30 group-hover/row:opacity-70 shrink-0" /></span>
+                : fmtNOK(actual)}
             </td>
           )
         }
