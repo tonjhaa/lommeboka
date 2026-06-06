@@ -1,4 +1,4 @@
-import { useState, useMemo, Fragment } from 'react'
+import { useState, useMemo, Fragment, useEffect } from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { usePartnerStore } from '@/application/usePartnerStore'
 import { usePartnershipStore } from '@/store/usePartnershipStore'
@@ -678,6 +678,15 @@ function MånedsoversiktTable({
   const partnerStatus = usePartnershipStore((s) => s.status)
   const setPartnerVeikart = useEconomyStore((s) => s.setPartnerVeikart)
   const [syncDone, setSyncDone] = useState(false)
+
+  // Auto-sync partner Veikart on mount and whenever partner store changes
+  useEffect(() => {
+    const ps = usePartnerStore.getState()
+    if (!ps.savingsAccounts?.length && !ps.debts?.length) return
+    const patch = buildPartnerVeikartPatch(ps.savingsAccounts, ps.debts, ps.profile, partnerVeikart, now, ps.fondPortfolio)
+    setPartnerVeikart({ ...partnerVeikart, ...patch })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function syncPartner() {
     const ps = usePartnerStore.getState()
