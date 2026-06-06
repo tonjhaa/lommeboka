@@ -1121,144 +1121,162 @@ function MånedsoversiktTable({
           </tr>
         </thead>
         <tbody>
-          {/* Startsaldo-rad */}
-          <tr className="border-b-2 border-border bg-muted/5">
-            <td className="sticky left-0 bg-muted/5 px-3 py-1.5 font-medium border-r border-border text-muted-foreground whitespace-nowrap">Startsaldo</td>
-            {accMeta.map(acc => (
-              <td key={acc.id} colSpan={2} className="border-r border-border px-3 py-1.5 text-right">
-                <InnskuddCell
-                  value={acc.startBalance}
-                  isOverridden={`start-${acc.id}` in contribOverrides}
-                  onChange={v => setContribOverrides(prev => ({ ...prev, [`start-${acc.id}`]: v }))}
-                />
-              </td>
-            ))}
-            {hasFond && (
-              <td colSpan={2} className="border-r border-border px-3 py-1.5 text-right">
-                <InnskuddCell
-                  value={contribOverrides['start-fond'] ?? fondCurrentValue}
-                  isOverridden={'start-fond' in contribOverrides}
-                  onChange={v => setContribOverrides(prev => ({ ...prev, 'start-fond': v }))}
-                />
-              </td>
-            )}
-            {hasPartner && hasBsu && (
-              <td colSpan={2} className="border-r border-border px-3 py-1.5 text-right">
-                <InnskuddCell
-                  value={contribOverrides['start-p-bsu'] ?? (partnerVeikart.bsu ?? 0)}
-                  isOverridden={'start-p-bsu' in contribOverrides}
-                  onChange={v => setSavingsOverride('start-p-bsu', v)}
-                />
-              </td>
-            )}
-            {partnerAccMeta.map(acc => (
-              <td key={acc.id} colSpan={2} className="border-r border-border px-3 py-1.5 text-right">
-                <InnskuddCell
-                  value={contribOverrides[`start-p-${acc.id}`] ?? acc.balance}
-                  isOverridden={`start-p-${acc.id}` in contribOverrides}
-                  onChange={v => setSavingsOverride(`start-p-${acc.id}`, v)}
-                />
-              </td>
-            ))}
-            <td className="border-l-2 border-l-red-400/20 border-r border-border" />
-            <td className="border-r border-border" />
-            {hasPartner && <td className="border-r border-border" />}
-            <td className="border-r-2 border-r-red-400/20" />
-            <td className="border-l-2 border-l-green-400/20 border-r border-border" />
-            {myAnnualIncome > 0 && <td className="border-r border-border" />}
-            {hasPartner && partnerOnlyAnnualIncome > 0 && <td />}
-          </tr>
           {years.map(year => {
             const yearData = monthRows.filter(r => r.year === year)
-            const last = yearData[yearData.length - 1]
+            const isFirstYear = year === years[0]
+            const prevYearRows = isFirstYear ? [] : monthRows.filter(r => r.year === year - 1)
+            const prevYearLast = prevYearRows[prevYearRows.length - 1]
             return (
               <Fragment key={year}>
-                {/* Year summary row */}
+                {/* Year row: første år = startsaldo (redigerbar); påfølgende år = forrige år summary */}
                 <tr className="bg-muted/60 border-y-2 border-border">
                   <td className="sticky left-0 bg-muted/60 px-3 py-2 font-bold text-sm border-r border-border">{year}</td>
                   {accMeta.map(acc => {
-                    const ab = last.accountBalances.find(a => a.id === acc.id)!
-                    const yearRente = Math.round(yearData.reduce((s, row) => s + (row.accountBalances.find(a => a.id === acc.id)?.interest ?? 0), 0))
-                    const yearInnskudd = Math.round(yearData.reduce((s, row) => s + (row.accountBalances.find(a => a.id === acc.id)?.contribution ?? 0), 0))
+                    if (isFirstYear) {
+                      return (
+                        <td key={acc.id} colSpan={2} className="border-r border-border p-0">
+                          <div className="flex items-center">
+                            <span className="flex-1 px-3 py-2 text-right text-muted-foreground text-xs">startsaldo</span>
+                            <span className="flex-1 px-3 py-2 text-right font-semibold">
+                              <InnskuddCell
+                                value={acc.startBalance}
+                                isOverridden={`start-${acc.id}` in contribOverrides}
+                                onChange={v => setContribOverrides(prev => ({ ...prev, [`start-${acc.id}`]: v }))}
+                              />
+                            </span>
+                          </div>
+                        </td>
+                      )
+                    }
+                    const openingBal = prevYearLast?.accountBalances.find(a => a.id === acc.id)?.balance ?? 0
+                    const prevRente = Math.round(prevYearRows.reduce((s, r) => s + (r.accountBalances.find(a => a.id === acc.id)?.interest ?? 0), 0))
+                    const prevInnskudd = Math.round(prevYearRows.reduce((s, r) => s + (r.accountBalances.find(a => a.id === acc.id)?.contribution ?? 0), 0))
                     return (
                       <td key={acc.id} colSpan={2} className="border-r border-border p-0">
                         <div className="flex items-baseline">
                           <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
-                            {yearInnskudd > 0 ? yearInnskudd.toLocaleString('no-NO') : '—'}
+                            {prevInnskudd > 0 ? prevInnskudd.toLocaleString('no-NO') : '—'}
                           </span>
                           <span className="flex-1 px-3 py-2 text-right font-semibold whitespace-nowrap flex items-baseline justify-end">
-                            <span>{fmtNOK(ab.balance)}</span>
+                            <span>{fmtNOK(openingBal)}</span>
                             <span className="text-[10px] text-green-400/80 ml-1 min-w-[3.5rem] text-right shrink-0">
-                              {yearRente > 0 ? `(+${yearRente.toLocaleString('no-NO')})` : ''}
+                              {prevRente > 0 ? `(+${prevRente.toLocaleString('no-NO')})` : ''}
                             </span>
                           </span>
                         </div>
                       </td>
                     )
                   })}
-                  {hasFond && (
-                    <td colSpan={2} className="border-r border-border p-0">
-                      {(() => {
-                        const yearFondRente = Math.round(yearData.reduce((s, row) => s + row.fondInterest, 0))
-                        const yearFondInnskudd = Math.round(yearData.reduce((s, row) => s + row.fondContrib, 0))
-                        return (
-                          <div className="flex items-baseline">
-                            <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
-                              {yearFondInnskudd > 0 ? yearFondInnskudd.toLocaleString('no-NO') : '—'}
-                            </span>
-                            <span className="flex-1 px-3 py-2 text-right text-teal-400 font-semibold whitespace-nowrap flex items-baseline justify-end">
-                              <span>{fmtNOK(last.fondBalance)}</span>
-                              <span className="text-[10px] text-green-400/80 ml-1 min-w-[3.5rem] text-right shrink-0">
-                                {yearFondRente > 0 ? `(+${yearFondRente.toLocaleString('no-NO')})` : ''}
-                              </span>
+                  {hasFond && (() => {
+                    if (isFirstYear) {
+                      return (
+                        <td colSpan={2} className="border-r border-border p-0">
+                          <div className="flex items-center">
+                            <span className="flex-1 px-3 py-2 text-right text-muted-foreground text-xs">startsaldo</span>
+                            <span className="flex-1 px-3 py-2 text-right font-semibold text-teal-400">
+                              <InnskuddCell
+                                value={contribOverrides['start-fond'] ?? fondCurrentValue}
+                                isOverridden={'start-fond' in contribOverrides}
+                                onChange={v => setContribOverrides(prev => ({ ...prev, 'start-fond': v }))}
+                              />
                             </span>
                           </div>
-                        )
-                      })()}
-                    </td>
-                  )}
-                  {hasPartner && hasBsu && (
-                    <td colSpan={2} className="border-r border-border p-0">
-                      {(() => {
-                        const yearBsuInnskudd = Math.round(yearData.reduce((s, row) => s + row.partnerBsuContrib, 0))
-                        return (
-                          <div className="flex items-baseline">
-                            <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
-                              {yearBsuInnskudd > 0 ? yearBsuInnskudd.toLocaleString('no-NO') : '—'}
+                        </td>
+                      )
+                    }
+                    const fondOpening = prevYearLast?.fondBalance ?? 0
+                    const prevFondRente = Math.round(prevYearRows.reduce((s, r) => s + r.fondInterest, 0))
+                    const prevFondInnskudd = Math.round(prevYearRows.reduce((s, r) => s + r.fondContrib, 0))
+                    return (
+                      <td colSpan={2} className="border-r border-border p-0">
+                        <div className="flex items-baseline">
+                          <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
+                            {prevFondInnskudd > 0 ? prevFondInnskudd.toLocaleString('no-NO') : '—'}
+                          </span>
+                          <span className="flex-1 px-3 py-2 text-right text-teal-400 font-semibold whitespace-nowrap flex items-baseline justify-end">
+                            <span>{fmtNOK(fondOpening)}</span>
+                            <span className="text-[10px] text-green-400/80 ml-1 min-w-[3.5rem] text-right shrink-0">
+                              {prevFondRente > 0 ? `(+${prevFondRente.toLocaleString('no-NO')})` : ''}
                             </span>
-                            <span className="flex-1 px-3 py-2 text-right text-violet-300 font-semibold whitespace-nowrap">{fmtNOK(last.partnerBsuBalance)}</span>
+                          </span>
+                        </div>
+                      </td>
+                    )
+                  })()}
+                  {hasPartner && hasBsu && (() => {
+                    if (isFirstYear) {
+                      return (
+                        <td colSpan={2} className="border-r border-border p-0">
+                          <div className="flex items-center">
+                            <span className="flex-1 px-3 py-2 text-right text-muted-foreground text-xs">startsaldo</span>
+                            <span className="flex-1 px-3 py-2 text-right font-semibold text-violet-300">
+                              <InnskuddCell
+                                value={contribOverrides['start-p-bsu'] ?? (partnerVeikart.bsu ?? 0)}
+                                isOverridden={'start-p-bsu' in contribOverrides}
+                                onChange={v => setSavingsOverride('start-p-bsu', v)}
+                              />
+                            </span>
                           </div>
-                        )
-                      })()}
-                    </td>
-                  )}
+                        </td>
+                      )
+                    }
+                    const bsuOpening = prevYearLast?.partnerBsuBalance ?? 0
+                    const prevBsuInnskudd = Math.round(prevYearRows.reduce((s, r) => s + r.partnerBsuContrib, 0))
+                    return (
+                      <td colSpan={2} className="border-r border-border p-0">
+                        <div className="flex items-baseline">
+                          <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
+                            {prevBsuInnskudd > 0 ? prevBsuInnskudd.toLocaleString('no-NO') : '—'}
+                          </span>
+                          <span className="flex-1 px-3 py-2 text-right text-violet-300 font-semibold whitespace-nowrap">{fmtNOK(bsuOpening)}</span>
+                        </div>
+                      </td>
+                    )
+                  })()}
                   {partnerAccMeta.map(acc => {
-                    const lastAb = last.partnerAccBalances.find(a => a.id === acc.id)!
-                    const yearRente = Math.round(yearData.reduce((s, r) => s + (r.partnerAccBalances.find(a => a.id === acc.id)?.interest ?? 0), 0))
-                    const yearInnskudd = Math.round(yearData.reduce((s, r) => s + (r.partnerAccBalances.find(a => a.id === acc.id)?.contribution ?? 0), 0))
+                    if (isFirstYear) {
+                      return (
+                        <td key={acc.id} colSpan={2} className="border-r border-border p-0">
+                          <div className="flex items-center">
+                            <span className="flex-1 px-3 py-2 text-right text-muted-foreground text-xs">startsaldo</span>
+                            <span className="flex-1 px-3 py-2 text-right font-semibold text-violet-300">
+                              <InnskuddCell
+                                value={contribOverrides[`start-p-${acc.id}`] ?? acc.balance}
+                                isOverridden={`start-p-${acc.id}` in contribOverrides}
+                                onChange={v => setSavingsOverride(`start-p-${acc.id}`, v)}
+                              />
+                            </span>
+                          </div>
+                        </td>
+                      )
+                    }
+                    const openingBal = prevYearLast?.partnerAccBalances.find(a => a.id === acc.id)?.balance ?? 0
+                    const prevRente = Math.round(prevYearRows.reduce((s, r) => s + (r.partnerAccBalances.find(a => a.id === acc.id)?.interest ?? 0), 0))
+                    const prevInnskudd = Math.round(prevYearRows.reduce((s, r) => s + (r.partnerAccBalances.find(a => a.id === acc.id)?.contribution ?? 0), 0))
                     return (
                       <td key={acc.id} colSpan={2} className="border-r border-border p-0">
                         <div className="flex items-baseline">
                           <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
-                            {yearInnskudd > 0 ? yearInnskudd.toLocaleString('no-NO') : '—'}
+                            {prevInnskudd > 0 ? prevInnskudd.toLocaleString('no-NO') : '—'}
                           </span>
                           <span className="flex-1 px-3 py-2 text-right text-violet-300 font-semibold whitespace-nowrap flex items-baseline justify-end">
-                            <span>{fmtNOK(lastAb?.balance ?? 0)}</span>
+                            <span>{fmtNOK(openingBal)}</span>
                             <span className="text-[10px] text-green-400/80 ml-1 min-w-[3.5rem] text-right shrink-0">
-                              {yearRente > 0 ? `(+${yearRente.toLocaleString('no-NO')})` : ''}
+                              {prevRente > 0 ? `(+${prevRente.toLocaleString('no-NO')})` : ''}
                             </span>
                           </span>
                         </div>
                       </td>
                     )
                   })}
-                  <td className="px-3 py-2 text-right font-mono text-blue-400 font-semibold border-l-2 border-l-red-400/20 border-r border-border whitespace-nowrap">{fmtNOK(last.totalEK)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-red-400/50 font-semibold border-r border-border whitespace-nowrap">{last.myDebtBalance > 0 ? '-' + fmtNOK(last.myDebtBalance) : '—'}</td>
-                  {hasPartner && <td className="px-2 py-2 text-right font-mono text-red-400/50 font-semibold border-r border-border whitespace-nowrap">{last.partnerDebtBalance > 0 ? '-' + fmtNOK(last.partnerDebtBalance) : '—'}</td>}
-                  <td className="px-2 py-2 text-right font-mono text-red-400/70 font-semibold border-r-2 border-r-red-400/30 whitespace-nowrap">{last.debtBalance > 0 ? '-' + fmtNOK(last.debtBalance) : '—'}</td>
-                  <td className="px-3 py-2 text-right font-mono text-green-400 font-semibold border-l-2 border-l-green-400/20 border-r border-border whitespace-nowrap">{last.maxKjøpesum > 0 ? fmtNOK(last.maxKjøpesum) : '—'}</td>
-                  {myAnnualIncome > 0 && <td className="px-3 py-2 text-right font-mono text-green-400/70 font-semibold border-r border-border whitespace-nowrap">{last.maxKjøpesumMeg > 0 ? fmtNOK(last.maxKjøpesumMeg) : '—'}</td>}
-                  {hasPartner && partnerOnlyAnnualIncome > 0 && <td className="px-3 py-2 text-right font-mono text-violet-400/70 font-semibold whitespace-nowrap">{last.maxKjøpesumPartner > 0 ? fmtNOK(last.maxKjøpesumPartner) : '—'}</td>}
+                  {/* Summary columns: show previous year-end values (= this year's opening EK/debt/kjøpekraft) */}
+                  <td className="px-3 py-2 text-right font-mono text-blue-400 font-semibold border-l-2 border-l-red-400/20 border-r border-border whitespace-nowrap">{prevYearLast ? fmtNOK(prevYearLast.totalEK) : '—'}</td>
+                  <td className="px-2 py-2 text-right font-mono text-red-400/50 font-semibold border-r border-border whitespace-nowrap">{prevYearLast?.myDebtBalance ? '-' + fmtNOK(prevYearLast.myDebtBalance) : '—'}</td>
+                  {hasPartner && <td className="px-2 py-2 text-right font-mono text-red-400/50 font-semibold border-r border-border whitespace-nowrap">{prevYearLast?.partnerDebtBalance ? '-' + fmtNOK(prevYearLast.partnerDebtBalance) : '—'}</td>}
+                  <td className="px-2 py-2 text-right font-mono text-red-400/70 font-semibold border-r-2 border-r-red-400/30 whitespace-nowrap">{prevYearLast?.debtBalance ? '-' + fmtNOK(prevYearLast.debtBalance) : '—'}</td>
+                  <td className="px-3 py-2 text-right font-mono text-green-400 font-semibold border-l-2 border-l-green-400/20 border-r border-border whitespace-nowrap">{prevYearLast?.maxKjøpesum ? fmtNOK(prevYearLast.maxKjøpesum) : '—'}</td>
+                  {myAnnualIncome > 0 && <td className="px-3 py-2 text-right font-mono text-green-400/70 font-semibold border-r border-border whitespace-nowrap">{prevYearLast?.maxKjøpesumMeg ? fmtNOK(prevYearLast.maxKjøpesumMeg) : '—'}</td>}
+                  {hasPartner && partnerOnlyAnnualIncome > 0 && <td className="px-3 py-2 text-right font-mono text-violet-400/70 font-semibold whitespace-nowrap">{prevYearLast?.maxKjøpesumPartner ? fmtNOK(prevYearLast.maxKjøpesumPartner) : '—'}</td>}
                 </tr>
                 {/* Monthly rows */}
                 {yearData.map(row => (
