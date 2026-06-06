@@ -92,7 +92,7 @@ export function BudgetPage() {
   const [addingLinePrefill, setAddingLinePrefill] = useState<Partial<BudgetLine> | null>(null)
   const [editingLine, setEditingLine] = useState<BudgetLine | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState<{ lineId: string; label: string } | null>(null)
-  const [contribPopover, setContribPopover] = useState<{ accId: string; month: number } | null>(null)
+  const [contribDialog, setContribDialog] = useState<{ accId: string; month: number } | null>(null)
   const [trekktabellLoaded, setTrekktabellLoaded] = useState(false)
 
   // Last trekktabelldata for brukerens tabellnummer inn i minne-cachen
@@ -130,9 +130,7 @@ export function BudgetPage() {
   }, [handleUndo])
   const [highlightedMonth, setHighlightedMonth] = useState<number | null>(null)
   const [hideTemporary, setHideTemporary] = useState(false)
-  const [hoveredCell, setHoveredCell] = useState<{
-    row: BudgetRow; month: number; rect: DOMRect
-  } | null>(null)
+  
 
   const yearOverrides = useMemo(() => {
     const prefix = `${activeYear}:`
@@ -589,10 +587,8 @@ export function BudgetPage() {
                         ? () => setConfirmingDelete({ lineId: deletableRowMap[row.id], label: row.label })
                         : undefined}
                       onActualCellClick={row.id.startsWith('sav-') && !row.id.startsWith('sav-t-')
-                        ? (month) => setContribPopover({ accId: row.id.slice(4), month })
+                        ? (month) => setContribDialog({ accId: row.id.slice(4), month })
                         : undefined}
-                      onCellHover={(month, rect) => setHoveredCell({ row, month, rect })}
-                      onCellLeave={() => setHoveredCell(null)}
                     />
                   ))}
 
@@ -702,89 +698,20 @@ export function BudgetPage() {
         </Dialog>
       )}
 
-      {/* ---- Cell hover tooltip ---- */}
-      {hoveredCell && (() => {
-        const { row, month, rect } = hoveredCell
-        const mi = month - 1
-        // Alle måneder opp til og med hover-måned — faktiske verdier der de finnes, ellers prognose
-        const ytdMonths = metas
-          .filter((m) => m.month <= month)
-          .map((m) => {
-            const cell = row.cells[m.month - 1]
-            const isActual = m.hasSlip || m.isLocked
-            return { month: m.month, val: isActual ? (cell.actual ?? cell.budget) : cell.budget, isActual }
-          })
-          .filter((x) => x.val !== 0)
-        const thisCell = row.cells[mi]
-        const thisMeta = metas[mi]
-        const thisVal = thisMeta
-          ? (thisMeta.hasSlip || thisMeta.isLocked)
-            ? (thisCell?.actual ?? thisCell?.budget ?? 0)
-            : (thisCell?.budget ?? 0)
-          : 0
-        const ytdSum = ytdMonths.reduce((s, x) => s + x.val, 0)
-        const ytdAvg = ytdMonths.length > 0 ? ytdSum / ytdMonths.length : null
-        const projAnnual = ytdAvg !== null ? ytdAvg * 12 : null
-        const actualCount = ytdMonths.filter((x) => x.isActual).length
-        // Posisjon: under cellen, men ikke utenfor vinduet
-        const tooltipH = 130
-        const top = rect.bottom + 6 + tooltipH > window.innerHeight
-          ? rect.top - tooltipH - 6
-          : rect.bottom + 6
-        const left = Math.min(rect.left, window.innerWidth - 200)
-        const monthName = MONTH_SHORT[month]
-        return (
-          <div
-            style={{ position: 'fixed', top, left, zIndex: 9999, width: 196 }}
-            className="pointer-events-none bg-popover border border-border rounded-lg shadow-xl px-3 py-2.5 text-xs space-y-1.5"
-          >
-            <p className="font-semibold text-foreground truncate">{row.label}</p>
-            <div className="flex justify-between text-muted-foreground">
-              <span>{monthName}</span>
-              <span className={cn('font-mono font-medium', thisVal < 0 ? 'text-red-400' : 'text-foreground')}>
-                {fmtNOK(thisVal)}
-              </span>
-            </div>
-            {ytdAvg !== null && (
-              <>
-                <div className="border-t border-border/40 pt-1.5 space-y-1">
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Snitt jan–{monthName}</span>
-                    <span className="font-mono">{fmtNOK(ytdAvg)}</span>
-                  </div>
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>YTD sum</span>
-                    <span className="font-mono">{fmtNOK(ytdSum)}</span>
-                  </div>
-                  {projAnnual !== null && (
-                    <div className="flex justify-between text-muted-foreground/60">
-                      <span>Årsanslag</span>
-                      <span className="font-mono">{fmtNOK(projAnnual)}</span>
-                    </div>
-                  )}
-                </div>
-                <p className="text-[10px] text-muted-foreground/40">
-                  {actualCount > 0 ? `${actualCount} faktisk${actualCount !== 1 ? 'e' : ''} + ` : ''}{ytdMonths.length - actualCount > 0 ? `${ytdMonths.length - actualCount} prog.` : ''}
-                </p>
-              </>
-            )}
-          </div>
-        )
-      })()}
 
       {/* Contributions dialog for savings rows */}
-      {contribPopover && (() => {
-        const acc = savingsAccounts.find(a => a.id === contribPopover.accId)
+      {contribDialog && (() => {
+        const acc = savingsAccounts.find(a => a.id === contribDialog.accId)
         if (!acc) return null
         const monthContribs = (acc.contributions ?? []).filter(c => {
           const d = new Date(c.date)
-          return d.getFullYear() === activeYear && d.getMonth() + 1 === contribPopover.month
+          return d.getFullYear() === activeYear && d.getMonth() + 1 === contribDialog.month
         })
         return (
-          <Dialog open onOpenChange={() => setContribPopover(null)}>
+          <Dialog open onOpenChange={() => setContribDialog(null)}>
             <DialogContent className="max-w-sm">
               <DialogHeader>
-                <DialogTitle className="text-sm">{acc.label} — {MONTH_SHORT[contribPopover.month]} {activeYear}</DialogTitle>
+                <DialogTitle className="text-sm">{acc.label} — {MONTH_SHORT[contribDialog.month]} {activeYear}</DialogTitle>
               </DialogHeader>
               {monthContribs.length === 0 ? (
                 <p className="text-xs text-muted-foreground italic">Ingen enkeltinnskudd denne måneden.</p>
@@ -798,7 +725,7 @@ export function BudgetPage() {
                         {c.note && <p className="text-muted-foreground text-[11px] mt-0.5">{c.note}</p>}
                       </div>
                       <button
-                        onClick={() => { removeContribution(acc.id, c.id); setContribPopover(null) }}
+                        onClick={() => { removeContribution(acc.id, c.id); setContribDialog(null) }}
                         className="shrink-0 text-muted-foreground hover:text-red-400 transition-colors"
                         title="Slett innskudd"
                       ><X className="h-4 w-4" /></button>
@@ -1174,8 +1101,6 @@ function DataRow({
   onDelete,
   onCopyForward,
   onActualCellClick,
-  onCellHover,
-  onCellLeave,
 }: {
   row: BudgetRow
   metas: MonthMeta[]
@@ -1189,8 +1114,6 @@ function DataRow({
   onDelete?: () => void
   onCopyForward?: (fromMonth: number, value: number) => void
   onActualCellClick?: (month: number) => void
-  onCellHover?: (month: number, rect: DOMRect) => void
-  onCellLeave?: () => void
 }) {
   const [editingMonth, setEditingMonth] = useState<number | null>(null)
   const [editValue, setEditValue] = useState('')
@@ -1251,8 +1174,6 @@ function DataRow({
             return (
               <td key={`${meta.month}-a`} colSpan={2}
                 className={cn('px-2 py-1.5 text-right border-r border-border/40 tabular-nums text-xs font-medium', hl && 'bg-sky-500/15')}
-                onMouseEnter={(e) => onCellHover?.(meta.month, e.currentTarget.getBoundingClientRect())}
-                onMouseLeave={() => onCellLeave?.()}
               >
                 {fmtNOK(cell.actual ?? cell.budget)}
               </td>
@@ -1263,8 +1184,6 @@ function DataRow({
               key={`${meta.month}-p`}
               colSpan={2}
               className={cn('px-2 py-1.5 text-right border-r border-border/40 tabular-nums text-xs italic text-muted-foreground', hl && 'bg-sky-500/15')}
-              onMouseEnter={(e) => onCellHover?.(meta.month, e.currentTarget.getBoundingClientRect())}
-              onMouseLeave={() => onCellLeave?.()}
             >
               {fmtNOK(cell.budget)}
             </td>
@@ -1386,8 +1305,6 @@ function DataRow({
                 hl && 'bg-sky-500/15',
               )}
               onClick={() => isEditable && startEdit(meta.month, displayVal)}
-              onMouseEnter={(e) => onCellHover?.(meta.month, e.currentTarget.getBoundingClientRect())}
-              onMouseLeave={() => onCellLeave?.()}
             >
               {fmtNOK(displayVal)}
             </td>
@@ -1411,17 +1328,20 @@ function DataRow({
                 !isHidden && bigDeviation && deviationDir === 'over' && 'bg-emerald-500/8',
                 !isHidden && bigDeviation && deviationDir === 'under' && 'bg-red-500/8',
                 hl && '!bg-sky-500/15',
-                onActualCellClick && !isHidden && 'cursor-pointer hover:bg-muted/20',
               )}
               title={deviation !== null
                 ? `Avvik fra budsjett: ${deviation > 0 ? '+' : ''}${Math.round(deviation).toLocaleString('no-NO')} kr (${deviationPct >= 0.01 ? (deviationPct * 100).toFixed(0) + '%' : '<1%'})`
                 : undefined}
-              onClick={onActualCellClick ? () => onActualCellClick(meta.month) : undefined}
-              onMouseEnter={(e) => onCellHover?.(meta.month, e.currentTarget.getBoundingClientRect())}
-              onMouseLeave={() => onCellLeave?.()}
             >
               {onActualCellClick && actual !== 0
-                ? <span className="flex items-center justify-end gap-1"><span>{fmtNOK(actual)}</span><X className="h-3 w-3 opacity-30 group-hover/row:opacity-70 shrink-0" /></span>
+                ? <span className="flex items-center justify-end gap-1">
+                    <span>{fmtNOK(actual)}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onActualCellClick(meta.month) }}
+                      className="shrink-0 text-muted-foreground/50 hover:text-red-400 transition-colors"
+                      title="Slett innskudd"
+                    ><X className="h-3 w-3" /></button>
+                  </span>
                 : fmtNOK(actual)}
             </td>
           )
@@ -1463,8 +1383,6 @@ function DataRow({
               hl && 'bg-sky-500/15',
             )}
             onClick={() => isEditable && !meta.isLocked && startEdit(meta.month, displayVal)}
-            onMouseEnter={(e) => onCellHover?.(meta.month, e.currentTarget.getBoundingClientRect())}
-            onMouseLeave={() => onCellLeave?.()}
           >
             <span className="flex items-center justify-end gap-1">
               {fmtNOK(displayVal)}
