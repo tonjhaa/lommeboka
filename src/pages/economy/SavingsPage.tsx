@@ -1934,6 +1934,10 @@ function AccountCard({
         {activeTab === 'innskudd' && (
           <AddContributionForm
             onSave={(c) => { onAddContribution(c); setActiveTab(null) }}
+            onSavePeriod={(p) => {
+              onUpdate({ contributionPeriods: [...(account.contributionPeriods ?? []), p] })
+              setActiveTab(null)
+            }}
             onCancel={() => setActiveTab(null)}
             existingContributions={account.contributions ?? []}
             existingWithdrawals={account.withdrawals ?? []}
@@ -2131,39 +2135,90 @@ function dupWarning(date: string, existing: { date: string }[]): string | null {
 }
 
 function AddContributionForm({
-  onSave, onCancel, existingContributions = [], existingWithdrawals = [],
+  onSave, onSavePeriod, onCancel, existingContributions = [], existingWithdrawals = [],
 }: {
   onSave: (c: SavingsContribution) => void
+  onSavePeriod: (p: ContributionPeriod) => void
   onCancel: () => void
   existingContributions?: SavingsContribution[]
   existingWithdrawals?: WithdrawalEntry[]
 }) {
   const today = new Date().toISOString().split('T')[0]
+  const [mode, setMode] = useState<'enkelt' | 'periode'>('enkelt')
+  // Enkelt
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(today)
   const [note, setNote] = useState('')
+  // Periode
+  const [periodAmount, setPeriodAmount] = useState('')
+  const [periodFrom, setPeriodFrom] = useState('')
+  const [periodTo, setPeriodTo] = useState('')
 
-  const warning = date ? dupWarning(date, [...existingContributions, ...existingWithdrawals]) : null
+  const warning = mode === 'enkelt' && date ? dupWarning(date, [...existingContributions, ...existingWithdrawals]) : null
 
   return (
     <div className="space-y-1.5">
-      <div className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">
-        <div className="space-y-0.5">
-          <Label className="text-xs">Dato</Label>
-          <Input type="date" className="h-8 text-xs w-36" value={date} onChange={(e) => setDate(e.target.value)} />
+      <div className="rounded-md border border-border p-2 space-y-2">
+        {/* Toggle */}
+        <div className="flex gap-1">
+          <button
+            onClick={() => setMode('enkelt')}
+            className={`px-2.5 py-1 rounded text-xs transition-colors ${mode === 'enkelt' ? 'bg-primary text-primary-foreground' : 'border border-border text-muted-foreground hover:text-foreground'}`}
+          >Enkelt innskudd</button>
+          <button
+            onClick={() => setMode('periode')}
+            className={`px-2.5 py-1 rounded text-xs transition-colors ${mode === 'periode' ? 'bg-primary text-primary-foreground' : 'border border-border text-muted-foreground hover:text-foreground'}`}
+          >Spareperiode</button>
         </div>
-        <div className="space-y-0.5">
-          <Label className="text-xs">Beløp (kr)</Label>
-          <Input type="number" className="h-8 text-xs w-28" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />
-        </div>
-        <div className="space-y-0.5 flex-1">
-          <Label className="text-xs">Notat (valgfritt)</Label>
-          <Input className="h-8 text-xs" value={note} onChange={(e) => setNote(e.target.value)} placeholder="f.eks. lønning" />
-        </div>
-        <Button size="sm" className="h-8 text-xs" onClick={() => onSave({ id: crypto.randomUUID(), date, amount: parseFloat(amount) || 0, note: note || undefined })}>
-          Lagre
-        </Button>
-        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={onCancel}>Avbryt</Button>
+
+        {mode === 'enkelt' ? (
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-0.5">
+              <Label className="text-xs">Dato</Label>
+              <Input type="date" className="h-8 text-xs w-36" value={date} onChange={(e) => setDate(e.target.value)} />
+            </div>
+            <div className="space-y-0.5">
+              <Label className="text-xs">Beløp (kr)</Label>
+              <Input type="number" className="h-8 text-xs w-28" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />
+            </div>
+            <div className="space-y-0.5 flex-1">
+              <Label className="text-xs">Notat (valgfritt)</Label>
+              <Input className="h-8 text-xs" value={note} onChange={(e) => setNote(e.target.value)} placeholder="f.eks. lønning" />
+            </div>
+            <Button size="sm" className="h-8 text-xs" onClick={() => onSave({ id: crypto.randomUUID(), date, amount: parseFloat(amount) || 0, note: note || undefined })}>
+              Lagre
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={onCancel}>Avbryt</Button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-0.5">
+              <Label className="text-xs">Beløp/mnd (kr)</Label>
+              <Input type="number" className="h-8 text-xs w-28" value={periodAmount} onChange={(e) => setPeriodAmount(e.target.value)} placeholder="f.eks. 3000" autoFocus />
+            </div>
+            <div className="space-y-0.5">
+              <Label className="text-xs">Fra (valgfri)</Label>
+              <Input type="month" className="h-8 text-xs w-36" value={periodFrom} onChange={(e) => setPeriodFrom(e.target.value)} />
+            </div>
+            <div className="space-y-0.5">
+              <Label className="text-xs">Til (valgfri)</Label>
+              <Input type="month" className="h-8 text-xs w-36" value={periodTo} onChange={(e) => setPeriodTo(e.target.value)} />
+            </div>
+            <Button size="sm" className="h-8 text-xs" onClick={() => {
+              const amt = parseFloat(periodAmount)
+              if (!amt) return
+              onSavePeriod({
+                id: crypto.randomUUID(),
+                amount: amt,
+                fromDate: periodFrom ? `${periodFrom}-01` : undefined,
+                toDate: periodTo ? `${periodTo}-01` : undefined,
+              })
+            }}>
+              Lagre
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={onCancel}>Avbryt</Button>
+          </div>
+        )}
       </div>
       {warning && (
         <p className="flex items-center gap-1 text-[11px] text-amber-400">
