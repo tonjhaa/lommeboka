@@ -13,7 +13,7 @@ import type {
   FondPortfolio,
 } from '@/types/economy'
 import { estimateSalaryTrend, projectMonthlySalary } from './salaryCalculator'
-import { computeMonthContributions, computeMonthWithdrawals, getBaseContribForPeriod } from './savingsCalculator'
+import { computeMonthContributions, getBaseContribForPeriod } from './savingsCalculator'
 import { calcMonthlyTaxWithholding } from './norwegianTaxRules'
 
 // ----------------------------------------------------------------
@@ -595,8 +595,7 @@ export function computeBudgetTable(
   const hasActivity = (a: SavingsAccount) =>
     a.monthlyContribution > 0 ||
     (a.contributionPeriods ?? []).length > 0 ||
-    (a.contributions ?? []).length > 0 ||
-    (a.withdrawals ?? []).length > 0
+    (a.contributions ?? []).length > 0
 
   for (const acc of savingsAccounts.filter(hasActivity)) {
     sparingRows.push(mkRow(`sav-${acc.id}`, acc.label, uniform12(
@@ -604,15 +603,13 @@ export function computeBudgetTable(
         const monthlyAmt = getBaseContribForPeriod(acc, year, m)
         const overriddenMonthly = monthlyAmt > 0 ? budgetVal(`sav-${acc.id}`, m, -monthlyAmt) : 0
         const oneTime = computeMonthContributions(acc, year, m)
-        const withdrawal = computeMonthWithdrawals(acc, year, m) // negativ verdi
-        return overriddenMonthly - oneTime + withdrawal
+        return overriddenMonthly - oneTime
       },
       (m) => {
         const oneTime = computeMonthContributions(acc, year, m)
-        const withdrawal = computeMonthWithdrawals(acc, year, m)
-        if (oneTime <= 0 && withdrawal === 0) return null
+        if (oneTime <= 0) return null
         const monthly = getBaseContribForPeriod(acc, year, m)
-        return -(oneTime + monthly) + withdrawal
+        return -(oneTime + monthly)
       },
     )))
   }
