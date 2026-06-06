@@ -14,7 +14,8 @@ export function buildPartnerVeikartPatch(
 ): Partial<PartnerVeikart> & Pick<PartnerVeikart, 'enabled' | 'accounts' | 'bsu' | 'bsuMonthlyContribution' | 'annualIncome' | 'debts'> {
   function projectedBalance(a: SavingsAccount): number {
     const effectiveBalance = computeEffectiveBalance(a, now)
-    const rate = [...a.rateHistory].sort((x, y) => y.fromDate.localeCompare(x.fromDate))[0]?.rate ?? 0
+    const nowISO = now.toISOString().slice(0, 10)
+    const rate = [...a.rateHistory].filter(r => r.fromDate <= nowISO).sort((x, y) => y.fromDate.localeCompare(x.fromDate))[0]?.rate ?? 0
     const monthly = a.monthlyContribution ?? 0
     // If there's actual balance history, use computeEffectiveBalance directly
     if (a.balanceHistory.length > 0) return effectiveBalance

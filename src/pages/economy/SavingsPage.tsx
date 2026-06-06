@@ -730,7 +730,7 @@ function MånedsoversiktTable({
       label: acc.label,
       type: acc.type,
       startBalance: contribOverrides[`start-${acc.id}`] ?? computeEffectiveBalance(acc, now),
-      rate: contribOverrides[`rate-${acc.id}`] ?? ([...acc.rateHistory].sort((a, b) => b.fromDate.localeCompare(a.fromDate))[0]?.rate ?? 0),
+      rate: contribOverrides[`rate-${acc.id}`] ?? ([...acc.rateHistory].filter(r => r.fromDate <= nowISO).sort((a, b) => b.fromDate.localeCompare(a.fromDate))[0]?.rate ?? 0),
       tieredRates: acc.tieredRates,
       getBase: (year: number, month: number) => getBaseContribForMonth(acc, year, month, nowISO),
     }))
