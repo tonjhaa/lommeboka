@@ -29,6 +29,10 @@ export function EconomyStoreProvider({
  * Works with or without a selector — matches Zustand's hook signature.
  * Both underlying hooks are always called (no conditional hooks).
  */
+export function useActiveStoreType(): StoreType {
+  return useContext(EconomyStoreContext)
+}
+
 export function useActiveEconomyStore(): EconomyState
 export function useActiveEconomyStore<T>(selector: (s: EconomyState) => T): T
 export function useActiveEconomyStore<T = EconomyState>(

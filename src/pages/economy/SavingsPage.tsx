@@ -15,7 +15,7 @@ import { Progress } from '@/components/ui/progress'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
+import { useActiveEconomyStore, useActiveStoreType } from '@/contexts/EconomyStoreContext'
 import { BSU_MAX_YEARLY } from '@/config/economy.config'
 import {
   checkBSULimits,
@@ -678,10 +678,13 @@ function MånedsoversiktTable({
   const partnerStatus = usePartnershipStore((s) => s.status)
   const setPartnerVeikart = useEconomyStore((s) => s.setPartnerVeikart)
   const [syncDone, setSyncDone] = useState(false)
+  const storeType = useActiveStoreType()
 
-  // Auto-sync partner Veikart on mount and whenever partner store changes
+  // Auto-sync partner Veikart on mount.
+  // Economy context: pull from partner store (partner's data → shown in PARTNER column).
+  // Partner context: pull from economy store (main user's data → shown in PARTNER column).
   useEffect(() => {
-    const ps = usePartnerStore.getState()
+    const ps = storeType === 'partner' ? useEconomyStore.getState() : usePartnerStore.getState()
     if (!ps.savingsAccounts?.length && !ps.debts?.length) return
     const patch = buildPartnerVeikartPatch(ps.savingsAccounts, ps.debts, ps.profile, partnerVeikart, now, ps.fondPortfolio)
     setPartnerVeikart({ ...partnerVeikart, ...patch })
@@ -689,7 +692,7 @@ function MånedsoversiktTable({
   }, [])
 
   function syncPartner() {
-    const ps = usePartnerStore.getState()
+    const ps = storeType === 'partner' ? useEconomyStore.getState() : usePartnerStore.getState()
     const patch = buildPartnerVeikartPatch(
       ps.savingsAccounts,
       ps.debts,
@@ -1322,16 +1325,16 @@ function MånedsoversiktTable({
                           <span className="flex-1 px-3 py-1 flex items-center justify-end">
                             {row.fondPeriod && !(`fond-${row.year}-${row.month}` in contribOverrides) ? (
                               <span
-                                className="flex items-center gap-1"
+                                className="relative w-full flex items-center justify-end"
                                 title={`Spareperiode: ${Math.round(row.fondPeriod.amount).toLocaleString('no-NO')} kr/mnd${row.fondPeriod.fromDate ? ` · fra ${row.fondPeriod.fromDate.slice(0, 7)}` : ''}${row.fondPeriod.toDate ? ` → ${row.fondPeriod.toDate.slice(0, 7)}` : ''}`}
                               >
+                                <span className="absolute left-0 rounded px-1 py-0.5 text-[9px] font-medium bg-teal-900/40 text-teal-400 leading-none">P</span>
                                 <InnskuddCell
                                   value={row.fondContrib}
                                   isOverridden={false}
                                   onChange={v => setMonthOverride('fond', row.year, row.month, v)}
                                   onFillDown={v => fillDown('fond', row.year, row.month, v)}
                                 />
-                                <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-medium bg-teal-900/40 text-teal-400 leading-none">P</span>
                               </span>
                             ) : (
                             <InnskuddCell
