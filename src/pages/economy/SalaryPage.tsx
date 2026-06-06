@@ -247,9 +247,9 @@ export function SalaryPage() {
                 <p className="text-[11px] text-muted-foreground">{Math.round(profile.baseMonthly * 12).toLocaleString('no-NO')} kr/år</p>
               </div>
               <div className="rounded-lg border border-border bg-card px-4 py-3">
-                <p className="text-[11px] text-muted-foreground mb-0.5">Brutto/mnd</p>
-                <p className="text-lg font-semibold font-mono tabular-nums">{Math.round(brutto).toLocaleString('no-NO')} kr</p>
-                <p className="text-[11px] text-muted-foreground">{Math.round(brutto * 12).toLocaleString('no-NO')} kr/år</p>
+                <p className="text-[11px] text-muted-foreground mb-0.5">Brutto årslønn</p>
+                <p className="text-lg font-semibold font-mono tabular-nums">{Math.round(brutto * 12).toLocaleString('no-NO')} kr</p>
+                <p className="text-[11px] text-muted-foreground">{Math.round(brutto).toLocaleString('no-NO')} kr/mnd</p>
               </div>
               {netto != null && netto > 0 && (
                 <div className="rounded-lg border border-border bg-card px-4 py-3">
