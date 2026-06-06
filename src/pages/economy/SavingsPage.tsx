@@ -1051,7 +1051,7 @@ function MånedsoversiktTable({
             ))}
             {hasFond && (
               <th colSpan={2} className="px-3 py-1.5 text-center border-r border-border text-teal-400 font-semibold whitespace-nowrap">
-                Fond <span className="text-[10px] text-muted-foreground font-normal">faktisk</span>
+                Fond
               </th>
             )}
             {hasPartner && hasBsu && (
@@ -1083,7 +1083,7 @@ function MånedsoversiktTable({
               <th key={acc.id} colSpan={2} className="border-r border-border p-0">
                 <div className="flex">
                   <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal" title="Innskudd per måned / Renteopptjening per år">Innskudd</span>
-                  <span className="flex-1 px-3 py-1 text-right font-medium">Saldo</span>
+                  <span className="flex-1 px-3 py-1 flex items-center justify-end font-medium"><span className="flex-1 text-right">Saldo</span><span className="shrink-0 min-w-[3.5rem]" /></span>
                 </div>
               </th>
             ))}
@@ -1091,7 +1091,7 @@ function MånedsoversiktTable({
               <th colSpan={2} className="border-r border-border p-0">
                 <div className="flex">
                   <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal" title="Innskudd per måned / Renteopptjening per år">Innskudd</span>
-                  <span className="flex-1 px-3 py-1 text-right text-teal-400 font-medium">Saldo</span>
+                  <span className="flex-1 px-3 py-1 flex items-center justify-end text-teal-400 font-medium"><span className="flex-1 text-right">Saldo</span><span className="shrink-0 min-w-[3.5rem]" /></span>
                 </div>
               </th>
             )}
@@ -1099,7 +1099,7 @@ function MånedsoversiktTable({
               <th colSpan={2} className="border-r border-border p-0">
                 <div className="flex">
                   <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal" title="Innskudd per måned / Renteopptjening per år">Innskudd</span>
-                  <span className="flex-1 px-3 py-1 text-right text-violet-300 font-medium">Saldo</span>
+                  <span className="flex-1 px-3 py-1 flex items-center justify-end text-violet-300 font-medium"><span className="flex-1 text-right">Saldo</span><span className="shrink-0 min-w-[3.5rem]" /></span>
                 </div>
               </th>
             )}
@@ -1107,7 +1107,7 @@ function MånedsoversiktTable({
               <th key={acc.id} colSpan={2} className="border-r border-border p-0">
                 <div className="flex">
                   <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal" title="Innskudd per måned / Renteopptjening per år">Innskudd</span>
-                  <span className="flex-1 px-3 py-1 text-right text-violet-300 font-medium">Saldo</span>
+                  <span className="flex-1 px-3 py-1 flex items-center justify-end text-violet-300 font-medium"><span className="flex-1 text-right">Saldo</span><span className="shrink-0 min-w-[3.5rem]" /></span>
                 </div>
               </th>
             ))}
@@ -1136,7 +1136,7 @@ function MånedsoversiktTable({
                       return (
                         <td key={acc.id} colSpan={2} className="border-r border-border p-0">
                           <div className="flex items-center">
-                            <span className="flex-1 px-3 py-2 text-right text-muted-foreground text-xs">startsaldo</span>
+                            <span className="flex-1" />
                             <span className="flex-1 px-3 py-2 text-right font-semibold">
                               <InnskuddCell
                                 value={acc.startBalance}
@@ -1172,7 +1172,7 @@ function MånedsoversiktTable({
                       return (
                         <td colSpan={2} className="border-r border-border p-0">
                           <div className="flex items-center">
-                            <span className="flex-1 px-3 py-2 text-right text-muted-foreground text-xs">startsaldo</span>
+                            <span className="flex-1" />
                             <span className="flex-1 px-3 py-2 text-right font-semibold text-teal-400">
                               <InnskuddCell
                                 value={contribOverrides['start-fond'] ?? fondCurrentValue}
@@ -1208,7 +1208,7 @@ function MånedsoversiktTable({
                       return (
                         <td colSpan={2} className="border-r border-border p-0">
                           <div className="flex items-center">
-                            <span className="flex-1 px-3 py-2 text-right text-muted-foreground text-xs">startsaldo</span>
+                            <span className="flex-1" />
                             <span className="flex-1 px-3 py-2 text-right font-semibold text-violet-300">
                               <InnskuddCell
                                 value={contribOverrides['start-p-bsu'] ?? (partnerVeikart.bsu ?? 0)}
@@ -1238,7 +1238,7 @@ function MånedsoversiktTable({
                       return (
                         <td key={acc.id} colSpan={2} className="border-r border-border p-0">
                           <div className="flex items-center">
-                            <span className="flex-1 px-3 py-2 text-right text-muted-foreground text-xs">startsaldo</span>
+                            <span className="flex-1" />
                             <span className="flex-1 px-3 py-2 text-right font-semibold text-violet-300">
                               <InnskuddCell
                                 value={contribOverrides[`start-p-${acc.id}`] ?? acc.balance}
