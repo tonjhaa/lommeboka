@@ -766,18 +766,17 @@ function MånedsoversiktTable({
         let contrib = overrideKey in contribOverrides ? contribOverrides[overrideKey] : baseContrib
         let bal: number
         let interest: number
-        if (acc.type === 'BSU') {
-          const room = Math.max(0, BSU_MAX_TOTAL - bal0)
-          contrib = Math.min(contrib, room)
-          bal = bal0 + contrib
-          interest = 0
-        } else {
-          // Renter beregnes månedlig, krediteres i januar (norsk bankstandard)
+        {
           const effectiveRate = (acc.tieredRates?.length && !(`rate-${acc.id}` in contribOverrides))
             ? getEffectiveRateFromTiers(acc.tieredRates, bal0)
             : acc.rate
           const monthlyInterest = bal0 * effectiveRate / 100 / 12
           interest = monthlyInterest
+          if (acc.type === 'BSU') {
+            const room = Math.max(0, BSU_MAX_TOTAL - bal0)
+            contrib = Math.min(contrib, room)
+          }
+          // Renter beregnes månedlig, krediteres i januar (BSU og vanlige kontoer)
           if (month === 1) {
             bal = bal0 + accruedInterest[j] + contrib
             accruedInterest[j] = monthlyInterest
