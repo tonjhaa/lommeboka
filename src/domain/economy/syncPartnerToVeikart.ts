@@ -1,4 +1,4 @@
-import { computeEffectiveBalance, projectBalanceMonthly, getEffectiveRate } from './savingsCalculator'
+import { computeEffectiveBalance, projectBalanceMonthly, getEffectiveRate, getBaseContribForPeriod } from './savingsCalculator'
 import type {
   SavingsAccount, DebtAccount, EmploymentProfile,
   PartnerVeikart, PartnerAccount, PartnerDebt, PartnerFondHolding, FondPortfolio,
@@ -12,18 +12,34 @@ export function buildPartnerVeikartPatch(
   now: Date,
   fondPortfolio?: FondPortfolio | null,
 ): Partial<PartnerVeikart> & Pick<PartnerVeikart, 'enabled' | 'accounts' | 'bsu' | 'bsuMonthlyContribution' | 'annualIncome' | 'debts'> {
+  const nowISO = now.toISOString().slice(0, 10)
+
+  function currentRate(a: SavingsAccount): number {
+    return [...a.rateHistory].filter(r => r.fromDate <= nowISO).sort((x, y) => y.fromDate.localeCompare(x.fromDate))[0]?.rate ?? 0
+  }
+
   function projectedBalance(a: SavingsAccount): number {
     const effectiveBalance = computeEffectiveBalance(a, now)
-    const nowISO = now.toISOString().slice(0, 10)
-    const rate = [...a.rateHistory].filter(r => r.fromDate <= nowISO).sort((x, y) => y.fromDate.localeCompare(x.fromDate))[0]?.rate ?? 0
-    const monthly = a.monthlyContribution ?? 0
-    // If there's actual balance history, use computeEffectiveBalance directly
-    if (a.balanceHistory.length > 0) return effectiveBalance
-    // Otherwise project forward from openingDate using monthlyContribution
+    const rate = currentRate(a)
+
+    if (a.balanceHistory.length > 0) {
+      // Project interest from the last balance entry to now
+      const sorted = [...a.balanceHistory].sort((x, y) => x.year !== y.year ? x.year - y.year : x.month - y.month)
+      const last = sorted.at(-1)!
+      const lastDate = new Date(last.year, last.month - 1, 1)
+      const monthsSinceEntry = Math.max(0, Math.round((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44)))
+      if (monthsSinceEntry > 0 && rate > 0) {
+        return Math.round(projectBalanceMonthly(effectiveBalance, 0, rate, monthsSinceEntry, a.type === 'BSU'))
+      }
+      return Math.round(effectiveBalance)
+    }
+
+    // No balance history: project forward from opening date
+    const monthly = getBaseContribForPeriod(a, now.getFullYear(), now.getMonth() + 1)
     const openingMs = new Date(a.openingDate).getTime()
     const months = Math.max(0, Math.round((now.getTime() - openingMs) / (1000 * 60 * 60 * 24 * 30.44)))
-    if (months === 0) return effectiveBalance
-    return projectBalanceMonthly(a.openingBalance, monthly, rate, months, a.type === 'BSU')
+    if (months === 0) return Math.round(effectiveBalance)
+    return Math.round(projectBalanceMonthly(a.openingBalance, monthly, rate, months, a.type === 'BSU'))
   }
 
   const accounts: PartnerAccount[] = savingsAccounts
@@ -35,7 +51,7 @@ export function buildPartnerVeikartPatch(
         label: a.label,
         balance,
         rate: getEffectiveRate(a, balance),
-        monthlyContribution: a.monthlyContribution ?? 0,
+        monthlyContribution: getBaseContribForPeriod(a, now.getFullYear(), now.getMonth() + 1),
         ...(a.tieredRates?.length ? { tieredRates: a.tieredRates } : {}),
       }
     })
