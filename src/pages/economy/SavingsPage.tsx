@@ -2198,11 +2198,11 @@ function AddContributionForm({
             </div>
             <div className="space-y-0.5">
               <Label className="text-xs">Fra (valgfri)</Label>
-              <Input type="month" className="h-8 text-xs w-36" value={periodFrom} onChange={(e) => setPeriodFrom(e.target.value)} />
+              <Input type="date" className="h-8 text-xs w-36" value={periodFrom} onChange={(e) => setPeriodFrom(e.target.value)} />
             </div>
             <div className="space-y-0.5">
               <Label className="text-xs">Til (valgfri)</Label>
-              <Input type="month" className="h-8 text-xs w-36" value={periodTo} onChange={(e) => setPeriodTo(e.target.value)} />
+              <Input type="date" className="h-8 text-xs w-36" value={periodTo} onChange={(e) => setPeriodTo(e.target.value)} />
             </div>
             <Button size="sm" className="h-8 text-xs" onClick={() => {
               const amt = parseFloat(periodAmount)
@@ -2210,8 +2210,8 @@ function AddContributionForm({
               onSavePeriod({
                 id: crypto.randomUUID(),
                 amount: amt,
-                fromDate: periodFrom ? `${periodFrom}-01` : undefined,
-                toDate: periodTo ? `${periodTo}-01` : undefined,
+                fromDate: periodFrom || undefined,
+                toDate: periodTo || undefined,
               })
             }}>
               Lagre
