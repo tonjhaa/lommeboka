@@ -844,9 +844,10 @@ function MånedsoversiktTable({
             : partnerVeikart.debt ?? 0)
         : 0
       const partnerDebt = 'partner-debt' in contribOverrides ? contribOverrides['partner-debt'] : partnerDebtBase
-      const debtBalance = debts
+      const myDebtBalance = Math.round(debts
         .filter(d => d.status !== 'nedbetalt')
-        .reduce((s, d) => s + projectDebtBalance(d, i + 1), 0) + partnerDebt
+        .reduce((s, d) => s + projectDebtBalance(d, i + 1), 0))
+      const debtBalance = myDebtBalance + partnerDebt
       // Lønnsvekst: 3% (eller override) per år fra nåværende år
       const growthFactor = Math.pow(1 + salaryGrowthPct / 100, year - currentYear)
       const projectedMyIncome = myAnnualIncome * growthFactor
@@ -873,6 +874,8 @@ function MånedsoversiktTable({
         maxKjøpesumMeg,
         maxKjøpesumPartner,
         debtBalance: Math.round(debtBalance),
+        myDebtBalance,
+        partnerDebtBalance: Math.round(partnerDebt),
       }
     })
 
@@ -1041,7 +1044,9 @@ function MånedsoversiktTable({
               </th>
             ))}
             <th className="bg-background px-3 py-1.5 text-right border-r border-border text-blue-400 font-semibold whitespace-nowrap">Total EK</th>
-            <th className="bg-background px-3 py-1.5 text-right border-r border-border text-red-400/70 font-semibold whitespace-nowrap">Gjeld</th>
+            <th className="bg-background px-3 py-1.5 text-right border-r border-border text-red-400/50 font-semibold whitespace-nowrap">Gjeld meg</th>
+            {hasPartner && <th className="bg-background px-3 py-1.5 text-right border-r border-border text-red-400/50 font-semibold whitespace-nowrap">Gjeld partner</th>}
+            <th className="bg-background px-3 py-1.5 text-right border-r border-border text-red-400/70 font-semibold whitespace-nowrap">Gjeld samlet</th>
             <th className="bg-background px-3 py-1.5 text-right border-r border-border text-green-400 font-semibold whitespace-nowrap">Samlet</th>
             {myAnnualIncome > 0 && <th className="bg-background px-3 py-1.5 text-right border-r border-border text-green-400/70 font-semibold whitespace-nowrap">Meg</th>}
             {hasPartner && partnerOnlyAnnualIncome > 0 && <th className="bg-background px-3 py-1.5 text-right text-violet-400/70 font-semibold whitespace-nowrap">Partner</th>}
@@ -1189,6 +1194,8 @@ function MånedsoversiktTable({
                     )
                   })}
                   <td className="px-3 py-2 text-right font-mono text-blue-400 font-semibold border-r border-border whitespace-nowrap">{fmtNOK(last.totalEK)}</td>
+                  <td className="px-3 py-2 text-right font-mono text-red-400/50 font-semibold border-r border-border whitespace-nowrap">{last.myDebtBalance > 0 ? '-' + fmtNOK(last.myDebtBalance) : '—'}</td>
+                  {hasPartner && <td className="px-3 py-2 text-right font-mono text-red-400/50 font-semibold border-r border-border whitespace-nowrap">{last.partnerDebtBalance > 0 ? '-' + fmtNOK(last.partnerDebtBalance) : '—'}</td>}
                   <td className="px-3 py-2 text-right font-mono text-red-400/70 font-semibold border-r border-border whitespace-nowrap">{last.debtBalance > 0 ? '-' + fmtNOK(last.debtBalance) : '—'}</td>
                   <td className="px-3 py-2 text-right font-mono text-green-400 font-semibold border-r border-border whitespace-nowrap">{last.maxKjøpesum > 0 ? fmtNOK(last.maxKjøpesum) : '—'}</td>
                   {myAnnualIncome > 0 && <td className="px-3 py-2 text-right font-mono text-green-400/70 font-semibold border-r border-border whitespace-nowrap">{last.maxKjøpesumMeg > 0 ? fmtNOK(last.maxKjøpesumMeg) : '—'}</td>}
@@ -1287,6 +1294,8 @@ function MånedsoversiktTable({
                         </td>
                     ))}
                     <td className="px-3 py-1 text-right font-mono text-blue-300 border-r border-border whitespace-nowrap">{fmtNOK(row.totalEK)}</td>
+                    <td className="px-3 py-1 text-right font-mono text-red-400/40 border-r border-border whitespace-nowrap">{row.myDebtBalance > 0 ? '-' + fmtNOK(row.myDebtBalance) : '—'}</td>
+                    {hasPartner && <td className="px-3 py-1 text-right font-mono text-red-400/40 border-r border-border whitespace-nowrap">{row.partnerDebtBalance > 0 ? '-' + fmtNOK(row.partnerDebtBalance) : '—'}</td>}
                     <td className="px-3 py-1 text-right font-mono text-red-400/50 border-r border-border whitespace-nowrap">{row.debtBalance > 0 ? '-' + fmtNOK(row.debtBalance) : '—'}</td>
                     <td className="px-3 py-1 text-right font-mono text-green-300/60 border-r border-border whitespace-nowrap">{row.maxKjøpesum > 0 ? fmtNOK(row.maxKjøpesum) : '—'}</td>
                     {myAnnualIncome > 0 && <td className="px-3 py-1 text-right font-mono text-green-300/40 border-r border-border whitespace-nowrap">{row.maxKjøpesumMeg > 0 ? fmtNOK(row.maxKjøpesumMeg) : '—'}</td>}
