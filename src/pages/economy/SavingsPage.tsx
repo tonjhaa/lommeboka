@@ -539,7 +539,7 @@ function RådTab({
 }
 // ─── Månedsoversikt ───────────────────────────────────────────
 
-const FOND_RATE_TABLE = 7.0
+// FOND_RATE_TABLE removed: fond uses faktisk snapshots, ikke automatisk avkastning
 const SAVINGS_RATE_TABLE = 3.5
 const FULL_MONTH_NAMES = ['Januar', 'Februar', 'Mars', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Desember']
 
@@ -791,7 +791,7 @@ function MånedsoversiktTable({
         return { id: acc.id, balance: bal, contribution: contrib, overrideKey, interest }
       })
 
-      // Fond — månedlig compounding (markedsbasert, daglig kursendring)
+      // Fond — basert på faktiske snapshots, ingen automatisk avkastning
       const fondKey = `fond-${year}-${month}`
       const ym = `${year}-${String(month).padStart(2, '0')}`
       const activeFondPeriod = fondPortfolio?.contributionPeriods?.find(p => {
@@ -801,8 +801,17 @@ function MånedsoversiktTable({
       }) ?? null
       const baseFondMnd = fondPortfolio ? getFondContribForMonth(fondPortfolio, year, month) : fondMonthlyDeposit
       const effectiveFondMnd = fondKey in contribOverrides ? contribOverrides[fondKey] : baseFondMnd
-      const fondInterest = fondBal * FOND_RATE_TABLE / 100 / 12
-      fondBal = fondBal + fondInterest + effectiveFondMnd
+      // Bruk faktisk snapshot for denne måneden hvis det finnes
+      const snapshotThisMonth = fondPortfolio?.snapshots?.find(s => s.date.slice(0, 7) === ym)
+      const prevFondBal = fondBal
+      let fondInterest: number
+      if (snapshotThisMonth) {
+        fondBal = snapshotThisMonth.totalValue
+        fondInterest = fondBal - prevFondBal - effectiveFondMnd  // derivert avkastning
+      } else {
+        fondBal = prevFondBal + effectiveFondMnd  // ingen automatisk avkastning
+        fondInterest = 0
+      }
 
       // Partner accounts — per-month overrides + januar-rentekreditt
       const partnerAccBalances = partnerAccMeta.map((acc, j) => {
@@ -972,6 +981,21 @@ function MånedsoversiktTable({
           </button>
         )}
       </div>
+      {hasFond && (() => {
+        const d = now.getDate()
+        const isNearTwelfth = d >= 10 && d <= 14
+        const lastSnapshotYm = [...(fondPortfolio?.snapshots ?? [])].sort((a, b) => b.date.localeCompare(a.date))[0]?.date.slice(0, 7) ?? ''
+        const thisYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+        const missingThisMonth = lastSnapshotYm < thisYm
+        if (!isNearTwelfth && !missingThisMonth) return null
+        return (
+          <div className="mx-0 px-3 py-2 flex items-center gap-2 bg-teal-900/20 border-b border-teal-500/20 text-teal-300 text-xs">
+            <span>📊</span>
+            <span>Husk å legge inn fondsaldo for {thisYm.replace('-', '/')} i <b>Fond-fanen</b></span>
+            {lastSnapshotYm && <span className="text-teal-500/60 ml-auto">Siste: {lastSnapshotYm}</span>}
+          </div>
+        )
+      })()}
       <div className="overflow-auto flex-1 text-xs">
       <table className="border-collapse w-full min-w-max">
         <thead className="sticky top-0 z-10 bg-background backdrop-blur-none [&_th]:bg-background">
@@ -986,7 +1010,8 @@ function MånedsoversiktTable({
                 Partner
               </th>
             )}
-            <th colSpan={3 + (myAnnualIncome > 0 ? 1 : 0) + (hasPartner && partnerOnlyAnnualIncome > 0 ? 1 : 0)} className="bg-background" />
+            <th colSpan={hasPartner ? 3 : 2} className="bg-background px-2 py-1 text-center border-r border-border text-xs font-bold tracking-wide text-red-400/60 uppercase">Gjeld</th>
+            <th colSpan={1 + (myAnnualIncome > 0 ? 1 : 0) + (hasPartner && partnerOnlyAnnualIncome > 0 ? 1 : 0)} className="bg-background" />
           </tr>
           {/* Row 2: Account names */}
           <tr className="border-b border-border">
@@ -1026,7 +1051,7 @@ function MånedsoversiktTable({
             ))}
             {hasFond && (
               <th colSpan={2} className="px-3 py-1.5 text-center border-r border-border text-teal-400 font-semibold whitespace-nowrap">
-                Fond <span className="text-[10px] text-muted-foreground font-normal">{FOND_RATE_TABLE}%</span>
+                Fond <span className="text-[10px] text-muted-foreground font-normal">faktisk</span>
               </th>
             )}
             {hasPartner && hasBsu && (
@@ -1044,9 +1069,9 @@ function MånedsoversiktTable({
               </th>
             ))}
             <th className="bg-background px-3 py-1.5 text-right border-r border-border text-blue-400 font-semibold whitespace-nowrap">Total EK</th>
-            <th className="bg-background px-3 py-1.5 text-right border-r border-border text-red-400/50 font-semibold whitespace-nowrap">Gjeld meg</th>
-            {hasPartner && <th className="bg-background px-3 py-1.5 text-right border-r border-border text-red-400/50 font-semibold whitespace-nowrap">Gjeld partner</th>}
-            <th className="bg-background px-3 py-1.5 text-right border-r border-border text-red-400/70 font-semibold whitespace-nowrap">Gjeld samlet</th>
+            <th className="bg-background px-2 py-1.5 text-right border-r border-border text-red-400/50 font-semibold whitespace-nowrap">Meg</th>
+            {hasPartner && <th className="bg-background px-2 py-1.5 text-right border-r border-border text-red-400/50 font-semibold whitespace-nowrap">Partner</th>}
+            <th className="bg-background px-2 py-1.5 text-right border-r border-border text-red-400/70 font-semibold whitespace-nowrap">∑</th>
             <th className="bg-background px-3 py-1.5 text-right border-r border-border text-green-400 font-semibold whitespace-nowrap">Samlet</th>
             {myAnnualIncome > 0 && <th className="bg-background px-3 py-1.5 text-right border-r border-border text-green-400/70 font-semibold whitespace-nowrap">Meg</th>}
             {hasPartner && partnerOnlyAnnualIncome > 0 && <th className="bg-background px-3 py-1.5 text-right text-violet-400/70 font-semibold whitespace-nowrap">Partner</th>}
@@ -1194,9 +1219,9 @@ function MånedsoversiktTable({
                     )
                   })}
                   <td className="px-3 py-2 text-right font-mono text-blue-400 font-semibold border-r border-border whitespace-nowrap">{fmtNOK(last.totalEK)}</td>
-                  <td className="px-3 py-2 text-right font-mono text-red-400/50 font-semibold border-r border-border whitespace-nowrap">{last.myDebtBalance > 0 ? '-' + fmtNOK(last.myDebtBalance) : '—'}</td>
-                  {hasPartner && <td className="px-3 py-2 text-right font-mono text-red-400/50 font-semibold border-r border-border whitespace-nowrap">{last.partnerDebtBalance > 0 ? '-' + fmtNOK(last.partnerDebtBalance) : '—'}</td>}
-                  <td className="px-3 py-2 text-right font-mono text-red-400/70 font-semibold border-r border-border whitespace-nowrap">{last.debtBalance > 0 ? '-' + fmtNOK(last.debtBalance) : '—'}</td>
+                  <td className="px-2 py-2 text-right font-mono text-red-400/50 font-semibold border-r border-border whitespace-nowrap">{last.myDebtBalance > 0 ? '-' + fmtNOK(last.myDebtBalance) : '—'}</td>
+                  {hasPartner && <td className="px-2 py-2 text-right font-mono text-red-400/50 font-semibold border-r border-border whitespace-nowrap">{last.partnerDebtBalance > 0 ? '-' + fmtNOK(last.partnerDebtBalance) : '—'}</td>}
+                  <td className="px-2 py-2 text-right font-mono text-red-400/70 font-semibold border-r border-border whitespace-nowrap">{last.debtBalance > 0 ? '-' + fmtNOK(last.debtBalance) : '—'}</td>
                   <td className="px-3 py-2 text-right font-mono text-green-400 font-semibold border-r border-border whitespace-nowrap">{last.maxKjøpesum > 0 ? fmtNOK(last.maxKjøpesum) : '—'}</td>
                   {myAnnualIncome > 0 && <td className="px-3 py-2 text-right font-mono text-green-400/70 font-semibold border-r border-border whitespace-nowrap">{last.maxKjøpesumMeg > 0 ? fmtNOK(last.maxKjøpesumMeg) : '—'}</td>}
                   {hasPartner && partnerOnlyAnnualIncome > 0 && <td className="px-3 py-2 text-right font-mono text-violet-400/70 font-semibold whitespace-nowrap">{last.maxKjøpesumPartner > 0 ? fmtNOK(last.maxKjøpesumPartner) : '—'}</td>}
@@ -1294,9 +1319,9 @@ function MånedsoversiktTable({
                         </td>
                     ))}
                     <td className="px-3 py-1 text-right font-mono text-blue-300 border-r border-border whitespace-nowrap">{fmtNOK(row.totalEK)}</td>
-                    <td className="px-3 py-1 text-right font-mono text-red-400/40 border-r border-border whitespace-nowrap">{row.myDebtBalance > 0 ? '-' + fmtNOK(row.myDebtBalance) : '—'}</td>
-                    {hasPartner && <td className="px-3 py-1 text-right font-mono text-red-400/40 border-r border-border whitespace-nowrap">{row.partnerDebtBalance > 0 ? '-' + fmtNOK(row.partnerDebtBalance) : '—'}</td>}
-                    <td className="px-3 py-1 text-right font-mono text-red-400/50 border-r border-border whitespace-nowrap">{row.debtBalance > 0 ? '-' + fmtNOK(row.debtBalance) : '—'}</td>
+                    <td className="px-2 py-1 text-right font-mono text-red-400/40 border-r border-border whitespace-nowrap">{row.myDebtBalance > 0 ? '-' + fmtNOK(row.myDebtBalance) : '—'}</td>
+                    {hasPartner && <td className="px-2 py-1 text-right font-mono text-red-400/40 border-r border-border whitespace-nowrap">{row.partnerDebtBalance > 0 ? '-' + fmtNOK(row.partnerDebtBalance) : '—'}</td>}
+                    <td className="px-2 py-1 text-right font-mono text-red-400/50 border-r border-border whitespace-nowrap">{row.debtBalance > 0 ? '-' + fmtNOK(row.debtBalance) : '—'}</td>
                     <td className="px-3 py-1 text-right font-mono text-green-300/60 border-r border-border whitespace-nowrap">{row.maxKjøpesum > 0 ? fmtNOK(row.maxKjøpesum) : '—'}</td>
                     {myAnnualIncome > 0 && <td className="px-3 py-1 text-right font-mono text-green-300/40 border-r border-border whitespace-nowrap">{row.maxKjøpesumMeg > 0 ? fmtNOK(row.maxKjøpesumMeg) : '—'}</td>}
                     {hasPartner && partnerOnlyAnnualIncome > 0 && <td className="px-3 py-1 text-right font-mono text-violet-300/40 whitespace-nowrap">{row.maxKjøpesumPartner > 0 ? fmtNOK(row.maxKjøpesumPartner) : '—'}</td>}
