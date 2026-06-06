@@ -1589,7 +1589,8 @@ function AccountCard({
   const currentYear = now.getFullYear()
   const currentBalance = computeEffectiveBalance(account, now)
   const sortedRates = [...account.rateHistory].sort((a, b) => b.fromDate.localeCompare(a.fromDate))
-  const currentRate = sortedRates[0]?.rate ?? 0
+  const nowISO = now.toISOString().slice(0, 10)
+  const currentRate = sortedRates.find(r => r.fromDate <= nowISO)?.rate ?? sortedRates.at(-1)?.rate ?? 0
   const isBSU = account.type === 'BSU'
   const bsuStatus = isBSU ? checkBSULimits(account, currentYear) : null
   const monthlyEstimate = computeMonthlyContributionEstimate(account)
@@ -1730,17 +1731,37 @@ function AccountCard({
 
 
         {/* Rentehistorikk */}
-        {sortedRates.length > 1 && (
+        {sortedRates.length > 0 && (
           <div className="rounded-md border border-border/50 overflow-hidden">
             <div className="bg-muted/20 px-3 py-1.5 text-xs font-medium text-muted-foreground">Rentehistorikk</div>
-            {sortedRates.map((r, i) => (
-              <div key={r.fromDate} className="flex items-center justify-between px-3 py-1.5 text-xs border-t border-border/30">
-                <span className="text-muted-foreground">Fra {fmtDate(r.fromDate)}</span>
-                <span className={i === 0 ? 'font-medium text-foreground' : 'text-muted-foreground'}>
-                  {r.rate.toFixed(2)} %
-                </span>
-              </div>
-            ))}
+            {sortedRates.map((r) => {
+              const isFuture = r.fromDate > nowISO
+              const isCurrent = !isFuture && r.fromDate === sortedRates.find(x => x.fromDate <= nowISO)?.fromDate
+              return (
+                <div key={r.fromDate} className="flex items-center justify-between px-3 py-1.5 text-xs border-t border-border/30">
+                  <div className="flex items-center gap-2">
+                    <span className={isFuture ? 'text-amber-400/80' : isCurrent ? 'text-green-400' : 'text-muted-foreground'}>
+                      Fra {fmtDate(r.fromDate)}
+                    </span>
+                    {isFuture && <span className="text-[10px] bg-amber-400/10 text-amber-400/80 rounded px-1 py-0.5">Kommende</span>}
+                    {isCurrent && <span className="text-[10px] bg-green-400/10 text-green-400 rounded px-1 py-0.5">Aktiv</span>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={isFuture ? 'text-amber-400/80' : isCurrent ? 'font-semibold text-green-400' : 'text-muted-foreground'}>
+                      {r.rate.toFixed(2)} %
+                    </span>
+                    {sortedRates.length > 1 && (
+                      <button
+                        onClick={() => onUpdate({ rateHistory: account.rateHistory.filter(x => x.fromDate !== r.fromDate) })}
+                        className="text-muted-foreground hover:text-red-400 transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
 
@@ -2366,6 +2387,11 @@ function AccountForm({
   const [deposits, setDeposits] = useState<SavingsContribution[]>(
     initial?.contributions ?? []
   )
+  const [rateHistoryBsu, setRateHistoryBsu] = useState<RateHistoryEntry[]>(
+    initial?.rateHistory ?? [{ fromDate: initial?.openingDate ?? new Date().toISOString().slice(0, 10), rate: 6.05 }]
+  )
+  const [bsuNewFromDate, setBsuNewFromDate] = useState('')
+  const [bsuNewRate, setBsuNewRate] = useState('')
 
   const isBSU = type === 'BSU'
 
@@ -2440,7 +2466,7 @@ function AccountForm({
       accountNumber: accountNumber || undefined,
       birthYear: isBSU && birthYear ? parseInt(birthYear) : undefined,
       interestCreditFrequency: isBSU ? 'yearly' : interestFreq,
-      rateHistory: initial?.rateHistory ?? [{ fromDate: openingDate, rate: flatRate }],
+      rateHistory: isBSU ? rateHistoryBsu : (initial?.rateHistory ?? [{ fromDate: openingDate, rate: flatRate }]),
       tieredRates: effectiveTieredRates,
       bankPresetId: selectedPresetId !== 'manual' ? selectedPresetId : undefined,
       monthlyContribution: periods.length > 0 ? 0 : defaultMonthly,
@@ -2570,6 +2596,46 @@ function AccountForm({
                   <SelectItem value="yearly" className="text-xs">Årlig (31. des)</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+        )}
+
+        {/* Seksjon B2: Rentesats for BSU */}
+        {isBSU && (
+          <div className="space-y-2 border-t border-border/30 pt-3">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Rentesats</p>
+            <div className="space-y-1">
+              {[...rateHistoryBsu].sort((a, b) => b.fromDate.localeCompare(a.fromDate)).map((r) => (
+                <div key={r.fromDate} className="flex items-center gap-2 rounded border border-border/40 bg-muted/10 px-2 py-1.5 text-xs">
+                  <span className="flex-1 text-muted-foreground">{fmtDate(r.fromDate)}</span>
+                  <span className="font-mono">{r.rate.toFixed(2)} %</span>
+                  {rateHistoryBsu.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setRateHistoryBsu(prev => prev.filter(x => x.fromDate !== r.fromDate))}
+                      className="text-muted-foreground hover:text-red-400 transition-colors"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <Input type="date" className="h-7 text-xs w-32" value={bsuNewFromDate} onChange={(e) => setBsuNewFromDate(e.target.value)} placeholder="Dato" />
+              <Input type="number" step={0.01} className="h-7 text-xs w-20" placeholder="% rente" value={bsuNewRate} onChange={(e) => setBsuNewRate(e.target.value)} />
+              <button
+                type="button"
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => {
+                  if (!bsuNewFromDate || !bsuNewRate) return
+                  setRateHistoryBsu(prev => [...prev.filter(r => r.fromDate !== bsuNewFromDate), { fromDate: bsuNewFromDate, rate: parseFloat(bsuNewRate) }])
+                  setBsuNewFromDate('')
+                  setBsuNewRate('')
+                }}
+              >
+                <Plus className="h-3 w-3" /> Legg til
+              </button>
             </div>
           </div>
         )}
