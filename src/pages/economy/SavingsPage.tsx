@@ -1000,18 +1000,18 @@ function MånedsoversiktTable({
       <table className="border-collapse w-full min-w-max">
         <thead className="sticky top-0 z-10 bg-background backdrop-blur-none [&_th]:bg-background">
           {/* Row 1: Person groups */}
-          <tr className="border-b border-border/40">
-            <th className="sticky left-0 bg-background z-20 px-3 py-1 border-r border-border" />
-            <th colSpan={userCols} className="bg-background px-3 py-1 text-center border-r border-border text-xs font-bold tracking-wide text-primary/80 uppercase">
+          <tr>
+            <th className="sticky left-0 bg-background z-20 px-3 py-1 border-r border-border border-b border-border/40" />
+            <th colSpan={userCols} className="bg-background px-3 py-1 text-center border-r-2 border-r-primary/30 border-b-2 border-b-primary/40 text-xs font-bold tracking-wide text-primary/80 uppercase">
               Meg
             </th>
             {hasPartner && (
-              <th colSpan={partnerCols} className="bg-background px-3 py-1 text-center border-r border-border text-xs font-bold tracking-wide text-violet-400/80 uppercase">
-                Partner
+              <th colSpan={partnerCols} className="bg-background px-3 py-1 text-center border-r-2 border-r-violet-400/30 border-b-2 border-b-violet-400/40 text-xs font-bold tracking-wide text-violet-400/80 uppercase">
+                {partnerVeikart.partnerName ?? 'Partner'}
               </th>
             )}
-            <th colSpan={hasPartner ? 3 : 2} className="bg-background px-2 py-1 text-center border-r border-border text-xs font-bold tracking-wide text-red-400/60 uppercase">Gjeld</th>
-            <th colSpan={1 + (myAnnualIncome > 0 ? 1 : 0) + (hasPartner && partnerOnlyAnnualIncome > 0 ? 1 : 0)} className="bg-background" />
+            <th colSpan={hasPartner ? 4 : 2} className="bg-background px-2 py-1 text-center border-r-2 border-r-red-400/30 border-b-2 border-b-red-400/40 text-xs font-bold tracking-wide text-red-400/60 uppercase">Gjeld</th>
+            <th colSpan={1 + (myAnnualIncome > 0 ? 1 : 0) + (hasPartner && partnerOnlyAnnualIncome > 0 ? 1 : 0)} className="bg-background px-2 py-1 text-center border-b-2 border-b-green-400/40 text-xs font-bold tracking-wide text-green-400/60 uppercase">Kjøpekraft</th>
           </tr>
           {/* Row 2: Account names */}
           <tr className="border-b border-border">
@@ -1068,13 +1068,13 @@ function MånedsoversiktTable({
                 )}
               </th>
             ))}
-            <th className="bg-background px-3 py-1.5 text-right border-r border-border text-blue-400 font-semibold whitespace-nowrap">Total EK</th>
+            <th className="bg-background px-3 py-1.5 text-right border-l-2 border-l-red-400/30 border-r border-border text-blue-400 font-semibold whitespace-nowrap">Total EK</th>
             <th className="bg-background px-2 py-1.5 text-right border-r border-border text-red-400/50 font-semibold whitespace-nowrap">Meg</th>
-            {hasPartner && <th className="bg-background px-2 py-1.5 text-right border-r border-border text-red-400/50 font-semibold whitespace-nowrap">Partner</th>}
-            <th className="bg-background px-2 py-1.5 text-right border-r border-border text-red-400/70 font-semibold whitespace-nowrap">∑</th>
-            <th className="bg-background px-3 py-1.5 text-right border-r border-border text-green-400 font-semibold whitespace-nowrap">Samlet</th>
+            {hasPartner && <th className="bg-background px-2 py-1.5 text-right border-r border-border text-red-400/50 font-semibold whitespace-nowrap">{partnerVeikart.partnerName ?? 'Partner'}</th>}
+            <th className="bg-background px-2 py-1.5 text-right border-r-2 border-r-red-400/30 text-red-400/70 font-semibold whitespace-nowrap">∑</th>
+            <th className="bg-background px-3 py-1.5 text-right border-l-2 border-l-green-400/30 border-r border-border text-green-400 font-semibold whitespace-nowrap">Samlet</th>
             {myAnnualIncome > 0 && <th className="bg-background px-3 py-1.5 text-right border-r border-border text-green-400/70 font-semibold whitespace-nowrap">Meg</th>}
-            {hasPartner && partnerOnlyAnnualIncome > 0 && <th className="bg-background px-3 py-1.5 text-right text-violet-400/70 font-semibold whitespace-nowrap">Partner</th>}
+            {hasPartner && partnerOnlyAnnualIncome > 0 && <th className="bg-background px-3 py-1.5 text-right text-violet-400/70 font-semibold whitespace-nowrap">{partnerVeikart.partnerName ?? 'Partner'}</th>}
           </tr>
           {/* Row 3: Innskudd / Saldo sub-headers */}
           <tr className="border-b-2 border-border">
@@ -1111,9 +1111,11 @@ function MånedsoversiktTable({
                 </div>
               </th>
             ))}
+            <th className="bg-background px-3 py-1 border-l-2 border-l-red-400/30 border-r border-border" />
             <th className="bg-background px-3 py-1 border-r border-border" />
-            <th className="bg-background px-3 py-1 border-r border-border" />
-            <th className="bg-background px-3 py-1 border-r border-border" />
+            {hasPartner && <th className="bg-background px-3 py-1 border-r border-border" />}
+            <th className="bg-background px-3 py-1 border-r-2 border-r-red-400/30" />
+            <th className="bg-background px-3 py-1 border-l-2 border-l-green-400/30 border-r border-border" />
             {myAnnualIncome > 0 && <th className="bg-background px-3 py-1 border-r border-border" />}
             {hasPartner && partnerOnlyAnnualIncome > 0 && <th className="bg-background px-3 py-1" />}
           </tr>
@@ -1158,9 +1160,11 @@ function MånedsoversiktTable({
                 />
               </td>
             ))}
+            <td className="border-l-2 border-l-red-400/20 border-r border-border" />
             <td className="border-r border-border" />
-            <td className="border-r border-border" />
-            <td className="border-r border-border" />
+            {hasPartner && <td className="border-r border-border" />}
+            <td className="border-r-2 border-r-red-400/20" />
+            <td className="border-l-2 border-l-green-400/20 border-r border-border" />
             {myAnnualIncome > 0 && <td className="border-r border-border" />}
             {hasPartner && partnerOnlyAnnualIncome > 0 && <td />}
           </tr>
@@ -1175,54 +1179,84 @@ function MånedsoversiktTable({
                   {accMeta.map(acc => {
                     const ab = last.accountBalances.find(a => a.id === acc.id)!
                     const yearRente = Math.round(yearData.reduce((s, row) => s + (row.accountBalances.find(a => a.id === acc.id)?.interest ?? 0), 0))
+                    const yearInnskudd = Math.round(yearData.reduce((s, row) => s + (row.accountBalances.find(a => a.id === acc.id)?.contribution ?? 0), 0))
                     return (
                       <td key={acc.id} colSpan={2} className="border-r border-border p-0">
-                        <div className="flex">
-                          <span className="flex-1 px-3 py-2 text-right text-green-400/80 tabular-nums">
-                            {yearRente > 0 ? `+${yearRente.toLocaleString('no-NO')}` : '—'}
+                        <div className="flex items-baseline">
+                          <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
+                            {yearInnskudd > 0 ? yearInnskudd.toLocaleString('no-NO') : '—'}
                           </span>
-                          <span className="flex-1 px-3 py-2 text-right font-semibold whitespace-nowrap">{fmtNOK(ab.balance)}</span>
+                          <span className="flex-1 px-3 py-2 text-right font-semibold whitespace-nowrap flex items-baseline justify-end">
+                            <span>{fmtNOK(ab.balance)}</span>
+                            <span className="text-[10px] text-green-400/80 ml-1 min-w-[3.5rem] text-right shrink-0">
+                              {yearRente > 0 ? `(+${yearRente.toLocaleString('no-NO')})` : ''}
+                            </span>
+                          </span>
                         </div>
                       </td>
                     )
                   })}
                   {hasFond && (
                     <td colSpan={2} className="border-r border-border p-0">
-                      <div className="flex">
-                        <span className="flex-1 px-3 py-2 text-right text-green-400/80 tabular-nums">
-                          {(() => { const r = Math.round(yearData.reduce((s, row) => s + row.fondInterest, 0)); return r > 0 ? `+${r.toLocaleString('no-NO')}` : '—' })()}
-                        </span>
-                        <span className="flex-1 px-3 py-2 text-right text-teal-400 font-semibold whitespace-nowrap">{fmtNOK(last.fondBalance)}</span>
-                      </div>
+                      {(() => {
+                        const yearFondRente = Math.round(yearData.reduce((s, row) => s + row.fondInterest, 0))
+                        const yearFondInnskudd = Math.round(yearData.reduce((s, row) => s + row.fondContrib, 0))
+                        return (
+                          <div className="flex items-baseline">
+                            <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
+                              {yearFondInnskudd > 0 ? yearFondInnskudd.toLocaleString('no-NO') : '—'}
+                            </span>
+                            <span className="flex-1 px-3 py-2 text-right text-teal-400 font-semibold whitespace-nowrap flex items-baseline justify-end">
+                              <span>{fmtNOK(last.fondBalance)}</span>
+                              <span className="text-[10px] text-green-400/80 ml-1 min-w-[3.5rem] text-right shrink-0">
+                                {yearFondRente > 0 ? `(+${yearFondRente.toLocaleString('no-NO')})` : ''}
+                              </span>
+                            </span>
+                          </div>
+                        )
+                      })()}
                     </td>
                   )}
                   {hasPartner && hasBsu && (
                     <td colSpan={2} className="border-r border-border p-0">
-                      <div className="flex">
-                        <span className="flex-1 px-3 py-2 text-right text-muted-foreground">—</span>
-                        <span className="flex-1 px-3 py-2 text-right text-violet-300 font-semibold whitespace-nowrap">{fmtNOK(last.partnerBsuBalance)}</span>
-                      </div>
+                      {(() => {
+                        const yearBsuInnskudd = Math.round(yearData.reduce((s, row) => s + row.partnerBsuContrib, 0))
+                        return (
+                          <div className="flex items-baseline">
+                            <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
+                              {yearBsuInnskudd > 0 ? yearBsuInnskudd.toLocaleString('no-NO') : '—'}
+                            </span>
+                            <span className="flex-1 px-3 py-2 text-right text-violet-300 font-semibold whitespace-nowrap">{fmtNOK(last.partnerBsuBalance)}</span>
+                          </div>
+                        )
+                      })()}
                     </td>
                   )}
                   {partnerAccMeta.map(acc => {
                     const lastAb = last.partnerAccBalances.find(a => a.id === acc.id)!
                     const yearRente = Math.round(yearData.reduce((s, r) => s + (r.partnerAccBalances.find(a => a.id === acc.id)?.interest ?? 0), 0))
+                    const yearInnskudd = Math.round(yearData.reduce((s, r) => s + (r.partnerAccBalances.find(a => a.id === acc.id)?.contribution ?? 0), 0))
                     return (
                       <td key={acc.id} colSpan={2} className="border-r border-border p-0">
-                        <div className="flex">
-                          <span className="flex-1 px-3 py-2 text-right text-green-400/80 tabular-nums">
-                            {yearRente > 0 ? `+${yearRente.toLocaleString('no-NO')}` : '—'}
+                        <div className="flex items-baseline">
+                          <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
+                            {yearInnskudd > 0 ? yearInnskudd.toLocaleString('no-NO') : '—'}
                           </span>
-                          <span className="flex-1 px-3 py-2 text-right text-violet-300 font-semibold whitespace-nowrap">{fmtNOK(lastAb?.balance ?? 0)}</span>
+                          <span className="flex-1 px-3 py-2 text-right text-violet-300 font-semibold whitespace-nowrap flex items-baseline justify-end">
+                            <span>{fmtNOK(lastAb?.balance ?? 0)}</span>
+                            <span className="text-[10px] text-green-400/80 ml-1 min-w-[3.5rem] text-right shrink-0">
+                              {yearRente > 0 ? `(+${yearRente.toLocaleString('no-NO')})` : ''}
+                            </span>
+                          </span>
                         </div>
                       </td>
                     )
                   })}
-                  <td className="px-3 py-2 text-right font-mono text-blue-400 font-semibold border-r border-border whitespace-nowrap">{fmtNOK(last.totalEK)}</td>
+                  <td className="px-3 py-2 text-right font-mono text-blue-400 font-semibold border-l-2 border-l-red-400/20 border-r border-border whitespace-nowrap">{fmtNOK(last.totalEK)}</td>
                   <td className="px-2 py-2 text-right font-mono text-red-400/50 font-semibold border-r border-border whitespace-nowrap">{last.myDebtBalance > 0 ? '-' + fmtNOK(last.myDebtBalance) : '—'}</td>
                   {hasPartner && <td className="px-2 py-2 text-right font-mono text-red-400/50 font-semibold border-r border-border whitespace-nowrap">{last.partnerDebtBalance > 0 ? '-' + fmtNOK(last.partnerDebtBalance) : '—'}</td>}
-                  <td className="px-2 py-2 text-right font-mono text-red-400/70 font-semibold border-r border-border whitespace-nowrap">{last.debtBalance > 0 ? '-' + fmtNOK(last.debtBalance) : '—'}</td>
-                  <td className="px-3 py-2 text-right font-mono text-green-400 font-semibold border-r border-border whitespace-nowrap">{last.maxKjøpesum > 0 ? fmtNOK(last.maxKjøpesum) : '—'}</td>
+                  <td className="px-2 py-2 text-right font-mono text-red-400/70 font-semibold border-r-2 border-r-red-400/30 whitespace-nowrap">{last.debtBalance > 0 ? '-' + fmtNOK(last.debtBalance) : '—'}</td>
+                  <td className="px-3 py-2 text-right font-mono text-green-400 font-semibold border-l-2 border-l-green-400/20 border-r border-border whitespace-nowrap">{last.maxKjøpesum > 0 ? fmtNOK(last.maxKjøpesum) : '—'}</td>
                   {myAnnualIncome > 0 && <td className="px-3 py-2 text-right font-mono text-green-400/70 font-semibold border-r border-border whitespace-nowrap">{last.maxKjøpesumMeg > 0 ? fmtNOK(last.maxKjøpesumMeg) : '—'}</td>}
                   {hasPartner && partnerOnlyAnnualIncome > 0 && <td className="px-3 py-2 text-right font-mono text-violet-400/70 font-semibold whitespace-nowrap">{last.maxKjøpesumPartner > 0 ? fmtNOK(last.maxKjøpesumPartner) : '—'}</td>}
                 </tr>
@@ -1318,11 +1352,11 @@ function MånedsoversiktTable({
                           </div>
                         </td>
                     ))}
-                    <td className="px-3 py-1 text-right font-mono text-blue-300 border-r border-border whitespace-nowrap">{fmtNOK(row.totalEK)}</td>
+                    <td className="px-3 py-1 text-right font-mono text-blue-300 border-l-2 border-l-red-400/20 border-r border-border whitespace-nowrap">{fmtNOK(row.totalEK)}</td>
                     <td className="px-2 py-1 text-right font-mono text-red-400/40 border-r border-border whitespace-nowrap">{row.myDebtBalance > 0 ? '-' + fmtNOK(row.myDebtBalance) : '—'}</td>
                     {hasPartner && <td className="px-2 py-1 text-right font-mono text-red-400/40 border-r border-border whitespace-nowrap">{row.partnerDebtBalance > 0 ? '-' + fmtNOK(row.partnerDebtBalance) : '—'}</td>}
-                    <td className="px-2 py-1 text-right font-mono text-red-400/50 border-r border-border whitespace-nowrap">{row.debtBalance > 0 ? '-' + fmtNOK(row.debtBalance) : '—'}</td>
-                    <td className="px-3 py-1 text-right font-mono text-green-300/60 border-r border-border whitespace-nowrap">{row.maxKjøpesum > 0 ? fmtNOK(row.maxKjøpesum) : '—'}</td>
+                    <td className="px-2 py-1 text-right font-mono text-red-400/50 border-r-2 border-r-red-400/30 whitespace-nowrap">{row.debtBalance > 0 ? '-' + fmtNOK(row.debtBalance) : '—'}</td>
+                    <td className="px-3 py-1 text-right font-mono text-green-300/60 border-l-2 border-l-green-400/20 border-r border-border whitespace-nowrap">{row.maxKjøpesum > 0 ? fmtNOK(row.maxKjøpesum) : '—'}</td>
                     {myAnnualIncome > 0 && <td className="px-3 py-1 text-right font-mono text-green-300/40 border-r border-border whitespace-nowrap">{row.maxKjøpesumMeg > 0 ? fmtNOK(row.maxKjøpesumMeg) : '—'}</td>}
                     {hasPartner && partnerOnlyAnnualIncome > 0 && <td className="px-3 py-1 text-right font-mono text-violet-300/40 whitespace-nowrap">{row.maxKjøpesumPartner > 0 ? fmtNOK(row.maxKjøpesumPartner) : '—'}</td>}
                   </tr>

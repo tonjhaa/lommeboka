@@ -743,6 +743,7 @@ export interface PartnerFondHolding {
 /** Partners tall brukt i Veikart og Dashboard */
 export interface PartnerVeikart {
   enabled: boolean
+  partnerName?: string         // visningsnavn for partner (f.eks. "Ane")
   annualIncome: number         // årslønn (brutto) — brukes til låneevne
   annualNetIncome: number      // årslønn (netto) — brukes til sparekraft
   equity: number               // legacy — erstattet av accounts
