@@ -83,6 +83,7 @@ export function BudgetPage() {
     undoBudget,
     removeContribution,
     updateSavingsAccount: updateSavingsAccountInBudget,
+    removeWithdrawal,
   } = useActiveEconomyStore()
 
   const now = new Date()
@@ -705,9 +706,10 @@ export function BudgetPage() {
         const acc = savingsAccounts.find(a => a.id === contribDialog.accId)
         if (!acc) return null
         const allContribs = [...(acc.contributions ?? [])].sort((a, b) => b.date.localeCompare(a.date))
+        const allWithdrawals = [...(acc.withdrawals ?? [])].sort((a, b) => b.date.localeCompare(a.date))
         const allPeriods = [...(acc.contributionPeriods ?? [])].sort((a, b) =>
           (b.fromDate ?? '').localeCompare(a.fromDate ?? ''))
-        const isEmpty = allContribs.length === 0 && allPeriods.length === 0
+        const isEmpty = allContribs.length === 0 && allWithdrawals.length === 0 && allPeriods.length === 0
         return (
           <Dialog open onOpenChange={() => setContribDialog(null)}>
             <DialogContent className="max-w-sm">
@@ -738,6 +740,23 @@ export function BudgetPage() {
                         }}
                         className="shrink-0 text-muted-foreground hover:text-red-400 transition-colors"
                         title="Slett periode"
+                      ><X className="h-4 w-4" /></button>
+                    </div>
+                  ))}
+                  {allWithdrawals.length > 0 && (
+                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide pt-1">Uttak</p>
+                  )}
+                  {allWithdrawals.map(w => (
+                    <div key={w.id} className="flex items-center justify-between gap-3 rounded border border-border bg-muted/10 px-3 py-2">
+                      <div className="min-w-0 text-xs">
+                        <span className="font-mono font-medium">{Math.abs(w.amount).toLocaleString('no-NO')} kr</span>
+                        <span className="text-muted-foreground ml-2">{w.date}</span>
+                        {w.note && <p className="text-muted-foreground text-[11px] mt-0.5">{w.note}</p>}
+                      </div>
+                      <button
+                        onClick={() => { removeWithdrawal(acc.id, w.id); setContribDialog(null) }}
+                        className="shrink-0 text-muted-foreground hover:text-red-400 transition-colors"
+                        title="Slett uttak"
                       ><X className="h-4 w-4" /></button>
                     </div>
                   ))}
