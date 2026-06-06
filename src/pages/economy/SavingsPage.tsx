@@ -733,7 +733,7 @@ function MånedsoversiktTable({
   const myAnnualIncome = ((profile?.baseMonthly ?? 0) + (profile?.fixedAdditions?.reduce((s, a) => s + a.amount, 0) ?? 0)) * 12
   const partnerOnlyAnnualIncome = hasPartner ? partnerVeikart.annualIncome : 0
   const annualIncome = myAnnualIncome + partnerOnlyAnnualIncome
-  const salaryGrowthPct = contribOverrides['salary-growth'] ?? 3
+  const salaryGrowthPct = 3
 
   const { accMeta, partnerAccMeta, monthRows } = useMemo(() => {
     const nowISO = now.toISOString().split('T')[0]
@@ -864,7 +864,7 @@ function MånedsoversiktTable({
             ? (partnerVeikart.debts ?? []).reduce((s, d) => s + d.currentBalance, 0)
             : partnerVeikart.debt ?? 0)
         : 0
-      const partnerDebt = 'partner-debt' in contribOverrides ? contribOverrides['partner-debt'] : partnerDebtBase
+      const partnerDebt = partnerDebtBase
       const myDebtBalance = Math.round(debts
         .filter(d => d.status !== 'nedbetalt')
         .reduce((s, d) => s + projectDebtBalance(d, i + 1), 0))
@@ -951,38 +951,6 @@ function MånedsoversiktTable({
               <span className="text-foreground font-medium">{Math.round(myAnnualIncome / 1000)}k</span>
             </span>
           )}
-          <span className="flex items-center gap-1">
-            <span>Lønnsvekst:</span>
-            <input
-              type="number"
-              value={salaryGrowthPct}
-              onChange={e => setSavingsOverride('salary-growth', parseFloat(e.target.value) || 0)}
-              className="w-10 bg-muted/30 text-right rounded px-1 py-0.5 text-xs outline-none border border-border focus:border-primary"
-            />
-            <span>%/år</span>
-          </span>
-          {hasPartner && (() => {
-            const debtBase = (partnerVeikart.debts ?? []).length > 0
-              ? (partnerVeikart.debts ?? []).reduce((s, d) => s + d.currentBalance, 0)
-              : partnerVeikart.debt ?? 0
-            return (
-              <span className="flex items-center gap-1 text-violet-400/80">
-                <span>Partner gjeld:</span>
-                <input
-                  type="number"
-                  min={0}
-                  step={10000}
-                  value={contribOverrides['partner-debt'] ?? debtBase}
-                  onChange={e => {
-                    const val = parseFloat(e.target.value) || 0
-                    setSavingsOverride('partner-debt', val)
-                  }}
-                  className="w-20 bg-muted/30 text-right rounded px-1 py-0.5 text-xs outline-none border border-border focus:border-primary text-violet-300"
-                />
-                <span>kr</span>
-              </span>
-            )
-          })()}
         </span>
         {Object.keys(contribOverrides).length > 0 && (
           <button
