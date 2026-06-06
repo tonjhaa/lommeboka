@@ -1368,7 +1368,7 @@ function DataRow({
               key={`${meta.month}-fak`}
               colSpan={2}
               className={cn(
-                'px-2 py-1.5 text-right border-r border-border/40 font-medium tabular-nums relative',
+                'px-2 py-1.5 text-right border-r border-border/40 font-medium tabular-nums relative group/cell',
                 isHidden ? 'line-through text-muted-foreground/50' :
                   actual < 0 ? 'text-red-400' : actual > 0 ? 'text-foreground' : 'text-muted-foreground',
                 !isHidden && bigDeviation && deviationDir === 'over' && 'bg-emerald-500/8',
@@ -1379,16 +1379,14 @@ function DataRow({
                 ? `Avvik fra budsjett: ${deviation > 0 ? '+' : ''}${Math.round(deviation).toLocaleString('no-NO')} kr (${deviationPct >= 0.01 ? (deviationPct * 100).toFixed(0) + '%' : '<1%'})`
                 : undefined}
             >
-              {onActualCellClick && actual !== 0
-                ? <span className="flex items-center justify-end gap-1">
-                    <span>{fmtNOK(actual)}</span>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onActualCellClick(meta.month) }}
-                      className="shrink-0 text-muted-foreground/50 hover:text-red-400 transition-colors"
-                      title="Slett innskudd"
-                    ><X className="h-3 w-3" /></button>
-                  </span>
-                : fmtNOK(actual)}
+              {fmtNOK(actual)}
+              {onActualCellClick && actual !== 0 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onActualCellClick(meta.month) }}
+                  className="absolute right-0.5 top-1/2 -translate-y-1/2 opacity-0 group-hover/cell:opacity-60 hover:!opacity-100 text-muted-foreground hover:text-red-400 transition-opacity p-0.5"
+                  title="Administrer innskudd"
+                ><X className="h-2.5 w-2.5" /></button>
+              )}
             </td>
           )
         }
