@@ -1022,7 +1022,8 @@ function MånedsoversiktTable({
                 {partnerVeikart.partnerName ?? 'Partner'}
               </th>
             )}
-            <th colSpan={hasPartner ? 4 : 2} className="bg-background px-2 py-1 text-center border-r-2 border-r-red-400/30 border-b-2 border-b-red-400/40 text-xs font-bold tracking-wide text-red-400/60 uppercase">Gjeld</th>
+            <th className="bg-background px-2 py-1 text-center border-b-2 border-b-blue-400/30 text-xs font-bold tracking-wide text-blue-400/40 uppercase">EK</th>
+            <th colSpan={hasPartner ? 3 : 2} className="bg-background px-2 py-1 text-center border-r-2 border-r-red-400/30 border-b-2 border-b-red-400/40 text-xs font-bold tracking-wide text-red-400/60 uppercase">Gjeld</th>
             <th colSpan={1 + (myAnnualIncome > 0 ? 1 : 0) + (hasPartner && partnerOnlyAnnualIncome > 0 ? 1 : 0)} className="bg-background px-2 py-1 text-center border-b-2 border-b-green-400/40 text-xs font-bold tracking-wide text-green-400/60 uppercase">Kjøpekraft</th>
           </tr>
           {/* Row 2: Account names */}
