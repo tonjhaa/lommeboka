@@ -767,22 +767,24 @@ function MånedsoversiktTable({
         let bal: number
         let interest: number
         {
-          const effectiveRate = (acc.tieredRates?.length && !(`rate-${acc.id}` in contribOverrides))
-            ? getEffectiveRateFromTiers(acc.tieredRates, bal0)
-            : acc.rate
-          const monthlyInterest = bal0 * effectiveRate / 100 / 12
-          interest = monthlyInterest
           if (acc.type === 'BSU') {
             const room = Math.max(0, BSU_MAX_TOTAL - bal0)
             contrib = Math.min(contrib, room)
           }
-          // Renter beregnes månedlig, krediteres i januar (BSU og vanlige kontoer)
-          if (month === 1) {
+          // Trinnvis rente: beregn effektiv rente mot løpende saldo inkl. påløpte renter
+          const effectiveBal = bal0 + accruedInterest[j]
+          const effectiveRate = (acc.tieredRates?.length && !(`rate-${acc.id}` in contribOverrides))
+            ? getEffectiveRateFromTiers(acc.tieredRates, effectiveBal)
+            : acc.rate
+          const monthlyInterest = effectiveBal * effectiveRate / 100 / 12
+          interest = monthlyInterest
+          accruedInterest[j] += monthlyInterest
+          // Norsk bankstandard: renter krediteres 31. desember
+          if (month === 12) {
             bal = bal0 + accruedInterest[j] + contrib
-            accruedInterest[j] = monthlyInterest
+            accruedInterest[j] = 0
           } else {
             bal = bal0 + contrib
-            accruedInterest[j] += monthlyInterest
           }
         }
         runningBals[j] = bal
@@ -1050,7 +1052,7 @@ function MånedsoversiktTable({
             {accMeta.map(acc => (
               <th key={acc.id} colSpan={2} className="border-r border-border p-0">
                 <div className="flex">
-                  <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal">Innskudd</span>
+                  <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal" title="Innskudd per måned / Renteopptjening per år">Innskudd</span>
                   <span className="flex-1 px-3 py-1 text-right font-medium">Saldo</span>
                 </div>
               </th>
@@ -1058,7 +1060,7 @@ function MånedsoversiktTable({
             {hasFond && (
               <th colSpan={2} className="border-r border-border p-0">
                 <div className="flex">
-                  <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal">Innskudd</span>
+                  <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal" title="Innskudd per måned / Renteopptjening per år">Innskudd</span>
                   <span className="flex-1 px-3 py-1 text-right text-teal-400 font-medium">Saldo</span>
                 </div>
               </th>
@@ -1066,7 +1068,7 @@ function MånedsoversiktTable({
             {hasPartner && hasBsu && (
               <th colSpan={2} className="border-r border-border p-0">
                 <div className="flex">
-                  <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal">Innskudd</span>
+                  <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal" title="Innskudd per måned / Renteopptjening per år">Innskudd</span>
                   <span className="flex-1 px-3 py-1 text-right text-violet-300 font-medium">Saldo</span>
                 </div>
               </th>
@@ -1074,7 +1076,7 @@ function MånedsoversiktTable({
             {partnerAccMeta.map(acc => (
               <th key={acc.id} colSpan={2} className="border-r border-border p-0">
                 <div className="flex">
-                  <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal">Innskudd</span>
+                  <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal" title="Innskudd per måned / Renteopptjening per år">Innskudd</span>
                   <span className="flex-1 px-3 py-1 text-right text-violet-300 font-medium">Saldo</span>
                 </div>
               </th>
@@ -1142,11 +1144,13 @@ function MånedsoversiktTable({
                   <td className="sticky left-0 bg-muted/60 px-3 py-2 font-bold text-sm border-r border-border">{year}</td>
                   {accMeta.map(acc => {
                     const ab = last.accountBalances.find(a => a.id === acc.id)!
-                    const yearInnskudd = yearData.reduce((s, row) => s + (row.accountBalances.find(a => a.id === acc.id)?.contribution ?? 0), 0)
+                    const yearRente = Math.round(yearData.reduce((s, row) => s + (row.accountBalances.find(a => a.id === acc.id)?.interest ?? 0), 0))
                     return (
                       <td key={acc.id} colSpan={2} className="border-r border-border p-0">
                         <div className="flex">
-                          <span className="flex-1 px-3 py-2 text-right text-muted-foreground">{Math.round(yearInnskudd).toLocaleString('no-NO')}</span>
+                          <span className="flex-1 px-3 py-2 text-right text-green-400/80 tabular-nums">
+                            {yearRente > 0 ? `+${yearRente.toLocaleString('no-NO')}` : '—'}
+                          </span>
                           <span className="flex-1 px-3 py-2 text-right font-semibold whitespace-nowrap">{fmtNOK(ab.balance)}</span>
                         </div>
                       </td>
@@ -1155,8 +1159,8 @@ function MånedsoversiktTable({
                   {hasFond && (
                     <td colSpan={2} className="border-r border-border p-0">
                       <div className="flex">
-                        <span className="flex-1 px-3 py-2 text-right text-muted-foreground">
-                          {yearData.reduce((s, r) => s + r.fondContrib, 0).toLocaleString('no-NO')}
+                        <span className="flex-1 px-3 py-2 text-right text-green-400/80 tabular-nums">
+                          {(() => { const r = Math.round(yearData.reduce((s, row) => s + row.fondInterest, 0)); return r > 0 ? `+${r.toLocaleString('no-NO')}` : '—' })()}
                         </span>
                         <span className="flex-1 px-3 py-2 text-right text-teal-400 font-semibold whitespace-nowrap">{fmtNOK(last.fondBalance)}</span>
                       </div>
@@ -1165,20 +1169,19 @@ function MånedsoversiktTable({
                   {hasPartner && hasBsu && (
                     <td colSpan={2} className="border-r border-border p-0">
                       <div className="flex">
-                        <span className="flex-1 px-3 py-2 text-right text-muted-foreground">
-                          {yearData.reduce((s, r) => s + r.partnerBsuContrib, 0).toLocaleString('no-NO')}
-                        </span>
+                        <span className="flex-1 px-3 py-2 text-right text-muted-foreground">—</span>
                         <span className="flex-1 px-3 py-2 text-right text-violet-300 font-semibold whitespace-nowrap">{fmtNOK(last.partnerBsuBalance)}</span>
                       </div>
                     </td>
                   )}
                   {partnerAccMeta.map(acc => {
                     const lastAb = last.partnerAccBalances.find(a => a.id === acc.id)!
+                    const yearRente = Math.round(yearData.reduce((s, r) => s + (r.partnerAccBalances.find(a => a.id === acc.id)?.interest ?? 0), 0))
                     return (
                       <td key={acc.id} colSpan={2} className="border-r border-border p-0">
                         <div className="flex">
-                          <span className="flex-1 px-3 py-2 text-right text-muted-foreground">
-                            {yearData.reduce((s, r) => s + (r.partnerAccBalances.find(a => a.id === acc.id)?.contribution ?? 0), 0).toLocaleString('no-NO')}
+                          <span className="flex-1 px-3 py-2 text-right text-green-400/80 tabular-nums">
+                            {yearRente > 0 ? `+${yearRente.toLocaleString('no-NO')}` : '—'}
                           </span>
                           <span className="flex-1 px-3 py-2 text-right text-violet-300 font-semibold whitespace-nowrap">{fmtNOK(lastAb?.balance ?? 0)}</span>
                         </div>
