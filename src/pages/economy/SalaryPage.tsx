@@ -233,6 +233,42 @@ export function SalaryPage() {
 
       <div className="px-6 py-5 space-y-5 max-w-[1400px]">
 
+        {/* ── KPI-RAD ── */}
+        {profile && (() => {
+          const grunnlonn = latestSlipRecord?.slipData?.maanedslonn ?? profile.baseMonthly
+          const brutto = latestSlipRecord?.slipData?.bruttoSum
+            ?? (grunnlonn + profile.fixedAdditions.reduce((s, a) => s + Math.max(0, a.amount), 0))
+          const netto = latestSlipRecord?.slipData?.nettoUtbetalt ?? latestSlipRecord?.nettoUtbetalt
+          return (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="rounded-lg border border-border bg-card px-4 py-3">
+                <p className="text-[11px] text-muted-foreground mb-0.5">Grunnlønn/mnd</p>
+                <p className="text-lg font-semibold font-mono tabular-nums">{Math.round(profile.baseMonthly).toLocaleString('no-NO')} kr</p>
+                <p className="text-[11px] text-muted-foreground">{Math.round(profile.baseMonthly * 12).toLocaleString('no-NO')} kr/år</p>
+              </div>
+              <div className="rounded-lg border border-border bg-card px-4 py-3">
+                <p className="text-[11px] text-muted-foreground mb-0.5">Brutto/mnd</p>
+                <p className="text-lg font-semibold font-mono tabular-nums">{Math.round(brutto).toLocaleString('no-NO')} kr</p>
+                <p className="text-[11px] text-muted-foreground">{Math.round(brutto * 12).toLocaleString('no-NO')} kr/år</p>
+              </div>
+              {netto != null && netto > 0 && (
+                <div className="rounded-lg border border-border bg-card px-4 py-3">
+                  <p className="text-[11px] text-muted-foreground mb-0.5">Netto/mnd</p>
+                  <p className="text-lg font-semibold font-mono tabular-nums text-green-400">{Math.round(netto).toLocaleString('no-NO')} kr</p>
+                  <p className="text-[11px] text-muted-foreground">{Math.round(netto * 12).toLocaleString('no-NO')} kr/år</p>
+                </div>
+              )}
+              {latestSlipRecord?.slipData?.skattetrekk != null && (
+                <div className="rounded-lg border border-border bg-card px-4 py-3">
+                  <p className="text-[11px] text-muted-foreground mb-0.5">Skattetrekk/mnd</p>
+                  <p className="text-lg font-semibold font-mono tabular-nums text-red-400">{Math.round(latestSlipRecord.slipData.skattetrekk).toLocaleString('no-NO')} kr</p>
+                  <p className="text-[11px] text-muted-foreground">{currentTaxRate != null ? `${currentTaxRate.toFixed(1)} % effektiv sats` : ''}</p>
+                </div>
+              )}
+            </div>
+          )
+        })()}
+
         {/* ── WATERFALL HERO ── */}
         <SalaryWaterfallHero
           profile={profile}
