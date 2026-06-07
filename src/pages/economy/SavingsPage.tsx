@@ -993,6 +993,28 @@ function MånedsoversiktTable({
         {!partnerVeikart.enabled && (
           <span className="text-muted-foreground italic ml-1">Partner ikke aktivert — aktiver i Innstillinger</span>
         )}
+        {/* TEMP DEBUG — fjernes etterpå */}
+        {hasPartner && (
+          <button
+            onClick={() => {
+              const ps = usePartnerStore.getState()
+              const overrideKeys = Object.keys(ps.savingsOverrides ?? {})
+              const acc0 = partnerVeikart.accounts?.[0]
+              console.log('=== PARTNER DEBUG ===')
+              console.log('usePartnerStore.savingsOverrides keys:', overrideKeys.slice(0, 20))
+              console.log('partnerVeikart.accounts[0].id:', acc0?.id)
+              console.log('partnerVeikart.accounts[0].monthlyOverrides:', acc0?.monthlyOverrides)
+              console.log('partnerVeikart.accounts[0].fromDate:', acc0?.fromDate)
+              console.log('partnerVeikart.accounts[0].monthlyContribution:', acc0?.monthlyContribution)
+              const matchingKeys = overrideKeys.filter(k => acc0?.id && k.startsWith(acc0.id + '-'))
+              console.log('Matching savingsOverrides keys for acc0:', matchingKeys)
+              alert(`acc0.id: ${acc0?.id?.slice(0,8)}...\nOverride keys (total ${overrideKeys.length}): ${overrideKeys.slice(0,5).join(', ')}\nMatching: ${matchingKeys.join(', ')}\nmonthlyOverrides: ${JSON.stringify(acc0?.monthlyOverrides)}`)
+            }}
+            className="px-2 py-1 rounded border border-purple-500/40 text-purple-400 text-[10px] hover:bg-purple-500/10"
+          >
+            🔍 Debug
+          </button>
+        )}
         <span className="ml-auto flex items-center gap-2 text-muted-foreground">
           {myAnnualIncome > 0 && (
             <span className="flex items-center gap-1">
