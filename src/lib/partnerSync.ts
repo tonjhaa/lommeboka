@@ -1,5 +1,7 @@
 import { supabase } from './supabase'
 import { usePartnerStore } from '@/application/usePartnerStore'
+import { useEconomyStore } from '@/application/useEconomyStore'
+import { buildPartnerVeikartPatch } from '@/domain/economy/syncPartnerToVeikart'
 
 // ----------------------------------------------------------------
 // Types
@@ -129,9 +131,21 @@ export async function loadPartnerData(partnerId: string): Promise<object | null>
   return data?.economy_data ?? null
 }
 
-/** Importerer partnerdata inn i usePartnerStore. */
+/** Importerer partnerdata inn i usePartnerStore og oppdaterer partnerVeikart automatisk. */
 export function importPartnerDataToStore(data: object): void {
   usePartnerStore.getState().importData(JSON.stringify(data))
+  // Synk partnerVeikart umiddelbart etter at data er lastet inn (ikke vent på bruker-klikk)
+  const ps = usePartnerStore.getState()
+  const existing = useEconomyStore.getState().partnerVeikart
+  const patch = buildPartnerVeikartPatch(
+    ps.savingsAccounts,
+    ps.debts,
+    ps.profile,
+    existing,
+    new Date(),
+    ps.fondPortfolio,
+  )
+  useEconomyStore.getState().setPartnerVeikart({ ...existing, ...patch })
 }
 
 /** Abonnerer på sanntidsendringer i partnerens data. Returnerer unsubscribe-funksjon. */
