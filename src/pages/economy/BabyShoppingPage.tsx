@@ -173,7 +173,9 @@ function usePriceChecker(
         if (abortRef.current) break
         const item = candidates[i]
         try {
-          const res = await fetch(`/api/find-best-price?name=${encodeURIComponent(item.name)}`)
+          const params = new URLSearchParams({ name: item.name })
+          if (item.storeUrl) params.set('storeUrl', item.storeUrl)
+          const res = await fetch(`/api/find-best-price?${params}`)
           const data = await res.json()
           const results: { store: string; price: number; url: string }[] = data.results ?? []
           const best = results.find(r => r.price > 0)
@@ -504,6 +506,7 @@ function ItemDialog({ item, isNew, categories, onSave, onClose, onDelete }: {
   const [scrapeError, setScrapeError] = useState('')
   const [findingPrice, setFindingPrice] = useState(false)
   const [priceResults, setPriceResults] = useState<{ store: string; price: number; url: string }[]>([])
+  const [searchLinks, setSearchLinks] = useState<{ store: string; price: number; url: string }[]>([])
 
   useEffect(() => { setForm(item) }, [item])
 
@@ -543,12 +546,16 @@ function ItemDialog({ item, isNew, categories, onSave, onClose, onDelete }: {
     if (!form.name) return
     setFindingPrice(true)
     setPriceResults([])
+    setSearchLinks([])
     try {
-      const res = await fetch(`/api/find-best-price?name=${encodeURIComponent(form.name)}`)
+      const params = new URLSearchParams({ name: form.name })
+      if (form.storeUrl) params.set('storeUrl', form.storeUrl)
+      const res = await fetch(`/api/find-best-price?${params}`)
       const data = await res.json()
       setPriceResults(data.results ?? [])
+      setSearchLinks(data.searchLinks ?? [])
     } catch {
-      setPriceResults([])
+      setSearchLinks([])
     } finally {
       setFindingPrice(false)
     }
@@ -647,21 +654,32 @@ function ItemDialog({ item, isNew, categories, onSave, onClose, onDelete }: {
                 Finn beste pris
               </Button>
             </div>
-            {findingPrice && <p className="text-[11px] text-muted-foreground">Søker på norske nettbutikker...</p>}
+            {findingPrice && <p className="text-[11px] text-muted-foreground">Henter nåværende pris...</p>}
+            {/* Current price from saved store URL */}
             {priceResults.length > 0 && (
               <div className="rounded-md border border-border divide-y divide-border overflow-hidden">
+                <p className="px-3 py-1.5 text-[10px] font-medium text-muted-foreground bg-muted/20 uppercase tracking-wide">Nåværende pris</p>
                 {priceResults.map((r, i) => (
-                  <button
-                    key={i}
-                    onClick={() => pickPrice(r)}
-                    className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-muted/40 transition-colors text-left"
-                  >
+                  <button key={i} onClick={() => pickPrice(r)} className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-muted/40 transition-colors text-left">
                     <span className="text-foreground">{r.store}</span>
-                    <span className="font-mono font-medium text-primary ml-4 shrink-0">
-                      {r.price > 0 ? `${r.price.toLocaleString('no-NO')} kr` : 'Se pris'}
-                    </span>
+                    <span className="font-mono font-medium text-primary ml-4 shrink-0">{r.price > 0 ? `${r.price.toLocaleString('no-NO')} kr` : 'Se pris'}</span>
                   </button>
                 ))}
+              </div>
+            )}
+            {/* Search links for manual price comparison */}
+            {searchLinks.length > 0 && (
+              <div className="rounded-md border border-border overflow-hidden">
+                <p className="px-3 py-1.5 text-[10px] font-medium text-muted-foreground bg-muted/20 uppercase tracking-wide">Sammenlign selv</p>
+                <div className="divide-y divide-border/50">
+                  {searchLinks.map((r, i) => (
+                    <a key={i} href={r.url} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center justify-between px-3 py-2 text-xs hover:bg-muted/40 transition-colors">
+                      <span className="text-foreground">{r.store}</span>
+                      <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                    </a>
+                  ))}
+                </div>
               </div>
             )}
           </div>
