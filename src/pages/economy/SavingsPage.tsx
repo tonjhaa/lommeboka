@@ -764,7 +764,8 @@ function MånedsoversiktTable({
       .sort((a, b) => b.year !== a.year ? b.year - a.year : b.month - a.month)
     return slips[0]?.slipData?.maanedslonn ?? 0
   })()
-  const myAnnualIncome = (derivedBaseMonthly + (profile?.fixedAdditions?.reduce((s, a) => s + a.amount, 0) ?? 0)) * 12
+  // Brutto årslønn uten tidsbegrensede tillegg — kun grunnlønn + faste (ikke-tidsbegrensede) tillegg
+  const myAnnualIncome = (derivedBaseMonthly + (profile?.fixedAdditions?.filter(a => !a.isTemporary).reduce((s, a) => s + a.amount, 0) ?? 0)) * 12
   const salaryNeedsUpdate = !profile || profile.baseMonthly === 0
   const partnerOnlyAnnualIncome = hasPartner ? partnerVeikart.annualIncome : 0
   const annualIncome = myAnnualIncome + partnerOnlyAnnualIncome
