@@ -378,12 +378,9 @@ function ItemDialog({ item, isNew, categories, onSave, onClose, onDelete }: {
       const data = await res.json()
       if (data.error) { setScrapeError('Kunne ikke hente produktinfo'); return }
       const patch: Partial<BabyShoppingItem> = {}
-      if (data.name) {
-        const clean = data.name.replace(/\s*[-|–]\s*.+$/, '').trim()
-        if (!form.name) patch.name = clean
-      }
-      if (data.price && !form.budgeted) patch.budgeted = data.price
-      if (data.category && form.category === 'Annet') patch.category = data.category
+      if (data.name) patch.name = data.name.replace(/\s*[-|–]\s*.+$/, '').trim()
+      if (data.price) patch.budgeted = data.price
+      if (data.category) patch.category = data.category
       setForm(f => ({ ...f, ...patch }))
       if (!data.name && !data.price) setScrapeError('Fant ikke produktinfo på siden')
     } catch {
