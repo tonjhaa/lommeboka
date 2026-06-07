@@ -52,7 +52,7 @@ const PartnerPage = lazyWithRetry(() =>
   import('@/pages/economy/PartnerPage').then((m) => ({ default: m.PartnerPage }))
 )
 const IVFPageTop = lazyWithRetry(() =>
-  import('@/pages/economy/IVFPage').then((m) => ({ default: m.IVFPage }))
+  import('@/pages/economy/ProsjektPage').then((m) => ({ default: m.ProsjektPage }))
 )
 
 function PageFallback() {

@@ -39,7 +39,6 @@ import {
   Umbrella,
   Map,
   Gift,
-  Baby,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -85,9 +84,6 @@ const VeikartPage = lazyWithRetry(() =>
 const GiftPage = lazyWithRetry(() =>
   import('./GiftPage').then((m) => ({ default: m.GiftPage }))
 )
-const ProsjektPage = lazyWithRetry(() =>
-  import('./ProsjektPage').then((m) => ({ default: m.ProsjektPage }))
-)
 
 interface NavItem {
   page: EconomySubPage
@@ -109,7 +105,6 @@ const NAV_ITEMS: NavItem[] = [
   { page: 'vacation', label: 'Ferie', Icon: Umbrella },
   { page: 'veikart', label: 'Veikart', Icon: Map },
   { page: 'gaver', label: 'Gaver', Icon: Gift },
-  { page: 'ivf', label: 'Prosjekt', Icon: Baby },
 ]
 
 function PageFallback() {
@@ -228,7 +223,6 @@ export function EconomyPage() {
           {currentPage === 'vacation' && <VacationPage />}
           {currentPage === 'veikart' && <VeikartPage />}
           {currentPage === 'gaver' && <GiftPage />}
-          {(currentPage === 'ivf' || currentPage === 'permisjon') && <ProsjektPage />}
           {currentPage === 'settings' && <EconomySettingsPage />}
         </Suspense>
         </PageErrorBoundary>
