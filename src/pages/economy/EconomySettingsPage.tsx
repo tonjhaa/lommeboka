@@ -144,160 +144,6 @@ function PersonaliaSection() {
 }
 
 // ----------------------------------------------------------------
-// Tidsbegrensede tillegg
-// ----------------------------------------------------------------
-
-function TidsbegrensetTilleggSection() {
-  const profile = useEconomyStore((s) => s.profile)
-  const setProfile = useEconomyStore((s) => s.setProfile)
-
-  const candidates = profile?.fixedAdditions.filter(a => a.amount > 0 && !a.isPermanent) ?? []
-  const permanentOnes = profile?.fixedAdditions.filter(a => a.amount > 0 && a.isPermanent) ?? []
-
-  if (!profile || (candidates.length === 0 && permanentOnes.length === 0 && profile.housingDeduction === 0)) {
-    return (
-      <Section
-        title="Tidsbegrensede tillegg"
-        description="Importer en lønnsslipp for å se tilleggene dine her."
-      >
-        <p className="text-xs text-muted-foreground italic">Ingen tillegg registrert ennå.</p>
-      </Section>
-    )
-  }
-
-  function toggleAddition(kode: string) {
-    if (!profile) return
-    setProfile({
-      ...profile,
-      fixedAdditions: profile.fixedAdditions.map((a) =>
-        a.kode === kode ? { ...a, isTemporary: !a.isTemporary } : a
-      ),
-    })
-  }
-
-  function markPermanent(kode: string) {
-    if (!profile) return
-    setProfile({
-      ...profile,
-      fixedAdditions: profile.fixedAdditions.map((a) =>
-        a.kode === kode ? { ...a, isPermanent: true, isTemporary: false, fromDate: undefined, toDate: undefined } : a
-      ),
-    })
-  }
-
-  function setAdditionDate(kode: string, field: 'fromDate' | 'toDate', value: string) {
-    if (!profile) return
-    setProfile({
-      ...profile,
-      fixedAdditions: profile.fixedAdditions.map((a) =>
-        a.kode === kode ? { ...a, [field]: value || undefined } : a
-      ),
-    })
-  }
-
-  function toggleHousingDeduction() {
-    if (!profile) return
-    setProfile({ ...profile, housingDeductionIsTemporary: !profile.housingDeductionIsTemporary })
-  }
-
-  return (
-    <Section
-      title="Tidsbegrensede tillegg"
-      description='Hak av tillegg og trekk som er midlertidige. Disse gråes ut og ekskluderes fra beregninger når du trykker "Uten tillegg" i budsjett-fanen.'
-    >
-      <div className="rounded-md border border-border bg-muted/20 p-3 space-y-3">
-        {candidates.length === 0 && profile.housingDeduction === 0 && (
-          <p className="text-xs text-muted-foreground italic">Ingen midlertidige tillegg.</p>
-        )}
-        {candidates.map((addition) => (
-          <div key={addition.kode} className="space-y-1.5">
-            <div className="flex items-center gap-3 text-xs">
-              <label className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={!!addition.isTemporary}
-                  onChange={() => toggleAddition(addition.kode)}
-                  className="h-3.5 w-3.5 accent-amber-400 shrink-0"
-                />
-                <span className="flex-1 min-w-0 truncate">{addition.label}</span>
-              </label>
-              <span className="font-mono text-muted-foreground shrink-0">{addition.kode}</span>
-              <span className="tabular-nums text-muted-foreground shrink-0 text-right w-20">
-                +{Math.round(addition.amount).toLocaleString('no-NO')} kr
-              </span>
-              <button
-                onClick={() => markPermanent(addition.kode)}
-                className="text-[10px] text-muted-foreground hover:text-foreground underline underline-offset-2 shrink-0"
-                title="Marker som fast lønn — fjerner fra denne listen"
-              >
-                fast lønn
-              </button>
-            </div>
-            {addition.isTemporary && (
-              <div className="ml-6 flex items-center gap-2 text-[11px]">
-                <span className="text-muted-foreground w-16 shrink-0">Gyldig fra</span>
-                <Input
-                  type="month"
-                  value={addition.fromDate ?? ''}
-                  onChange={e => setAdditionDate(addition.kode, 'fromDate', e.target.value)}
-                  className="h-6 text-[11px] w-36 px-1.5"
-                />
-                <span className="text-muted-foreground">–</span>
-                <Input
-                  type="month"
-                  value={addition.toDate ?? ''}
-                  onChange={e => setAdditionDate(addition.kode, 'toDate', e.target.value)}
-                  placeholder="løpende"
-                  className="h-6 text-[11px] w-36 px-1.5"
-                />
-              </div>
-            )}
-            {!addition.isTemporary && (addition.fromDate || addition.toDate) && (
-              <p className="ml-6 text-[10px] text-muted-foreground">
-                {addition.fromDate ?? '?'} – {addition.toDate ?? 'løpende'}
-              </p>
-            )}
-          </div>
-        ))}
-        {permanentOnes.length > 0 && (
-          <div className="border-t border-border/40 pt-2.5 space-y-1.5">
-            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Fast lønn (skjult herfra)</p>
-            {permanentOnes.map((a) => (
-              <div key={a.kode} className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span className="flex-1 min-w-0 truncate">{a.label}</span>
-                <span className="font-mono">{a.kode}</span>
-                <span className="tabular-nums w-20 text-right">+{Math.round(a.amount).toLocaleString('no-NO')} kr</span>
-                <button
-                  onClick={() => setProfile({ ...profile, fixedAdditions: profile.fixedAdditions.map(x => x.kode === a.kode ? { ...x, isPermanent: false } : x) })}
-                  className="text-[10px] hover:text-foreground underline underline-offset-2 shrink-0"
-                >
-                  tilbake
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        {profile.housingDeduction > 0 && (
-          <label className="flex items-center gap-3 text-xs cursor-pointer select-none border-t border-border/40 pt-2.5">
-            <input
-              type="checkbox"
-              checked={!!profile.housingDeductionIsTemporary}
-              onChange={toggleHousingDeduction}
-              className="h-3.5 w-3.5 accent-amber-400 shrink-0"
-            />
-            <span className="flex-1">Husleietrekk</span>
-            <span className="font-mono text-muted-foreground shrink-0">3209</span>
-            <span className="tabular-nums text-muted-foreground shrink-0 text-right w-20">
-              -{Math.round(profile.housingDeduction).toLocaleString('no-NO')} kr
-            </span>
-          </label>
-        )}
-      </div>
-    </Section>
-  )
-}
-
-// ----------------------------------------------------------------
 // Sikkerhetskopi
 // ----------------------------------------------------------------
 
@@ -578,45 +424,6 @@ function DataSection() {
 // Page
 // ----------------------------------------------------------------
 
-// ----------------------------------------------------------------
-// Lønningsdato
-// ----------------------------------------------------------------
-
-function LønningsdatoSection() {
-  const userPreferences = useEconomyStore((s) => s.userPreferences)
-  const setUserPreferences = useEconomyStore((s) => s.setUserPreferences)
-  const [value, setValue] = useState(String(userPreferences?.payDay ?? 12))
-
-  function save() {
-    const day = Math.min(28, Math.max(1, parseInt(value) || 12))
-    setValue(String(day))
-    setUserPreferences({
-      onboardingCompleted: userPreferences?.onboardingCompleted ?? true,
-      enabledTabs: userPreferences?.enabledTabs ?? [],
-      payDay: day,
-    })
-  }
-
-  return (
-    <Section
-      title="Lønningsdato"
-      description="Dag i måneden lønn normalt utbetales. Brukes i dashbord-nedtellingen. Skyves automatisk til forrige virkedag ved helg og helligdager."
-    >
-      <div className="flex items-center gap-3">
-        <Input
-          type="number"
-          min={1}
-          max={28}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onBlur={save}
-          className="w-20 h-8 text-sm"
-        />
-        <span className="text-sm text-muted-foreground">. i måneden</span>
-      </div>
-    </Section>
-  )
-}
 
 function ModulesSection() {
   const userPreferences = useEconomyStore((s) => s.userPreferences)
@@ -884,16 +691,10 @@ export function EconomySettingsPage() {
       <PersonaliaSection />
 
       <Separator />
-      <LønningsdatoSection />
-
-      <Separator />
       <ModulesSection />
 
       <Separator />
       <BankPresetsSection />
-
-      <Separator />
-      <TidsbegrensetTilleggSection />
 
       <Separator />
       <SikkerhetskopiBSection />
