@@ -1,9 +1,9 @@
-import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { IVFPage } from './IVFPage'
 import { PermisjonPage } from './PermisjonPage'
 import { BabyShoppingPage } from './BabyShoppingPage'
 import { FlaskConical, Baby, ShoppingCart } from 'lucide-react'
+import { useAppStore } from '@/store/useAppStore'
 
 type ProsjektTab = 'behandling' | 'permisjon' | 'innkjøpsliste'
 
@@ -14,7 +14,8 @@ const TABS: { id: ProsjektTab; label: string; Icon: React.FC<{ className?: strin
 ]
 
 export function ProsjektPage() {
-  const [tab, setTab] = useState<ProsjektTab>('behandling')
+  const tab = useAppStore((s) => s.prosjektTab)
+  const setTab = useAppStore((s) => s.setProsjektTab)
 
   return (
     <div className="flex flex-col h-full overflow-hidden">

@@ -24,12 +24,14 @@ interface AppState {
   currentView: AppView
   currentEconomyPage: EconomySubPage
   savingsTab: 'kontoer' | 'fond' | 'måneder' | 'råd'
+  prosjektTab: 'behandling' | 'permisjon' | 'innkjøpsliste'
 
   setTheme: (theme: 'dark' | 'light' | 'system') => void
   setSidebarOpen: (open: boolean) => void
   setCurrentView: (view: AppView) => void
   setCurrentEconomyPage: (page: EconomySubPage) => void
   setSavingsTab: (tab: 'kontoer' | 'fond' | 'måneder' | 'råd') => void
+  setProsjektTab: (tab: 'behandling' | 'permisjon' | 'innkjøpsliste') => void
 
   addScenario: (scenario: ScenarioInput) => void
   updateScenario: (id: string, updates: Partial<ScenarioInput>) => void
@@ -59,12 +61,14 @@ export const useAppStore = create<AppState>()(
       currentView: 'economy',
       currentEconomyPage: 'dashboard',
       savingsTab: 'kontoer',
+      prosjektTab: 'behandling',
 
       setTheme: (theme) => set({ theme }),
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
       setCurrentView: (view) => set({ currentView: view }),
       setCurrentEconomyPage: (page) => set({ currentEconomyPage: page }),
       setSavingsTab: (tab) => set({ savingsTab: tab }),
+      setProsjektTab: (tab) => set({ prosjektTab: tab }),
 
       addScenario: (scenario) =>
         set((state) => ({
@@ -163,6 +167,7 @@ export const useAppStore = create<AppState>()(
         currentView: state.currentView,
         currentEconomyPage: state.currentEconomyPage,
         savingsTab: state.savingsTab,
+        prosjektTab: state.prosjektTab,
       }),
     }
   )
