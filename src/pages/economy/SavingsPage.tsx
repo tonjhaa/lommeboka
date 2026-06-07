@@ -1054,6 +1054,8 @@ function MånedsoversiktTable({
                 <>
                   <span className="text-muted-foreground/40 mx-0.5">+</span>
                   <span className="text-violet-400 font-medium">{Math.round(partnerOnlyAnnualIncome / 1000)}k</span>
+                  <span className="text-muted-foreground/40 mx-0.5">=</span>
+                  <span className="text-foreground font-medium">{Math.round(annualIncome / 1000)}k</span>
                 </>
               )}
             </span>
