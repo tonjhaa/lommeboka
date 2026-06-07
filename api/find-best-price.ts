@@ -7,12 +7,32 @@ export interface PriceResult {
   url: string
 }
 
-// ── SSRF guard (reused from scrape-product.ts) ────────────────────────────────
+// ── SSRF guard ────────────────────────────────────────────────────────────────
 function isPrivateAddress(ip: string): boolean {
-  if (ip === '::1' || ip === '::' || ip.startsWith('fe80:') || ip.startsWith('fc') || ip.startsWith('fd')) return true
+  const lower = ip.toLowerCase()
+  // IPv4-mapped IPv6 (::ffff:x.x.x.x) — recurse on the embedded IPv4
+  if (lower.startsWith('::ffff:')) return isPrivateAddress(ip.slice(7))
+  // 6to4 (2002::/16) embeds an IPv4 in bytes 3-6
+  if (lower.startsWith('2002:')) {
+    const hex = lower.split(':')[1] ?? ''
+    if (hex.length === 4) {
+      const a = parseInt(hex.slice(0, 2), 16)
+      const b = parseInt(hex.slice(2, 4), 16)
+      const next = lower.split(':')[2] ?? ''
+      const c = parseInt((next).slice(0, 2), 16)
+      const d = parseInt((next).slice(2, 4), 16)
+      return isPrivateAddress(`${a}.${b}.${c}.${d}`)
+    }
+  }
+  // Loopback, link-local, ULA, unspecified
+  if (lower === '::1' || lower === '::' || lower.startsWith('fe80:') ||
+      lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('100::')) return true
+  // IPv4
   const parts = ip.split('.').map(Number)
-  if (parts.length !== 4 || parts.some(isNaN)) return false
-  const [a, b, c] = parts
+  if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
+    return true // unknown format → deny by default
+  }
+  const [a, b] = parts
   return (
     a === 127 || a === 10 || a === 0 ||
     (a === 172 && b >= 16 && b <= 31) ||
