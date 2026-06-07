@@ -729,6 +729,8 @@ function MånedsoversiktTable({
   const fondMonthlyDeposit = fondPortfolio?.monthlyDeposit ?? 0
   const hasFond = fondCurrentValue > 0 || fondMonthlyDeposit > 0
   const hasPartner = partnerVeikart.enabled
+  const hasPartnerFond = hasPartner && ((partnerVeikart.fondCurrentValue ?? 0) > 0 || (partnerVeikart.fondMonthlyContribution ?? 0) > 0)
+  const partnerFondMonthly = hasPartner ? (partnerVeikart.fondMonthlyContribution ?? 0) : 0
 
   // Fallback: utled grunnlønn fra siste slip i monthHistory hvis profile.baseMonthly er 0
   const { monthHistory } = useActiveEconomyStore()
@@ -774,6 +776,7 @@ function MånedsoversiktTable({
     const partnerAccruedInterest = partnerAccMeta.map(() => 0)
     let fondBal = contribOverrides['start-fond'] ?? fondCurrentValue
     let partnerBsuBal = hasPartner ? (contribOverrides['start-p-bsu'] ?? partnerVeikart.bsu ?? 0) : 0
+    let partnerFondBal = hasPartnerFond ? (contribOverrides['start-p-fond'] ?? partnerVeikart.fondCurrentValue ?? 0) : 0
     const currentYear = now.getFullYear()
 
     const monthRows = Array.from({ length: HORIZON }, (_, i) => {
@@ -836,23 +839,34 @@ function MånedsoversiktTable({
         fondInterest = 0
       }
 
-      // Partner accounts — per-month overrides + januar-rentekreditt
+      // Partner accounts — per-month overrides + desember-rentekreditt (norsk standard)
       const partnerAccBalances = partnerAccMeta.map((acc, j) => {
-        const active = isActiveMonth(year, month, acc.fromDate, acc.toDate)
-        const baseContrib = active ? Math.round(acc.monthlyContribution) : 0
+        // Bruk contributionPeriods hvis tilgjengelig, ellers legacy fromDate/toDate
+        let baseContrib: number
+        if (acc.contributionPeriods?.length) {
+          const period = acc.contributionPeriods.find(p => {
+            const from = p.fromDate ? p.fromDate.slice(0, 7) : '0000-00'
+            const to = p.toDate ? p.toDate.slice(0, 7) : '9999-99'
+            return ym >= from && ym <= to
+          })
+          baseContrib = period ? Math.round(period.amount) : 0
+        } else {
+          baseContrib = isActiveMonth(year, month, acc.fromDate, acc.toDate) ? Math.round(acc.monthlyContribution) : 0
+        }
         const overrideKey = `p-${acc.id}-${year}-${month}`
         const contrib = overrideKey in contribOverrides ? contribOverrides[overrideKey] : baseContrib
         const rate = (acc.tieredRates?.length && !(`rate-p-${acc.id}` in contribOverrides))
           ? getEffectiveRateFromTiers(acc.tieredRates, acc.runningBal)
           : (acc.rate || SAVINGS_RATE_TABLE)
         const monthlyInterest = acc.runningBal * rate / 100 / 12
+        partnerAccruedInterest[j] += monthlyInterest
         let bal: number
-        if (month === 1) {
+        // Norsk bankstandard: renter krediteres 31. desember (samme som brukerens egne kontoer)
+        if (month === 12) {
           bal = acc.runningBal + partnerAccruedInterest[j] + contrib
-          partnerAccruedInterest[j] = monthlyInterest
+          partnerAccruedInterest[j] = 0
         } else {
           bal = acc.runningBal + contrib
-          partnerAccruedInterest[j] += monthlyInterest
         }
         acc.runningBal = bal
         return { id: acc.id, balance: bal, contribution: contrib, overrideKey, interest: monthlyInterest }
@@ -864,11 +878,13 @@ function MånedsoversiktTable({
       const partnerBsuMnd = Math.min(rawPartnerBsuMnd, partnerBsuRoom)
       if (hasPartner) partnerBsuBal = partnerBsuBal + partnerBsuMnd
 
-      const partnerFondVal = hasPartner ? (partnerVeikart.fondCurrentValue ?? 0) : 0
+      // Partner fond — vokser med månedlig innskudd (ingen automatisk avkastning)
+      if (hasPartnerFond) partnerFondBal = partnerFondBal + partnerFondMonthly
+
       const totalEK =
         accountBalances.reduce((s, a) => s + a.balance, 0) +
         (hasFond ? fondBal : 0) +
-        (hasPartner ? partnerAccBalances.reduce((s, a) => s + a.balance, 0) + partnerBsuBal + partnerFondVal : 0)
+        (hasPartner ? partnerAccBalances.reduce((s, a) => s + a.balance, 0) + partnerBsuBal + partnerFondBal : 0)
 
       const partnerDebtBase = hasPartner
         ? ((partnerVeikart.debts ?? []).length > 0
@@ -886,7 +902,7 @@ function MånedsoversiktTable({
       const projectedPartnerIncome = partnerOnlyAnnualIncome * growthFactor
       const projectedAnnualIncome = projectedMyIncome + projectedPartnerIncome
       const myEK = accountBalances.reduce((s, a) => s + a.balance, 0) + (hasFond ? fondBal : 0)
-      const partnerEK = hasPartner ? partnerAccBalances.reduce((s, a) => s + a.balance, 0) + partnerBsuBal + partnerFondVal : 0
+      const partnerEK = hasPartner ? partnerAccBalances.reduce((s, a) => s + a.balance, 0) + partnerBsuBal + partnerFondBal : 0
       const maxKjøpesum = projectedAnnualIncome > 0 ? calcMaxPurchase(totalEK, projectedAnnualIncome, debtBalance) : 0
       const maxKjøpesumMeg = projectedMyIncome > 0 ? calcMaxPurchase(myEK, projectedMyIncome, debtBalance) : 0
       const maxKjøpesumPartner = projectedPartnerIncome > 0 ? calcMaxPurchase(partnerEK, projectedPartnerIncome, debtBalance) : 0
@@ -901,6 +917,8 @@ function MånedsoversiktTable({
         partnerAccBalances,
         partnerBsuBalance: partnerBsuBal,
         partnerBsuContrib: partnerBsuMnd,
+        partnerFondBalance: Math.round(partnerFondBal),
+        partnerFondContrib: Math.round(partnerFondMonthly),
         totalEK,
         maxKjøpesum,
         maxKjøpesumMeg,
@@ -912,14 +930,14 @@ function MånedsoversiktTable({
     })
 
     return { accMeta, partnerAccMeta: partnerAccMeta as PartnerAccount[], monthRows }
-  }, [accounts, fondCurrentValue, fondPortfolio, fondMonthlyDeposit, debts, annualIncome, myAnnualIncome, partnerOnlyAnnualIncome, salaryGrowthPct, hasFond, hasPartner, partnerVeikart, now, contribOverrides])
+  }, [accounts, fondCurrentValue, fondPortfolio, fondMonthlyDeposit, debts, annualIncome, myAnnualIncome, partnerOnlyAnnualIncome, salaryGrowthPct, hasFond, hasPartner, hasPartnerFond, partnerFondMonthly, partnerVeikart, now, contribOverrides])
 
   const years = [...new Set(monthRows.map(r => r.year))]
 
   // Column spans for group headers
   const userCols = accMeta.length * 2 + (hasFond ? 2 : 0)
   const hasBsu = hasPartner && (partnerVeikart.bsu > 0 || partnerVeikart.bsuMonthlyContribution > 0)
-  const partnerCols = hasPartner ? (hasBsu ? 2 : 0) + partnerAccMeta.length * 2 : 0
+  const partnerCols = hasPartner ? (hasBsu ? 2 : 0) + (hasPartnerFond ? 2 : 0) + partnerAccMeta.length * 2 : 0
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -1057,6 +1075,9 @@ function MånedsoversiktTable({
             {hasPartner && hasBsu && (
               <th colSpan={2} className="px-3 py-1.5 text-center border-r border-border text-violet-300 font-semibold whitespace-nowrap">BSU</th>
             )}
+            {hasPartnerFond && (
+              <th colSpan={2} className="px-3 py-1.5 text-center border-r border-border text-violet-300 font-semibold whitespace-nowrap">Fond</th>
+            )}
             {partnerAccMeta.map(acc => (
               <th key={acc.id} colSpan={2} className="px-3 py-1.5 text-center border-r border-border text-violet-300 font-semibold whitespace-nowrap">
                 {acc.label}
@@ -1098,7 +1119,15 @@ function MånedsoversiktTable({
             {hasPartner && hasBsu && (
               <th colSpan={2} className="border-r border-border p-0">
                 <div className="flex">
-                  <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal" title="Innskudd per måned / Renteopptjening per år">Innskudd</span>
+                  <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal">Innskudd</span>
+                  <span className="flex-1 px-3 py-1 flex items-center justify-end text-violet-300 font-medium"><span className="flex-1 text-right">Saldo</span><span className="shrink-0 min-w-[3.5rem]" /></span>
+                </div>
+              </th>
+            )}
+            {hasPartnerFond && (
+              <th colSpan={2} className="border-r border-border p-0">
+                <div className="flex">
+                  <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal">Innskudd</span>
                   <span className="flex-1 px-3 py-1 flex items-center justify-end text-violet-300 font-medium"><span className="flex-1 text-right">Saldo</span><span className="shrink-0 min-w-[3.5rem]" /></span>
                 </div>
               </th>
@@ -1233,6 +1262,36 @@ function MånedsoversiktTable({
                       </td>
                     )
                   })()}
+                  {hasPartnerFond && (() => {
+                    if (isFirstYear) {
+                      return (
+                        <td colSpan={2} className="border-r border-border p-0">
+                          <div className="flex items-center">
+                            <span className="flex-1" />
+                            <span className="flex-1 px-3 py-2 text-right font-semibold text-violet-300">
+                              <InnskuddCell
+                                value={contribOverrides['start-p-fond'] ?? (partnerVeikart.fondCurrentValue ?? 0)}
+                                isOverridden={'start-p-fond' in contribOverrides}
+                                onChange={v => setSavingsOverride('start-p-fond', v)}
+                              />
+                            </span>
+                          </div>
+                        </td>
+                      )
+                    }
+                    const fondOpening = prevYearLast?.partnerFondBalance ?? 0
+                    const prevFondInnskudd = Math.round(prevYearRows.reduce((s, r) => s + r.partnerFondContrib, 0))
+                    return (
+                      <td colSpan={2} className="border-r border-border p-0">
+                        <div className="flex items-baseline">
+                          <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
+                            {prevFondInnskudd > 0 ? prevFondInnskudd.toLocaleString('no-NO') : '—'}
+                          </span>
+                          <span className="flex-1 px-3 py-2 text-right text-violet-300 font-semibold whitespace-nowrap">{fmtNOK(fondOpening)}</span>
+                        </div>
+                      </td>
+                    )
+                  })()}
                   {partnerAccMeta.map(acc => {
                     if (isFirstYear) {
                       return (
@@ -1347,6 +1406,16 @@ function MånedsoversiktTable({
                         <div className="flex items-center">
                           <span className="flex-1 px-3 py-1 text-right text-muted-foreground whitespace-nowrap">{Math.round(row.partnerBsuContrib).toLocaleString('no-NO')}</span>
                           <span className="flex-1 px-3 py-1 text-right font-mono text-violet-300 whitespace-nowrap">{fmtNOK(row.partnerBsuBalance)}</span>
+                        </div>
+                      </td>
+                    )}
+                    {hasPartnerFond && (
+                      <td colSpan={2} className="border-r border-border p-0">
+                        <div className="flex items-center">
+                          <span className="flex-1 px-3 py-1 text-right text-muted-foreground whitespace-nowrap">
+                            {row.partnerFondContrib > 0 ? row.partnerFondContrib.toLocaleString('no-NO') : '—'}
+                          </span>
+                          <span className="flex-1 px-3 py-1 text-right font-mono text-violet-300 whitespace-nowrap">{fmtNOK(row.partnerFondBalance)}</span>
                         </div>
                       </td>
                     )}

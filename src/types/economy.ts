@@ -694,6 +694,7 @@ export interface PartnerAccount {
   fromDate?: string   // ISO "YYYY-MM-DD" — innskudd starter fra denne måneden
   toDate?: string     // ISO "YYYY-MM-DD" — innskudd slutter etter denne måneden
   tieredRates?: TieredRate[]
+  contributionPeriods?: ContributionPeriod[]  // alle perioder, for fullstendig simulering
 }
 
 export interface PartnerDebt {

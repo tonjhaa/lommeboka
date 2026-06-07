@@ -36,15 +36,19 @@ export function buildPartnerVeikartPatch(
       const balance = Math.round(computeEffectiveBalance(a, now))
       const period = relevantPeriod(a)
       const legacy = a.monthlyContribution ?? 0
+      const periods = a.contributionPeriods ?? []
       return {
         id: a.id,
         label: a.label,
         balance,
         rate: getEffectiveRate(a, balance),
+        // Legacy single-period fields for backwards compat
         monthlyContribution: period ? Math.round(period.amount) : legacy,
         ...(period?.fromDate ? { fromDate: period.fromDate } : {}),
         ...(period?.toDate ? { toDate: period.toDate } : {}),
         ...(a.tieredRates?.length ? { tieredRates: a.tieredRates } : {}),
+        // All periods for accurate monthly simulation
+        ...(periods.length > 0 ? { contributionPeriods: periods } : {}),
       }
     })
 
@@ -97,8 +101,9 @@ export function buildPartnerVeikartPatch(
   return {
     enabled: true,
     accounts,
-    bsu: bsuAcc ? Math.round(computeEffectiveBalance(bsuAcc, now)) : existing.bsu,
-    bsuMonthlyContribution: bsuAcc?.monthlyContribution ?? existing.bsuMonthlyContribution,
+    // Sett til 0 når partner ikke har BSU (fall ikke tilbake på existing — kan inneholde brukerens egen BSU)
+    bsu: bsuAcc ? Math.round(computeEffectiveBalance(bsuAcc, now)) : 0,
+    bsuMonthlyContribution: bsuAcc?.monthlyContribution ?? 0,
     annualIncome: profile ? (profile.baseMonthly ?? 0) * 12 : existing.annualIncome,
     debts: activeDebts,
     ...(fondHoldings ? { fondHoldings } : {}),
