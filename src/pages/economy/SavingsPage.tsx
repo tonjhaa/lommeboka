@@ -913,12 +913,22 @@ function MånedsoversiktTable({
         (hasFond ? fondBal : 0) +
         (hasPartner ? partnerAccBalances.reduce((s, a) => s + a.balance, 0) + partnerBsuBal + partnerFondBal : 0)
 
-      const partnerDebtBase = hasPartner
+      const partnerDebt = hasPartner
         ? ((partnerVeikart.debts ?? []).length > 0
-            ? (partnerVeikart.debts ?? []).reduce((s, d) => s + d.currentBalance, 0)
+            ? (partnerVeikart.debts ?? []).reduce((s, d) => {
+                if (d.currentBalance <= 0) return s
+                const r = d.interestRate / 100 / 12
+                const monthly = d.monthlyPayment
+                if (monthly <= 0) return s + d.currentBalance
+                let bal = d.currentBalance
+                for (let m = 0; m < i + 1; m++) {
+                  bal = r === 0 ? bal - monthly : bal * (1 + r) - monthly
+                  if (bal <= 0) return s
+                }
+                return s + Math.max(0, bal)
+              }, 0)
             : partnerVeikart.debt ?? 0)
         : 0
-      const partnerDebt = partnerDebtBase
       const myDebtBalance = Math.round(debts
         .filter(d => d.status !== 'nedbetalt')
         .reduce((s, d) => s + projectDebtBalance(d, i + 1), 0))
