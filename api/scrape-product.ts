@@ -21,10 +21,12 @@ function isPrivateAddress(ip: string): boolean {
   // IPv6 loopback / unspecified / link-local / ULA
   if (lower === '::1' || lower === '::' || lower.startsWith('fe80:') ||
       lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('100::')) return true
+  // Offentlig IPv6 (inneholder ':' men matchet ingen privat IPv6-sjekk over) → tillatt
+  if (lower.includes(':')) return false
   // IPv4
   const parts = ip.split('.').map(Number)
   if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
-    return true // unknown format → deny by default
+    return true // ukjent format → blokker
   }
   const [a, b] = parts
   return (
