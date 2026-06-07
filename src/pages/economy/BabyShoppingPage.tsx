@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react'
-import { Plus, Trash2, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Search, X, Pencil, Loader2 } from 'lucide-react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { Plus, Trash2, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Search, X, Pencil, Loader2, TrendingDown } from 'lucide-react'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,6 +26,18 @@ export interface BabyShoppingItem {
   storeUrl?: string
   bestPriceNote?: string
   bestPriceUrl?: string
+  trackedBestPrice?: number
+}
+
+export interface PriceAlert {
+  itemId: string
+  itemName: string
+  oldPrice: number
+  newPrice: number
+  pctDrop: number
+  store: string
+  url: string
+  detectedAt: number
 }
 
 const STATUS_LABELS: Record<ItemStatus, string> = {
@@ -105,8 +117,14 @@ const EMPTY_ITEM = (): Omit<BabyShoppingItem, 'id'> => ({
 function useBabyShopping() {
   const items = useEconomyStore((s) => s.babyShoppingItems ?? []) as BabyShoppingItem[]
   const setItems = useEconomyStore((s) => s.setBabyShoppingItems)
+  const priceAlerts = useEconomyStore((s) => s.priceAlerts ?? []) as PriceAlert[]
+  const addPriceAlerts = useEconomyStore((s) => s.addPriceAlerts)
+  const dismissPriceAlert = useEconomyStore((s) => s.dismissPriceAlert)
+  const lastGlobalPriceCheckAt = useEconomyStore((s) => s.lastGlobalPriceCheckAt ?? 0)
+  const setLastGlobalPriceCheckAt = useEconomyStore((s) => s.setLastGlobalPriceCheckAt)
   return {
-    items,
+    items, priceAlerts, lastGlobalPriceCheckAt,
+    addPriceAlerts, dismissPriceAlert, setLastGlobalPriceCheckAt,
     init: () => setItems(INITIAL_ITEMS.map(i => ({ ...i, id: newId() }))),
     save: (item: BabyShoppingItem) => {
       const exists = items.some(i => i.id === item.id)
@@ -117,13 +135,93 @@ function useBabyShopping() {
       ? { ...i, status: (i.status === 'anskaffet' || i.status === 'arv_gave') ? 'kjøpe' : 'anskaffet' }
       : i)),
     setStatus: (id: string, status: ItemStatus) => setItems(items.map(i => i.id === id ? { ...i, status } : i)),
+    updateTrackedPrice: (id: string, price: number) =>
+      setItems(items.map(i => i.id === id ? { ...i, trackedBestPrice: price } : i)),
   }
+}
+
+const CHECK_INTERVAL_MS = 20 * 60 * 60 * 1000 // 20 hours
+const MAX_ITEMS_PER_CHECK = 12
+const DELAY_BETWEEN_MS = 2500
+
+function usePriceChecker(
+  items: BabyShoppingItem[],
+  lastCheckAt: number,
+  onAlerts: (alerts: PriceAlert[]) => void,
+  onTrack: (id: string, price: number) => void,
+  onDone: (ts: number) => void,
+) {
+  const [checking, setChecking] = useState(false)
+  const [progress, setProgress] = useState({ done: 0, total: 0 })
+  const abortRef = useRef(false)
+
+  useEffect(() => {
+    if (Date.now() - lastCheckAt < CHECK_INTERVAL_MS) return
+    const candidates = items
+      .filter(i => i.name && i.status !== 'anskaffet' && i.status !== 'arv_gave')
+      .sort((a, b) => b.budgeted - a.budgeted)
+      .slice(0, MAX_ITEMS_PER_CHECK)
+    if (candidates.length === 0) return
+
+    abortRef.current = false
+    setChecking(true)
+    setProgress({ done: 0, total: candidates.length })
+    const newAlerts: PriceAlert[] = []
+
+    ;(async () => {
+      for (let i = 0; i < candidates.length; i++) {
+        if (abortRef.current) break
+        const item = candidates[i]
+        try {
+          const res = await fetch(`/api/find-best-price?name=${encodeURIComponent(item.name)}`)
+          const data = await res.json()
+          const results: { store: string; price: number; url: string }[] = data.results ?? []
+          const best = results.find(r => r.price > 0)
+          if (best) {
+            onTrack(item.id, best.price)
+            const prev = item.trackedBestPrice
+            if (prev && prev > 0 && best.price < prev) {
+              const pctDrop = Math.round((1 - best.price / prev) * 100)
+              if (pctDrop >= 3) {
+                newAlerts.push({
+                  itemId: item.id,
+                  itemName: item.name,
+                  oldPrice: prev,
+                  newPrice: best.price,
+                  pctDrop,
+                  store: best.store,
+                  url: best.url,
+                  detectedAt: Date.now(),
+                })
+              }
+            }
+          }
+        } catch { /* skip item */ }
+        setProgress({ done: i + 1, total: candidates.length })
+        if (i < candidates.length - 1) await new Promise(r => setTimeout(r, DELAY_BETWEEN_MS))
+      }
+      if (newAlerts.length) onAlerts(newAlerts)
+      onDone(Date.now())
+      setChecking(false)
+    })()
+
+    return () => { abortRef.current = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // run once on mount
+
+  return { checking, progress }
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function BabyShoppingPage() {
-  const { items, init, save, remove, toggleDone, setStatus } = useBabyShopping()
+  const { items, priceAlerts, lastGlobalPriceCheckAt, addPriceAlerts, dismissPriceAlert,
+          setLastGlobalPriceCheckAt, init, save, remove, toggleDone, setStatus, updateTrackedPrice } = useBabyShopping()
+
+  const { checking, progress } = usePriceChecker(
+    items, lastGlobalPriceCheckAt,
+    addPriceAlerts, updateTrackedPrice, setLastGlobalPriceCheckAt,
+  )
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
@@ -228,6 +326,43 @@ export function BabyShoppingPage() {
           <p className="text-base font-semibold font-mono text-amber-400">{fmtNOK(remaining)}</p>
         </div>
       </div>
+
+      {/* Prisnedgang-varsler */}
+      {priceAlerts.length > 0 && (
+        <div className="mx-5 mb-2 rounded-lg border border-green-500/30 bg-green-500/8 overflow-hidden shrink-0">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-green-500/20">
+            <TrendingDown className="h-3.5 w-3.5 text-green-400" />
+            <span className="text-xs font-medium text-green-400">{priceAlerts.length} prisnedgang{priceAlerts.length > 1 ? 'er' : ''} oppdaget</span>
+          </div>
+          {priceAlerts.map(alert => (
+            <div key={alert.itemId} className="flex items-center gap-3 px-3 py-2 border-b border-green-500/10 last:border-0">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium truncate">{alert.itemName}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {alert.oldPrice.toLocaleString('no-NO')} kr → <span className="text-green-400 font-medium">{alert.newPrice.toLocaleString('no-NO')} kr</span>
+                  {' '}(−{alert.pctDrop}%) hos {alert.store}
+                </p>
+              </div>
+              {alert.url && /^https?:\/\//i.test(alert.url) && (
+                <a href={alert.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-[11px] text-primary hover:underline flex items-center gap-1">
+                  <ExternalLink className="h-3 w-3" /> Kjøp
+                </a>
+              )}
+              <button onClick={() => dismissPriceAlert(alert.itemId)} className="shrink-0 text-muted-foreground hover:text-foreground p-0.5">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Prissjekk-status */}
+      {checking && (
+        <div className="mx-5 mb-2 flex items-center gap-2 text-[11px] text-muted-foreground shrink-0">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Sjekker priser... ({progress.done}/{progress.total})
+        </div>
+      )}
 
       {/* Filter-rad */}
       <div className="px-5 pb-3 flex flex-wrap items-center gap-2 shrink-0">

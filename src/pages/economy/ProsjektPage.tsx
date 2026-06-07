@@ -4,6 +4,7 @@ import { PermisjonPage } from './PermisjonPage'
 import { BabyShoppingPage } from './BabyShoppingPage'
 import { FlaskConical, Baby, ShoppingCart } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
+import { useEconomyStore } from '@/application/useEconomyStore'
 
 type ProsjektTab = 'behandling' | 'permisjon' | 'innkjøpsliste'
 
@@ -16,6 +17,7 @@ const TABS: { id: ProsjektTab; label: string; Icon: React.FC<{ className?: strin
 export function ProsjektPage() {
   const tab = useAppStore((s) => s.prosjektTab)
   const setTab = useAppStore((s) => s.setProsjektTab)
+  const alertCount = useEconomyStore((s) => (s.priceAlerts ?? []).length)
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -26,7 +28,7 @@ export function ProsjektPage() {
             key={id}
             onClick={() => setTab(id)}
             className={cn(
-              'flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap',
+              'flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap relative',
               tab === id
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
@@ -34,6 +36,11 @@ export function ProsjektPage() {
           >
             <Icon className="h-3.5 w-3.5" />
             {label}
+            {id === 'innkjøpsliste' && alertCount > 0 && (
+              <span className="absolute -top-0.5 -right-1 h-4 min-w-4 rounded-full bg-green-500 text-[9px] font-bold text-black flex items-center justify-center px-1">
+                {alertCount}
+              </span>
+            )}
           </button>
         ))}
       </div>

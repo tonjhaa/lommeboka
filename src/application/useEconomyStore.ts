@@ -86,6 +86,11 @@ export interface EconomyState {
 
   // Baby-innkjøpsliste
   babyShoppingItems: import('../pages/economy/BabyShoppingPage').BabyShoppingItem[]
+  priceAlerts: import('../pages/economy/BabyShoppingPage').PriceAlert[]
+  lastGlobalPriceCheckAt: number
+  addPriceAlerts: (alerts: import('../pages/economy/BabyShoppingPage').PriceAlert[]) => void
+  dismissPriceAlert: (itemId: string) => void
+  setLastGlobalPriceCheckAt: (ts: number) => void
 
   // Fond (KRON-portefølje)
   fondPortfolio: FondPortfolio
@@ -273,6 +278,8 @@ export const useEconomyStore = create<EconomyState>()(
       ivfTransactions: INITIAL_IVF_TRANSACTIONS,
       ivfSettings: DEFAULT_IVF_SETTINGS,
       babyShoppingItems: [],
+      priceAlerts: [],
+      lastGlobalPriceCheckAt: 0,
       fondPortfolio: DEFAULT_FOND_PORTFOLIO,
       partnerVeikart: {
         enabled: false,
@@ -906,6 +913,15 @@ export const useEconomyStore = create<EconomyState>()(
       setIvfSettings: (settings) =>
         set((s) => ({ ivfSettings: { ...s.ivfSettings, ...settings } })),
       setBabyShoppingItems: (items) => set({ babyShoppingItems: items }),
+      addPriceAlerts: (alerts) =>
+        set((s) => {
+          const existingIds = new Set(s.priceAlerts.map((a) => a.itemId))
+          const fresh = alerts.filter((a) => !existingIds.has(a.itemId))
+          return { priceAlerts: [...s.priceAlerts, ...fresh] }
+        }),
+      dismissPriceAlert: (itemId) =>
+        set((s) => ({ priceAlerts: s.priceAlerts.filter((a) => a.itemId !== itemId) })),
+      setLastGlobalPriceCheckAt: (ts) => set({ lastGlobalPriceCheckAt: ts }),
 
       // --- Fond ---
       setFondPortfolio: (p) => set({ fondPortfolio: p }),
@@ -1313,6 +1329,9 @@ export const useEconomyStore = create<EconomyState>()(
         savingsPlanTarget: state.savingsPlanTarget,
         savingsPlanHorizon: state.savingsPlanHorizon,
         bankPresets: state.bankPresets,
+        babyShoppingItems: state.babyShoppingItems,
+        priceAlerts: state.priceAlerts,
+        lastGlobalPriceCheckAt: state.lastGlobalPriceCheckAt,
       }),
     }
   )

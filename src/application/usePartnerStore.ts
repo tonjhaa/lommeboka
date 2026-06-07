@@ -427,6 +427,11 @@ export const usePartnerStore = create<EconomyState>()(
       setIvfSettings: () => {},
       babyShoppingItems: [],
       setBabyShoppingItems: () => {},
+      priceAlerts: [],
+      lastGlobalPriceCheckAt: 0,
+      addPriceAlerts: () => {},
+      dismissPriceAlert: () => {},
+      setLastGlobalPriceCheckAt: () => {},
 
       // ── Fond — stubs ───────────────────────────────────────────────────────
       fondPortfolio: DEFAULT_FOND_PORTFOLIO,
