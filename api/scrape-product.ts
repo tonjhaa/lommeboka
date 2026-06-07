@@ -18,10 +18,17 @@ function isPrivateAddress(ip: string): boolean {
       return isPrivateAddress(`${a}.${b}.${c}.${d}`)
     }
   }
+  // NAT64 (64:ff9b::/96 og 64:ff9b:1::/48) — kan translere private IPv4-adresser
+  if (lower.startsWith('64:ff9b:')) return true
+  // IPv6 med innebygd dotted-IPv4 (f.eks. ::192.168.1.1 eller 64:ff9b::10.0.0.1)
+  if (lower.includes('.')) {
+    const lastColon = lower.lastIndexOf(':')
+    return isPrivateAddress(lower.slice(lastColon + 1))
+  }
   // IPv6 loopback / unspecified / link-local / ULA
   if (lower === '::1' || lower === '::' || lower.startsWith('fe80:') ||
       lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('100::')) return true
-  // Offentlig IPv6 (inneholder ':' men matchet ingen privat IPv6-sjekk over) → tillatt
+  // Offentlig IPv6 (inneholder ':' og matchet ingen privat sjekk) → tillatt
   if (lower.includes(':')) return false
   // IPv4
   const parts = ip.split('.').map(Number)
