@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { Plus, Trash2, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Search, X } from 'lucide-react'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { Button } from '@/components/ui/button'
@@ -301,6 +301,26 @@ function ItemRow({ item, categories, editingUrl, setEditingUrl, onUpdate, onRemo
 }) {
   const isDone = item.status === 'anskaffet' || item.status === 'arv_gave'
 
+  // Lokal state for tekstfelt — sparer til store ved blur for å unngå fokusmist
+  const [localName, setLocalName] = useState(item.name)
+  const [localBestPrice, setLocalBestPrice] = useState(item.bestPriceNote ?? '')
+  const [localUrl, setLocalUrl] = useState(item.storeUrl ?? '')
+  const [localBudgeted, setLocalBudgeted] = useState(item.budgeted > 0 ? String(item.budgeted) : '')
+  const [localActual, setLocalActual] = useState(item.actual > 0 ? String(item.actual) : '')
+
+  // Sync hvis item byttes utenfra (f.eks. init)
+  const prevId = useRef(item.id)
+  useEffect(() => {
+    if (prevId.current !== item.id) {
+      setLocalName(item.name)
+      setLocalBestPrice(item.bestPriceNote ?? '')
+      setLocalUrl(item.storeUrl ?? '')
+      setLocalBudgeted(item.budgeted > 0 ? String(item.budgeted) : '')
+      setLocalActual(item.actual > 0 ? String(item.actual) : '')
+      prevId.current = item.id
+    }
+  }, [item])
+
   return (
     <tr className={cn('border-b border-border/40 group hover:bg-muted/10 transition-colors', isDone && 'opacity-50')}>
       {/* Checkbox */}
@@ -316,8 +336,9 @@ function ItemRow({ item, categories, editingUrl, setEditingUrl, onUpdate, onRemo
       {/* Produkt */}
       <td className="py-1.5 px-3">
         <Input
-          value={item.name}
-          onChange={e => onUpdate(item.id, { name: e.target.value })}
+          value={localName}
+          onChange={e => setLocalName(e.target.value)}
+          onBlur={() => onUpdate(item.id, { name: localName })}
           className={cn('h-6 min-w-[160px] border-0 bg-transparent p-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-xs', isDone && 'line-through')}
           placeholder="Produktnavn..."
         />
@@ -332,7 +353,7 @@ function ItemRow({ item, categories, editingUrl, setEditingUrl, onUpdate, onRemo
           className="h-6 w-full rounded border border-input bg-background px-1.5 text-[11px] text-muted-foreground"
         >
           {categories.map(c => <option key={c} value={c}>{c}</option>)}
-          <option value={item.category}>{item.category}</option>
+          {!categories.includes(item.category) && <option value={item.category}>{item.category}</option>}
         </select>
       </td>
 
@@ -367,10 +388,10 @@ function ItemRow({ item, categories, editingUrl, setEditingUrl, onUpdate, onRemo
         {editingUrl === item.id ? (
           <Input
             autoFocus
-            value={item.storeUrl ?? ''}
-            onChange={e => onUpdate(item.id, { storeUrl: e.target.value })}
-            onBlur={() => setEditingUrl(null)}
-            onKeyDown={e => e.key === 'Enter' && setEditingUrl(null)}
+            value={localUrl}
+            onChange={e => setLocalUrl(e.target.value)}
+            onBlur={() => { onUpdate(item.id, { storeUrl: localUrl }); setEditingUrl(null) }}
+            onKeyDown={e => { if (e.key === 'Enter') { onUpdate(item.id, { storeUrl: localUrl }); setEditingUrl(null) } }}
             className="h-6 w-48 text-[11px]"
             placeholder="https://..."
           />
@@ -378,7 +399,7 @@ function ItemRow({ item, categories, editingUrl, setEditingUrl, onUpdate, onRemo
           <div className="flex items-center gap-1.5">
             <a href={item.storeUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 max-w-[120px] truncate">
               <ExternalLink className="h-3 w-3 shrink-0" />
-              <span className="truncate text-[11px]">{new URL(item.storeUrl).hostname.replace('www.', '')}</span>
+              <span className="truncate text-[11px]">{(() => { try { return new URL(item.storeUrl).hostname.replace('www.', '') } catch { return item.storeUrl } })()}</span>
             </a>
             <button onClick={() => setEditingUrl(item.id)} className="opacity-0 group-hover:opacity-100 text-[10px] text-muted-foreground hover:text-foreground">✎</button>
           </div>
@@ -392,8 +413,9 @@ function ItemRow({ item, categories, editingUrl, setEditingUrl, onUpdate, onRemo
       {/* Beste pris / butikk */}
       <td className="py-1.5 px-3">
         <Input
-          value={item.bestPriceNote ?? ''}
-          onChange={e => onUpdate(item.id, { bestPriceNote: e.target.value })}
+          value={localBestPrice}
+          onChange={e => setLocalBestPrice(e.target.value)}
+          onBlur={() => onUpdate(item.id, { bestPriceNote: localBestPrice })}
           className="h-6 min-w-[120px] border-0 bg-transparent p-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-[11px] text-muted-foreground placeholder:text-muted-foreground/40"
           placeholder="Finn.no, Jollyroom..."
         />
@@ -404,8 +426,9 @@ function ItemRow({ item, categories, editingUrl, setEditingUrl, onUpdate, onRemo
         <div className="flex items-center justify-end gap-1">
           <Input
             type="number"
-            value={item.budgeted || ''}
-            onChange={e => onUpdate(item.id, { budgeted: parseInt(e.target.value) || 0 })}
+            value={localBudgeted}
+            onChange={e => setLocalBudgeted(e.target.value)}
+            onBlur={() => onUpdate(item.id, { budgeted: parseInt(localBudgeted) || 0 })}
             className="h-6 w-20 text-right text-[11px] font-mono"
             placeholder="0"
           />
@@ -418,9 +441,10 @@ function ItemRow({ item, categories, editingUrl, setEditingUrl, onUpdate, onRemo
         <div className="flex items-center justify-end gap-1">
           <Input
             type="number"
-            value={item.actual || ''}
-            onChange={e => onUpdate(item.id, { actual: parseInt(e.target.value) || 0 })}
-            className={cn('h-6 w-20 text-right text-[11px] font-mono', item.actual > 0 && 'text-green-400')}
+            value={localActual}
+            onChange={e => setLocalActual(e.target.value)}
+            onBlur={() => onUpdate(item.id, { actual: parseInt(localActual) || 0 })}
+            className={cn('h-6 w-20 text-right text-[11px] font-mono', Number(localActual) > 0 && 'text-green-400')}
             placeholder="—"
           />
           <span className="text-muted-foreground text-[10px] shrink-0">kr</span>
