@@ -39,9 +39,9 @@ export function ProsjektPage() {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        {tab === 'behandling' && <IVFPage />}
-        {tab === 'permisjon' && <PermisjonPage />}
-        {tab === 'innkjøpsliste' && <BabyShoppingPage />}
+        <div className={cn('h-full', tab !== 'behandling' && 'hidden')}><IVFPage /></div>
+        <div className={cn('h-full', tab !== 'permisjon' && 'hidden')}><PermisjonPage /></div>
+        <div className={cn('h-full', tab !== 'innkjøpsliste' && 'hidden')}><BabyShoppingPage /></div>
       </div>
     </div>
   )
