@@ -244,8 +244,8 @@ export function SalaryPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="rounded-lg border border-border bg-card px-4 py-3 group relative">
                 <p className="text-[11px] text-muted-foreground mb-0.5">Brutto grunnlønn/år</p>
-                <p className="text-lg font-semibold font-mono tabular-nums">{Math.round(profile.baseMonthly * 12).toLocaleString('no-NO')} kr</p>
-                <p className="text-[11px] text-muted-foreground">{Math.round(profile.baseMonthly).toLocaleString('no-NO')} kr/mnd</p>
+                <p className="text-lg font-semibold font-mono tabular-nums">{Math.round(grunnlonn * 12).toLocaleString('no-NO')} kr</p>
+                <p className="text-[11px] text-muted-foreground">{Math.round(grunnlonn).toLocaleString('no-NO')} kr/mnd</p>
                 <button
                   onClick={() => setEditingProfile(true)}
                   className="absolute top-2 right-3 text-[10px] text-muted-foreground hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
