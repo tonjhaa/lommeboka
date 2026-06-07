@@ -686,6 +686,7 @@ function MånedsoversiktTable({
   const partnerStatus = usePartnershipStore((s) => s.status)
   const setPartnerVeikart = useEconomyStore((s) => s.setPartnerVeikart)
   const [syncDone, setSyncDone] = useState(false)
+  const [includeInterest, setIncludeInterest] = useState(true)
   const storeType = useActiveStoreType()
 
   // Auto-sync partner Veikart on mount.
@@ -830,7 +831,7 @@ function MånedsoversiktTable({
           accruedInterest[j] += monthlyInterest
           // Norsk bankstandard: renter krediteres 31. desember
           if (month === 12) {
-            bal = bal0 + accruedInterest[j] + contrib
+            bal = bal0 + (includeInterest ? accruedInterest[j] : 0) + contrib
             accruedInterest[j] = 0
           } else {
             bal = bal0 + contrib
@@ -900,7 +901,7 @@ function MånedsoversiktTable({
         let bal: number
         // Norsk bankstandard: renter krediteres 31. desember (samme som brukerens egne kontoer)
         if (month === 12) {
-          bal = acc.runningBal + partnerAccruedInterest[j] + contrib
+          bal = acc.runningBal + (includeInterest ? partnerAccruedInterest[j] : 0) + contrib
           partnerAccruedInterest[j] = 0
         } else {
           bal = acc.runningBal + contrib
@@ -977,7 +978,7 @@ function MånedsoversiktTable({
     })
 
     return { accMeta, partnerAccMeta: partnerAccMeta as PartnerAccount[], monthRows }
-  }, [accounts, fondCurrentValue, fondPortfolio, fondMonthlyDeposit, debts, annualIncome, myAnnualIncome, partnerOnlyAnnualIncome, salaryGrowthPct, hasFond, hasPartner, hasPartnerFond, partnerFondMonthly, partnerVeikart, now, contribOverrides])
+  }, [accounts, fondCurrentValue, fondPortfolio, fondMonthlyDeposit, debts, annualIncome, myAnnualIncome, partnerOnlyAnnualIncome, salaryGrowthPct, hasFond, hasPartner, hasPartnerFond, partnerFondMonthly, partnerVeikart, now, contribOverrides, includeInterest])
 
   const years = [...new Set(monthRows.map(r => r.year))]
 
@@ -1020,6 +1021,17 @@ function MånedsoversiktTable({
         {!partnerVeikart.enabled && (
           <span className="text-muted-foreground italic ml-1">Partner ikke aktivert — aktiver i Innstillinger</span>
         )}
+        <button
+          onClick={() => setIncludeInterest(v => !v)}
+          className={`flex items-center gap-1 px-2 py-1 rounded border text-xs transition-colors ${
+            includeInterest
+              ? 'border-green-500/40 text-green-400 bg-green-500/5 hover:bg-green-500/15'
+              : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted/40'
+          }`}
+          title={includeInterest ? 'Klikk for å se saldo uten krediterte renter' : 'Klikk for å inkludere renter i saldo'}
+        >
+          {includeInterest ? '% Renter på' : '% Renter av'}
+        </button>
         {/* TEMP DEBUG — fjernes etterpå */}
         {hasPartner && (
           <button
