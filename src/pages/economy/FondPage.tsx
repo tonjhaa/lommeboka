@@ -506,6 +506,118 @@ function SnapshotSection({
 }
 
 // ------------------------------------------------------------
+// SPAREPLAN CARD (standalone, not inside settings)
+// ------------------------------------------------------------
+
+function SpareplanCard({
+  portfolio,
+  onUpdate,
+}: {
+  portfolio: FondPortfolio
+  onUpdate: (p: FondPortfolio) => void
+}) {
+  const [adding, setAdding] = useState(false)
+  const [amount, setAmount] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+
+  const periods = portfolio.contributionPeriods ?? []
+
+  function save() {
+    const amt = parseFloat(amount)
+    if (!amt || amt <= 0) return
+    const newPeriod: ContributionPeriod = {
+      id: crypto.randomUUID(),
+      amount: amt,
+      fromDate: from ? `${from}-01` : undefined,
+      toDate: to ? `${to}-01` : undefined,
+    }
+    onUpdate({ ...portfolio, contributionPeriods: [...periods, newPeriod] })
+    setAmount(''); setFrom(''); setTo(''); setAdding(false)
+  }
+
+  function remove(id: string) {
+    onUpdate({ ...portfolio, contributionPeriods: periods.filter(p => p.id !== id) })
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center justify-between">
+          <span>Spareplan</span>
+          <button
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border border-border"
+            onClick={() => { setAdding(true); setAmount(''); setFrom(''); setTo('') }}
+          >
+            <Plus className="h-3 w-3" /> Ny periode
+          </button>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {/* Fallback: fast månedlig */}
+        {periods.length === 0 && !adding && (
+          <div className="flex items-center justify-between rounded border border-border/40 bg-muted/10 px-2.5 py-2 text-xs">
+            <div>
+              <p className="font-mono font-medium">{portfolio.monthlyDeposit.toLocaleString('no-NO')} kr/mnd</p>
+              <p className="text-muted-foreground text-[10px]">Fast beløp (ingen perioder satt) · endre under Innstillinger</p>
+            </div>
+          </div>
+        )}
+
+        {/* Perioder */}
+        {periods.map(p => (
+          <div key={p.id} className="flex items-center justify-between rounded border border-border/40 bg-muted/10 px-2.5 py-2 text-xs">
+            <div className="flex flex-col gap-0.5">
+              <span className="font-mono font-medium">{Math.round(p.amount).toLocaleString('no-NO')} kr/mnd</span>
+              <span className="text-muted-foreground text-[10px]">
+                {p.fromDate ? new Date(p.fromDate).toLocaleDateString('no-NO', { month: 'short', year: 'numeric' }) : 'Start'}
+                {' → '}
+                {p.toDate ? new Date(p.toDate).toLocaleDateString('no-NO', { month: 'short', year: 'numeric' }) : 'Ingen slutt'}
+              </span>
+            </div>
+            <button className="text-muted-foreground hover:text-red-400 transition-colors p-1" onClick={() => remove(p.id)}>
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
+        ))}
+
+        {/* Legg til periode */}
+        {adding && (
+          <div className="rounded-lg border border-border bg-muted/10 p-3 space-y-2.5">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Ny spareperiode</p>
+            <div>
+              <label className="text-[10px] text-muted-foreground block mb-1">Beløp per måned (kr)</label>
+              <input autoFocus type="number" min={0} step={100} placeholder="f.eks. 5000"
+                className="h-7 w-full rounded border border-border bg-background px-2 text-xs font-mono outline-none focus:border-primary"
+                value={amount} onChange={e => setAmount(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && save()} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-muted-foreground block mb-1">Fra (valgfri)</label>
+                <input type="month" className="h-7 w-full rounded border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+                  value={from} onChange={e => setFrom(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground block mb-1">Til (valgfri)</label>
+                <input type="month" className="h-7 w-full rounded border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+                  value={to} onChange={e => setTo(e.target.value)} />
+              </div>
+            </div>
+            <div className="flex gap-1.5 justify-end">
+              <button onClick={() => setAdding(false)}
+                className="px-3 py-1 rounded text-xs border border-border text-muted-foreground hover:text-foreground transition-colors">Avbryt</button>
+              <button onClick={save} disabled={!amount || parseFloat(amount) <= 0}
+                className="px-3 py-1 rounded text-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50">Lagre</button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ------------------------------------------------------------
 // PORTFOLIO SETTINGS
 // ------------------------------------------------------------
 
@@ -946,6 +1058,12 @@ export function FondPage() {
             <DevelopmentChart portfolio={fondPortfolio} now={now} />
           </CardContent>
         </Card>
+
+        {/* Spareplan */}
+        <SpareplanCard
+          portfolio={fondPortfolio}
+          onUpdate={setFondPortfolio}
+        />
 
         {/* Allocation donut + fund list */}
         <Card>
