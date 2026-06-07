@@ -50,6 +50,11 @@ export function buildPartnerVeikartPatch(
         }
       }
 
+      // Planlagte fremtidige innskudd (contributions med dato > i dag)
+      const futureContributions = (a.contributions ?? [])
+        .filter(c => c.date > nowISO)
+        .map(c => ({ date: c.date, amount: c.amount }))
+
       return {
         id: a.id,
         label: a.label,
@@ -64,6 +69,8 @@ export function buildPartnerVeikartPatch(
         ...(periods.length > 0 ? { contributionPeriods: periods } : {}),
         // Per-month overrides embedded for reliable display uten separate store-oppslag
         ...(Object.keys(monthlyOverrides).length > 0 ? { monthlyOverrides } : {}),
+        // Planlagte fremtidige innskudd
+        ...(futureContributions.length > 0 ? { futureContributions } : {}),
       }
     })
 

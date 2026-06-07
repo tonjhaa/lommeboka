@@ -867,14 +867,21 @@ function MånedsoversiktTable({
         } else {
           baseContrib = isActiveMonth(year, month, acc.fromDate, acc.toDate) ? Math.round(acc.monthlyContribution) : 0
         }
+        // Planlagte fremtidige innskudd (samme logikk som futureTxDelta for brukerkontoer)
+        const futureTxDelta = (acc.futureContributions ?? [])
+          .filter(c => {
+            const d = new Date(c.date)
+            return d.getFullYear() === year && d.getMonth() + 1 === month
+          })
+          .reduce((s, c) => s + c.amount, 0)
         const overrideKey = `p-${acc.id}-${year}-${month}`
-        // Prioritet: 1) brukerens manuelle override (p-prefiks), 2) embedded monthly override, 3) beregnet grunnlag
+        // Prioritet: 1) brukerens manuelle override, 2) embedded monthly override, 3) beregnet grunnlag + planlagte innskudd
         const monthlyOverrideKey = `${year}-${month}`
         const contrib = overrideKey in contribOverrides
           ? contribOverrides[overrideKey]
           : acc.monthlyOverrides?.[monthlyOverrideKey] !== undefined
             ? acc.monthlyOverrides[monthlyOverrideKey]
-            : baseContrib
+            : baseContrib + futureTxDelta
         const rate = (acc.tieredRates?.length && !(`rate-p-${acc.id}` in contribOverrides))
           ? getEffectiveRateFromTiers(acc.tieredRates, acc.runningBal)
           : (acc.rate || SAVINGS_RATE_TABLE)

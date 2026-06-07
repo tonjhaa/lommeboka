@@ -696,6 +696,7 @@ export interface PartnerAccount {
   tieredRates?: TieredRate[]
   contributionPeriods?: ContributionPeriod[]  // alle perioder, for fullstendig simulering
   monthlyOverrides?: Record<string, number>   // key: "YYYY-M", value: kr/mnd — fra partners savingsOverrides
+  futureContributions?: { date: string; amount: number }[]  // planlagte fremtidige innskudd
 }
 
 export interface PartnerDebt {
