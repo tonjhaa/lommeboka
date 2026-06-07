@@ -1050,6 +1050,12 @@ function MånedsoversiktTable({
                 {Math.round(myAnnualIncome / 1000)}k
                 {salaryNeedsUpdate && <span className="ml-0.5 text-[9px]">*</span>}
               </span>
+              {hasPartner && partnerOnlyAnnualIncome > 0 && (
+                <>
+                  <span className="text-muted-foreground/40 mx-0.5">+</span>
+                  <span className="text-violet-400 font-medium">{Math.round(partnerOnlyAnnualIncome / 1000)}k</span>
+                </>
+              )}
             </span>
           )}
           {salaryNeedsUpdate && myAnnualIncome === 0 && (
