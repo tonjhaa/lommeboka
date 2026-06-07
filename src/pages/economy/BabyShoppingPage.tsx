@@ -310,7 +310,7 @@ export function BabyShoppingPage() {
                   </td>
                   <td className="py-2 px-3 text-[11px] text-muted-foreground max-w-[140px]" onClick={() => openEdit(item)}>
                     {item.bestPriceNote
-                      ? item.bestPriceUrl
+                      ? (item.bestPriceUrl && /^https?:\/\//i.test(item.bestPriceUrl))
                         ? <a href={item.bestPriceUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-primary hover:underline truncate"><ExternalLink className="h-3 w-3 shrink-0" /><span className="truncate">{item.bestPriceNote}</span></a>
                         : <span className="truncate block">{item.bestPriceNote}</span>
                       : <span className="opacity-30">—</span>}
@@ -374,6 +374,13 @@ function ItemDialog({ item, isNew, categories, onSave, onClose, onDelete }: {
 
   function set(patch: Partial<BabyShoppingItem>) { setForm(f => ({ ...f, ...patch })) }
 
+  function safeHttpUrl(u: string): string {
+    try {
+      const p = new URL(u)
+      return (p.protocol === 'https:' || p.protocol === 'http:') ? p.href : ''
+    } catch { return '' }
+  }
+
   async function scrapeUrl(url: string) {
     if (!url) return
     let validUrl: string
@@ -414,7 +421,7 @@ function ItemDialog({ item, isNew, categories, onSave, onClose, onDelete }: {
 
   function pickPrice(r: { store: string; price: number; url: string }) {
     const note = r.price > 0 ? `${r.price.toLocaleString('no-NO')} kr – ${r.store}` : r.store
-    set({ bestPriceNote: note, bestPriceUrl: r.url })
+    set({ bestPriceNote: note, bestPriceUrl: safeHttpUrl(r.url) })
     setPriceResults([])
   }
 
@@ -487,7 +494,7 @@ function ItemDialog({ item, isNew, categories, onSave, onClose, onDelete }: {
               {form.bestPriceNote ? (
                 <div className="flex-1 flex items-center gap-2 rounded-md border border-input bg-muted/30 px-3 h-8 text-xs">
                   {form.bestPriceUrl
-                    ? <a href={form.bestPriceUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate flex items-center gap-1"><ExternalLink className="h-3 w-3 shrink-0" />{form.bestPriceNote}</a>
+                    ? <a href={safeHttpUrl(form.bestPriceUrl ?? '')} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate flex items-center gap-1"><ExternalLink className="h-3 w-3 shrink-0" />{form.bestPriceNote}</a>
                     : <span className="truncate">{form.bestPriceNote}</span>}
                   <button onClick={() => set({ bestPriceNote: '', bestPriceUrl: '' })} className="ml-auto text-muted-foreground hover:text-foreground shrink-0"><X className="h-3 w-3" /></button>
                 </div>

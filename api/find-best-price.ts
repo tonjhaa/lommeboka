@@ -94,7 +94,7 @@ function parse(html: string, query: string): PriceResult[] {
       let store = ''
       try { store = new URL(storeHref).hostname.replace('www.', '') } catch { store = '' }
       if (store && store !== 'prisjakt.no') {
-        results.push({ store, price, url: storeHref })
+        results.push({ store, price, url: safeUrl(storeHref) })
       }
     }
   }
@@ -150,8 +150,15 @@ function collectFromJsonLd(items: unknown[], results: PriceResult[]) {
 function pushResult(results: PriceResult[], r: { store: unknown; price: unknown; url: unknown }) {
   const price = parseNOK(String(r.price ?? ''))
   const store = typeof r.store === 'string' ? r.store.trim() : ''
-  const url = typeof r.url === 'string' ? r.url : ''
+  const url = safeUrl(typeof r.url === 'string' ? r.url : '')
   if (price && store) results.push({ store, price, url })
+}
+
+function safeUrl(u: string): string {
+  try {
+    const p = new URL(u, 'https://www.prisjakt.no')
+    return (p.protocol === 'https:' || p.protocol === 'http:') ? p.href : ''
+  } catch { return '' }
 }
 
 function parseNOK(raw: string): number | null {
