@@ -679,6 +679,10 @@ function MånedsoversiktTable({
   const setPartnerVeikart = useEconomyStore((s) => s.setPartnerVeikart)
   const [syncDone, setSyncDone] = useState(false)
   const storeType = useActiveStoreType()
+  // Partner sine per-måneds-innskudd overrides — fra den andre storen (ikke aktiv kontekst)
+  const partnerSavingsOverrides = storeType === 'partner'
+    ? useEconomyStore((s) => s.savingsOverrides)
+    : usePartnerStore((s) => s.savingsOverrides)
 
   // Auto-sync partner Veikart on mount.
   // Economy context: pull from partner store (partner's data → shown in PARTNER column).
@@ -854,7 +858,13 @@ function MånedsoversiktTable({
           baseContrib = isActiveMonth(year, month, acc.fromDate, acc.toDate) ? Math.round(acc.monthlyContribution) : 0
         }
         const overrideKey = `p-${acc.id}-${year}-${month}`
-        const contrib = overrideKey in contribOverrides ? contribOverrides[overrideKey] : baseContrib
+        // Prioritet: 1) brukerens manuelle override (p-prefiks), 2) partners egne per-måneds-innskudd, 3) beregnet grunnlag
+        const partnerOwnKey = `${acc.id}-${year}-${month}`
+        const contrib = overrideKey in contribOverrides
+          ? contribOverrides[overrideKey]
+          : partnerSavingsOverrides?.[partnerOwnKey] !== undefined
+            ? partnerSavingsOverrides[partnerOwnKey]
+            : baseContrib
         const rate = (acc.tieredRates?.length && !(`rate-p-${acc.id}` in contribOverrides))
           ? getEffectiveRateFromTiers(acc.tieredRates, acc.runningBal)
           : (acc.rate || SAVINGS_RATE_TABLE)
@@ -930,7 +940,7 @@ function MånedsoversiktTable({
     })
 
     return { accMeta, partnerAccMeta: partnerAccMeta as PartnerAccount[], monthRows }
-  }, [accounts, fondCurrentValue, fondPortfolio, fondMonthlyDeposit, debts, annualIncome, myAnnualIncome, partnerOnlyAnnualIncome, salaryGrowthPct, hasFond, hasPartner, hasPartnerFond, partnerFondMonthly, partnerVeikart, now, contribOverrides])
+  }, [accounts, fondCurrentValue, fondPortfolio, fondMonthlyDeposit, debts, annualIncome, myAnnualIncome, partnerOnlyAnnualIncome, salaryGrowthPct, hasFond, hasPartner, hasPartnerFond, partnerFondMonthly, partnerVeikart, now, contribOverrides, partnerSavingsOverrides])
 
   const years = [...new Set(monthRows.map(r => r.year))]
 
