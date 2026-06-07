@@ -691,7 +691,20 @@ function MånedsoversiktTable({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function syncPartner() {
+  async function syncPartner() {
+    // Hent fersk partnerdata fra Supabase direkte for å unngå stale cache
+    const { supabase } = await import('@/lib/supabase')
+    const { loadPartnerData } = await import('@/lib/partnerSync')
+    const partnership = usePartnershipStore.getState().partnership
+    const { data: { user } } = await supabase.auth.getUser()
+    if (partnership && user) {
+      const partnerId = partnership.inviter_id === user.id ? partnership.invitee_id : partnership.inviter_id
+      if (partnerId) {
+        const freshData = await loadPartnerData(partnerId)
+        if (freshData) usePartnerStore.getState().importData(JSON.stringify(freshData))
+      }
+    }
+
     const ps = storeType === 'partner' ? useEconomyStore.getState() : usePartnerStore.getState()
     const patch = buildPartnerVeikartPatch(
       ps.savingsAccounts,
