@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { Plus, Trash2, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Search, X } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Search, X, Loader2 } from 'lucide-react'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -307,6 +307,35 @@ function ItemRow({ item, categories, editingUrl, setEditingUrl, onUpdate, onRemo
   const [localUrl, setLocalUrl] = useState(item.storeUrl ?? '')
   const [localBudgeted, setLocalBudgeted] = useState(item.budgeted > 0 ? String(item.budgeted) : '')
   const [localActual, setLocalActual] = useState(item.actual > 0 ? String(item.actual) : '')
+  const [scraping, setScraping] = useState(false)
+
+  async function saveUrl() {
+    const url = localUrl.trim()
+    setEditingUrl(null)
+    onUpdate(item.id, { storeUrl: url || undefined })
+    if (!url) return
+    let validUrl: string
+    try { validUrl = new URL(url).href } catch { return }
+
+    setScraping(true)
+    try {
+      const res = await fetch(`/api/scrape-product?url=${encodeURIComponent(validUrl)}`)
+      const data = await res.json()
+      const patch: Partial<BabyShoppingItem> = { storeUrl: url }
+      if (data.name && !item.name) {
+        const clean = data.name.replace(/\s*[-|–]\s*.+$/, '').trim() // strip site name suffix
+        patch.name = clean
+        setLocalName(clean)
+      }
+      if (data.price && !item.budgeted) {
+        patch.budgeted = data.price
+        setLocalBudgeted(String(data.price))
+      }
+      onUpdate(item.id, patch)
+    } catch { /* silent */ } finally {
+      setScraping(false)
+    }
+  }
 
   // Sync hvis item byttes utenfra (f.eks. init)
   const prevId = useRef(item.id)
@@ -390,11 +419,15 @@ function ItemRow({ item, categories, editingUrl, setEditingUrl, onUpdate, onRemo
             autoFocus
             value={localUrl}
             onChange={e => setLocalUrl(e.target.value)}
-            onBlur={() => { onUpdate(item.id, { storeUrl: localUrl }); setEditingUrl(null) }}
-            onKeyDown={e => { if (e.key === 'Enter') { onUpdate(item.id, { storeUrl: localUrl }); setEditingUrl(null) } }}
+            onBlur={() => saveUrl()}
+            onKeyDown={e => { if (e.key === 'Enter') saveUrl() }}
             className="h-6 w-48 text-[11px]"
             placeholder="https://..."
           />
+        ) : scraping ? (
+          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin" /> Henter info...
+          </span>
         ) : item.storeUrl ? (
           <div className="flex items-center gap-1.5">
             <a href={item.storeUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 max-w-[120px] truncate">
