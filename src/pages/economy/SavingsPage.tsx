@@ -679,10 +679,11 @@ function MånedsoversiktTable({
   const setPartnerVeikart = useEconomyStore((s) => s.setPartnerVeikart)
   const [syncDone, setSyncDone] = useState(false)
   const storeType = useActiveStoreType()
-  // Partner sine per-måneds-innskudd overrides — fra den andre storen (ikke aktiv kontekst)
-  const partnerSavingsOverrides = storeType === 'partner'
-    ? useEconomyStore((s) => s.savingsOverrides)
-    : usePartnerStore((s) => s.savingsOverrides)
+  // Partner sine per-måneds-innskudd overrides — begge hooks alltid kalt (Rules of Hooks)
+  const economySavingsOverrides = useEconomyStore((s) => s.savingsOverrides)
+  const partnerStoreSavingsOverrides = usePartnerStore((s) => s.savingsOverrides)
+  // I economy-kontekst: partner er usePartnerStore. I partner-kontekst: partner er useEconomyStore.
+  const partnerSavingsOverrides = storeType === 'partner' ? economySavingsOverrides : partnerStoreSavingsOverrides
 
   // Auto-sync partner Veikart on mount.
   // Economy context: pull from partner store (partner's data → shown in PARTNER column).
