@@ -679,11 +679,6 @@ function MånedsoversiktTable({
   const setPartnerVeikart = useEconomyStore((s) => s.setPartnerVeikart)
   const [syncDone, setSyncDone] = useState(false)
   const storeType = useActiveStoreType()
-  // Partner sine per-måneds-innskudd overrides — begge hooks alltid kalt (Rules of Hooks)
-  const economySavingsOverrides = useEconomyStore((s) => s.savingsOverrides)
-  const partnerStoreSavingsOverrides = usePartnerStore((s) => s.savingsOverrides)
-  // I economy-kontekst: partner er usePartnerStore. I partner-kontekst: partner er useEconomyStore.
-  const partnerSavingsOverrides = storeType === 'partner' ? economySavingsOverrides : partnerStoreSavingsOverrides
 
   // Auto-sync partner Veikart on mount.
   // Economy context: pull from partner store (partner's data → shown in PARTNER column).
@@ -691,7 +686,7 @@ function MånedsoversiktTable({
   useEffect(() => {
     const ps = storeType === 'partner' ? useEconomyStore.getState() : usePartnerStore.getState()
     if (!ps.savingsAccounts?.length && !ps.debts?.length) return
-    const patch = buildPartnerVeikartPatch(ps.savingsAccounts, ps.debts, ps.profile, partnerVeikart, now, ps.fondPortfolio)
+    const patch = buildPartnerVeikartPatch(ps.savingsAccounts, ps.debts, ps.profile, partnerVeikart, now, ps.fondPortfolio, ps.savingsOverrides)
     setPartnerVeikart({ ...partnerVeikart, ...patch })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -705,6 +700,7 @@ function MånedsoversiktTable({
       partnerVeikart,
       now,
       ps.fondPortfolio,
+      ps.savingsOverrides,
     )
     setPartnerVeikart({ ...partnerVeikart, ...patch })
     setSyncDone(true)
@@ -859,12 +855,12 @@ function MånedsoversiktTable({
           baseContrib = isActiveMonth(year, month, acc.fromDate, acc.toDate) ? Math.round(acc.monthlyContribution) : 0
         }
         const overrideKey = `p-${acc.id}-${year}-${month}`
-        // Prioritet: 1) brukerens manuelle override (p-prefiks), 2) partners egne per-måneds-innskudd, 3) beregnet grunnlag
-        const partnerOwnKey = `${acc.id}-${year}-${month}`
+        // Prioritet: 1) brukerens manuelle override (p-prefiks), 2) embedded monthly override, 3) beregnet grunnlag
+        const monthlyOverrideKey = `${year}-${month}`
         const contrib = overrideKey in contribOverrides
           ? contribOverrides[overrideKey]
-          : partnerSavingsOverrides?.[partnerOwnKey] !== undefined
-            ? partnerSavingsOverrides[partnerOwnKey]
+          : acc.monthlyOverrides?.[monthlyOverrideKey] !== undefined
+            ? acc.monthlyOverrides[monthlyOverrideKey]
             : baseContrib
         const rate = (acc.tieredRates?.length && !(`rate-p-${acc.id}` in contribOverrides))
           ? getEffectiveRateFromTiers(acc.tieredRates, acc.runningBal)
@@ -941,7 +937,7 @@ function MånedsoversiktTable({
     })
 
     return { accMeta, partnerAccMeta: partnerAccMeta as PartnerAccount[], monthRows }
-  }, [accounts, fondCurrentValue, fondPortfolio, fondMonthlyDeposit, debts, annualIncome, myAnnualIncome, partnerOnlyAnnualIncome, salaryGrowthPct, hasFond, hasPartner, hasPartnerFond, partnerFondMonthly, partnerVeikart, now, contribOverrides, partnerSavingsOverrides])
+  }, [accounts, fondCurrentValue, fondPortfolio, fondMonthlyDeposit, debts, annualIncome, myAnnualIncome, partnerOnlyAnnualIncome, salaryGrowthPct, hasFond, hasPartner, hasPartnerFond, partnerFondMonthly, partnerVeikart, now, contribOverrides])
 
   const years = [...new Set(monthRows.map(r => r.year))]
 

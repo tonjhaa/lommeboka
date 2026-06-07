@@ -695,6 +695,7 @@ export interface PartnerAccount {
   toDate?: string     // ISO "YYYY-MM-DD" — innskudd slutter etter denne måneden
   tieredRates?: TieredRate[]
   contributionPeriods?: ContributionPeriod[]  // alle perioder, for fullstendig simulering
+  monthlyOverrides?: Record<string, number>   // key: "YYYY-M", value: kr/mnd — fra partners savingsOverrides
 }
 
 export interface PartnerDebt {

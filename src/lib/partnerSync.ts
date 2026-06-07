@@ -144,6 +144,7 @@ export function importPartnerDataToStore(data: object): void {
     existing,
     new Date(),
     ps.fondPortfolio,
+    ps.savingsOverrides,
   )
   useEconomyStore.getState().setPartnerVeikart({ ...existing, ...patch })
 }

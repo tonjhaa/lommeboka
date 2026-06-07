@@ -11,6 +11,7 @@ export function buildPartnerVeikartPatch(
   existing: PartnerVeikart,
   now: Date,
   fondPortfolio?: FondPortfolio | null,
+  savingsOverrides?: Record<string, number>,
 ): Partial<PartnerVeikart> & Pick<PartnerVeikart, 'enabled' | 'accounts' | 'bsu' | 'bsuMonthlyContribution' | 'annualIncome' | 'debts'> {
   const nowISO = now.toISOString().slice(0, 10)
 
@@ -37,6 +38,18 @@ export function buildPartnerVeikartPatch(
       const period = relevantPeriod(a)
       const legacy = a.monthlyContribution ?? 0
       const periods = a.contributionPeriods ?? []
+      // Embedder per-måneds-overrides fra partners savingsOverrides
+      const monthlyOverrides: Record<string, number> = {}
+      if (savingsOverrides) {
+        const prefix = `${a.id}-`
+        for (const [key, val] of Object.entries(savingsOverrides)) {
+          if (key.startsWith(prefix)) {
+            // key = "{uuid}-{year}-{month}" → ymPart = "{year}-{month}"
+            monthlyOverrides[key.slice(prefix.length)] = val
+          }
+        }
+      }
+
       return {
         id: a.id,
         label: a.label,
@@ -49,6 +62,8 @@ export function buildPartnerVeikartPatch(
         ...(a.tieredRates?.length ? { tieredRates: a.tieredRates } : {}),
         // All periods for accurate monthly simulation
         ...(periods.length > 0 ? { contributionPeriods: periods } : {}),
+        // Per-month overrides embedded for reliable display uten separate store-oppslag
+        ...(Object.keys(monthlyOverrides).length > 0 ? { monthlyOverrides } : {}),
       }
     })
 
