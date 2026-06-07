@@ -1,9 +1,63 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { promises as dns } from 'dns'
+
+// Reject private/loopback/link-local IPv4 and IPv6 ranges
+function isPrivateAddress(ip: string): boolean {
+  // IPv6 loopback / unspecified
+  if (ip === '::1' || ip === '::' || ip.startsWith('fe80:') || ip.startsWith('fc') || ip.startsWith('fd')) return true
+  const parts = ip.split('.').map(Number)
+  if (parts.length !== 4 || parts.some(isNaN)) return false // not IPv4
+  const [a, b, c] = parts
+  return (
+    a === 127 ||                          // 127.0.0.0/8 loopback
+    a === 10 ||                           // 10.0.0.0/8 private
+    a === 0 ||                            // 0.0.0.0/8 unspecified
+    (a === 172 && b >= 16 && b <= 31) ||  // 172.16.0.0/12 private
+    (a === 192 && b === 168) ||           // 192.168.0.0/16 private
+    (a === 169 && b === 254) ||           // 169.254.0.0/16 link-local
+    (a === 100 && b >= 64 && b <= 127)    // 100.64.0.0/10 shared address
+  )
+}
+
+async function validateAndFetch(rawUrl: string): Promise<Response> {
+  const parsed = new URL(rawUrl)
+
+  if (!['https:', 'http:'].includes(parsed.protocol)) {
+    throw new Error('Only http/https allowed')
+  }
+
+  const hostname = parsed.hostname.toLowerCase().replace(/\.+$/, '')
+
+  // Resolve all addresses and reject if any is private
+  const addresses = await dns.lookup(hostname, { all: true })
+  for (const { address } of addresses) {
+    if (isPrivateAddress(address)) {
+      throw new Error('Hostname resolves to a private address')
+    }
+  }
+
+  // Fetch without following redirects — re-validate Location if needed
+  const response = await fetch(parsed.href, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml',
+      'Accept-Language': 'no-NO,no;q=0.9,en;q=0.8',
+    },
+    redirect: 'manual',
+    signal: AbortSignal.timeout(8000),
+  })
+
+  // Handle redirects safely (re-validate destination)
+  if (response.status >= 300 && response.status < 400) {
+    const location = response.headers.get('location')
+    if (!location) throw new Error('Redirect with no Location header')
+    return validateAndFetch(new URL(location, parsed.href).href)
+  }
+
+  return response
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET')
-
   const { url } = req.query
   if (!url || typeof url !== 'string') {
     return res.status(400).json({ error: 'Missing url parameter' })
@@ -17,17 +71,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const response = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'no-NO,no;q=0.9,en;q=0.8',
-      },
-      signal: AbortSignal.timeout(8000),
-    })
+    const response = await validateAndFetch(targetUrl)
 
     if (!response.ok) {
-      return res.status(502).json({ error: `Site returned ${response.status}` })
+      return res.status(502).json({ error: 'Could not fetch product page' })
     }
 
     const html = await response.text()
@@ -36,12 +83,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const ogTitle = metaContent(html, 'og:title')
     const metaTitle = html.match(/<title[^>]*>([^<]{3,200})<\/title>/i)?.[1]?.trim()
     const h1 = html.match(/<h1[^>]*>\s*([^<]{3,200})\s*<\/h1>/i)?.[1]?.trim()
-
     const name = (ogTitle || h1 || metaTitle || '').replace(/\s+/g, ' ').trim()
 
     // ── Price from JSON-LD ────────────────────────────────────────────────────
     let price: number | null = null
-
     const jsonLdBlocks = [...html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)]
     for (const [, block] of jsonLdBlocks) {
       try {
@@ -52,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (p) { price = p; break }
         }
         if (price) break
-      } catch { /* invalid JSON-LD, skip */ }
+      } catch { /* invalid JSON-LD */ }
     }
 
     // ── Fallback: og:price:amount ─────────────────────────────────────────────
@@ -61,9 +106,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (ogPrice) price = parseNOKPrice(ogPrice)
     }
 
-    // ── Fallback: heuristic regex on common price patterns ───────────────────
+    // ── Fallback: heuristic Norwegian price patterns ──────────────────────────
     if (!price) {
-      // Look for Norwegian price patterns: "1 299 kr", "1299,-", "1 299,00"
       const pricePatterns = [
         /class="[^"]*price[^"]*"[^>]*>\s*(?:kr\.?\s*)?([\d\s.,]+)\s*(?:kr|,-)?/i,
         /(?:pris|price)[^>]*>\s*(?:kr\.?\s*)?([\d\s.,]+)\s*(?:kr|,-)/i,
@@ -80,9 +124,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     return res.json({ name: name || null, price: price || null })
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    return res.status(500).json({ error: msg })
+  } catch {
+    return res.status(500).json({ error: 'Could not retrieve product information' })
   }
 }
 
@@ -94,11 +137,7 @@ function metaContent(html: string, property: string): string | null {
 
 function extractPrice(obj: Record<string, unknown>): number | null {
   if (!obj || typeof obj !== 'object') return null
-  // Direct offer
-  if (obj['@type'] === 'Offer' && obj.price != null) {
-    return parseNOKPrice(String(obj.price))
-  }
-  // Product with offers
+  if (obj['@type'] === 'Offer' && obj.price != null) return parseNOKPrice(String(obj.price))
   if (obj.offers) {
     const offers = Array.isArray(obj.offers) ? obj.offers : [obj.offers]
     for (const o of offers) {
@@ -110,7 +149,6 @@ function extractPrice(obj: Record<string, unknown>): number | null {
 }
 
 function parseNOKPrice(raw: string): number | null {
-  // Remove thousands separators (space or dot), normalise decimal comma
   const cleaned = raw.replace(/\s/g, '').replace(/\.(?=\d{3})/g, '').replace(',', '.')
   const n = parseFloat(cleaned)
   return isFinite(n) && n > 0 ? Math.round(n) : null
