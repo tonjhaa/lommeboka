@@ -137,7 +137,16 @@ function metaContent(html: string, property: string): string | null {
 
 function extractPrice(obj: Record<string, unknown>): number | null {
   if (!obj || typeof obj !== 'object') return null
-  if (obj['@type'] === 'Offer' && obj.price != null) return parseNOKPrice(String(obj.price))
+  if (obj['@type'] === 'Offer' || obj['@type'] === 'AggregateOffer') {
+    // priceSpecification takes priority over price (avoids IDs/timestamps in price field)
+    const spec = obj.priceSpecification as Record<string, unknown> | undefined
+    if (spec?.price != null) {
+      const p = parseNOKPrice(String(spec.price)); if (p) return p
+    }
+    if (obj.price != null) {
+      const p = parseNOKPrice(String(obj.price)); if (p) return p
+    }
+  }
   if (obj.offers) {
     const offers = Array.isArray(obj.offers) ? obj.offers : [obj.offers]
     for (const o of offers) {
@@ -151,5 +160,6 @@ function extractPrice(obj: Record<string, unknown>): number | null {
 function parseNOKPrice(raw: string): number | null {
   const cleaned = raw.replace(/\s/g, '').replace(/\.(?=\d{3})/g, '').replace(',', '.')
   const n = parseFloat(cleaned)
-  return isFinite(n) && n > 0 ? Math.round(n) : null
+  // Sanity check: valid prices are 1–500 000 kr
+  return isFinite(n) && n >= 1 && n <= 500_000 ? Math.round(n) : null
 }
