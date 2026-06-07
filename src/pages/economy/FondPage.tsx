@@ -511,33 +511,63 @@ function SnapshotSection({
 
 function SpareplanCard({
   portfolio,
-  onUpdate,
+  onAddContribution,
+  onRemoveContribution,
+  onAddPeriod,
+  onRemovePeriod,
 }: {
   portfolio: FondPortfolio
-  onUpdate: (p: FondPortfolio) => void
+  onAddContribution: (c: import('@/types/economy').SavingsContribution) => void
+  onRemoveContribution: (id: string) => void
+  onAddPeriod: (p: ContributionPeriod) => void
+  onRemovePeriod: (id: string) => void
 }) {
+  const today = new Date().toISOString().split('T')[0]
   const [adding, setAdding] = useState(false)
+  const [mode, setMode] = useState<'enkelt' | 'periode'>('enkelt')
+  // Enkelt
+  const [date, setDate] = useState(today)
   const [amount, setAmount] = useState('')
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
+  const [note, setNote] = useState('')
+  // Periode
+  const [periodAmount, setPeriodAmount] = useState('')
+  const [periodFrom, setPeriodFrom] = useState('')
+  const [periodTo, setPeriodTo] = useState('')
 
   const periods = portfolio.contributionPeriods ?? []
+  const contributions = portfolio.contributions ?? []
 
-  function save() {
+  // Felles sortert tidslinje: perioder + enkeltinnskudd
+  type Entry =
+    | { kind: 'periode'; data: ContributionPeriod }
+    | { kind: 'enkelt'; data: import('@/types/economy').SavingsContribution }
+
+  const entries: Entry[] = [
+    ...periods.map(p => ({ kind: 'periode' as const, data: p })),
+    ...contributions.map(c => ({ kind: 'enkelt' as const, data: c })),
+  ].sort((a, b) => {
+    const aDate = a.kind === 'periode' ? (a.data.fromDate ?? '9999') : a.data.date
+    const bDate = b.kind === 'periode' ? (b.data.fromDate ?? '9999') : b.data.date
+    return aDate.localeCompare(bDate)
+  })
+
+  function saveEnkelt() {
     const amt = parseFloat(amount)
-    if (!amt || amt <= 0) return
-    const newPeriod: ContributionPeriod = {
-      id: crypto.randomUUID(),
-      amount: amt,
-      fromDate: from ? `${from}-01` : undefined,
-      toDate: to ? `${to}-01` : undefined,
-    }
-    onUpdate({ ...portfolio, contributionPeriods: [...periods, newPeriod] })
-    setAmount(''); setFrom(''); setTo(''); setAdding(false)
+    if (!date || isNaN(amt) || amt <= 0) return
+    onAddContribution({ id: crypto.randomUUID(), date, amount: amt, note: note || undefined })
+    setAmount(''); setNote(''); setDate(today); setAdding(false)
   }
 
-  function remove(id: string) {
-    onUpdate({ ...portfolio, contributionPeriods: periods.filter(p => p.id !== id) })
+  function savePeriode() {
+    const amt = parseFloat(periodAmount)
+    if (!amt || amt <= 0) return
+    onAddPeriod({
+      id: crypto.randomUUID(),
+      amount: amt,
+      fromDate: periodFrom || undefined,
+      toDate: periodTo || undefined,
+    })
+    setPeriodAmount(''); setPeriodFrom(''); setPeriodTo(''); setAdding(false)
   }
 
   return (
@@ -545,72 +575,110 @@ function SpareplanCard({
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center justify-between">
           <span>Spareplan</span>
-          <button
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border border-border"
-            onClick={() => { setAdding(true); setAmount(''); setFrom(''); setTo('') }}
-          >
-            <Plus className="h-3 w-3" /> Ny periode
-          </button>
+          {!adding && (
+            <button
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border border-border"
+              onClick={() => { setAdding(true); setMode('enkelt') }}
+            >
+              <Plus className="h-3 w-3" /> Legg til
+            </button>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        {/* Fallback: fast månedlig */}
-        {periods.length === 0 && !adding && (
+        {/* Legg-til-skjema */}
+        {adding && (
+          <div className="rounded-md border border-border p-2 space-y-2">
+            {/* Toggle */}
+            <div className="flex gap-1">
+              <button
+                onClick={() => setMode('enkelt')}
+                className={`px-2.5 py-1 rounded text-xs transition-colors ${mode === 'enkelt' ? 'bg-primary text-primary-foreground' : 'border border-border text-muted-foreground hover:text-foreground'}`}
+              >Enkelt innskudd</button>
+              <button
+                onClick={() => setMode('periode')}
+                className={`px-2.5 py-1 rounded text-xs transition-colors ${mode === 'periode' ? 'bg-primary text-primary-foreground' : 'border border-border text-muted-foreground hover:text-foreground'}`}
+              >Spareperiode</button>
+            </div>
+
+            {mode === 'enkelt' ? (
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="space-y-0.5">
+                  <Label className="text-xs">Dato</Label>
+                  <Input type="date" className="h-8 text-xs w-36" value={date} onChange={e => setDate(e.target.value)} />
+                </div>
+                <div className="space-y-0.5">
+                  <Label className="text-xs">Beløp (kr)</Label>
+                  <Input type="number" className="h-8 text-xs w-28" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" autoFocus />
+                </div>
+                <div className="space-y-0.5 flex-1 min-w-28">
+                  <Label className="text-xs">Notat (valgfritt)</Label>
+                  <Input className="h-8 text-xs" value={note} onChange={e => setNote(e.target.value)} placeholder="f.eks. bonus" />
+                </div>
+                <Button size="sm" className="h-8 text-xs" onClick={saveEnkelt} disabled={!date || !amount || parseFloat(amount) <= 0}>Lagre</Button>
+                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setAdding(false)}>Avbryt</Button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="space-y-0.5">
+                  <Label className="text-xs">Beløp/mnd (kr)</Label>
+                  <Input type="number" className="h-8 text-xs w-28" value={periodAmount} onChange={e => setPeriodAmount(e.target.value)} placeholder="f.eks. 3000" autoFocus />
+                </div>
+                <div className="space-y-0.5">
+                  <Label className="text-xs">Fra (valgfri)</Label>
+                  <Input type="date" className="h-8 text-xs w-36" value={periodFrom} onChange={e => setPeriodFrom(e.target.value)} />
+                </div>
+                <div className="space-y-0.5">
+                  <Label className="text-xs">Til (valgfri)</Label>
+                  <Input type="date" className="h-8 text-xs w-36" value={periodTo} onChange={e => setPeriodTo(e.target.value)} />
+                </div>
+                <Button size="sm" className="h-8 text-xs" onClick={savePeriode} disabled={!periodAmount || parseFloat(periodAmount) <= 0}>Lagre</Button>
+                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setAdding(false)}>Avbryt</Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Fallback: kun fast månedlig, ingen oppføringer */}
+        {entries.length === 0 && !adding && (
           <div className="flex items-center justify-between rounded border border-border/40 bg-muted/10 px-2.5 py-2 text-xs">
             <div>
               <p className="font-mono font-medium">{portfolio.monthlyDeposit.toLocaleString('no-NO')} kr/mnd</p>
-              <p className="text-muted-foreground text-[10px]">Fast beløp (ingen perioder satt) · endre under Innstillinger</p>
+              <p className="text-muted-foreground text-[10px]">Fast beløp — ingen perioder satt. Endre under Innstillinger.</p>
             </div>
           </div>
         )}
 
-        {/* Perioder */}
-        {periods.map(p => (
-          <div key={p.id} className="flex items-center justify-between rounded border border-border/40 bg-muted/10 px-2.5 py-2 text-xs">
-            <div className="flex flex-col gap-0.5">
-              <span className="font-mono font-medium">{Math.round(p.amount).toLocaleString('no-NO')} kr/mnd</span>
-              <span className="text-muted-foreground text-[10px]">
-                {p.fromDate ? new Date(p.fromDate).toLocaleDateString('no-NO', { month: 'short', year: 'numeric' }) : 'Start'}
-                {' → '}
-                {p.toDate ? new Date(p.toDate).toLocaleDateString('no-NO', { month: 'short', year: 'numeric' }) : 'Ingen slutt'}
-              </span>
-            </div>
-            <button className="text-muted-foreground hover:text-red-400 transition-colors p-1" onClick={() => remove(p.id)}>
-              <Trash2 className="h-3 w-3" />
-            </button>
-          </div>
-        ))}
-
-        {/* Legg til periode */}
-        {adding && (
-          <div className="rounded-lg border border-border bg-muted/10 p-3 space-y-2.5">
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Ny spareperiode</p>
-            <div>
-              <label className="text-[10px] text-muted-foreground block mb-1">Beløp per måned (kr)</label>
-              <input autoFocus type="number" min={0} step={100} placeholder="f.eks. 5000"
-                className="h-7 w-full rounded border border-border bg-background px-2 text-xs font-mono outline-none focus:border-primary"
-                value={amount} onChange={e => setAmount(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && save()} />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[10px] text-muted-foreground block mb-1">Fra (valgfri)</label>
-                <input type="month" className="h-7 w-full rounded border border-border bg-background px-2 text-xs outline-none focus:border-primary"
-                  value={from} onChange={e => setFrom(e.target.value)} />
+        {/* Tidslinje */}
+        {entries.map(entry =>
+          entry.kind === 'periode' ? (
+            <div key={entry.data.id} className="flex items-center justify-between rounded border border-border/40 bg-muted/10 px-2.5 py-2 text-xs">
+              <div className="flex flex-col gap-0.5">
+                <span className="font-mono font-medium">{Math.round(entry.data.amount).toLocaleString('no-NO')} kr/mnd</span>
+                <span className="text-muted-foreground text-[10px]">
+                  {entry.data.fromDate ? new Date(entry.data.fromDate).toLocaleDateString('no-NO', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Start'}
+                  {' → '}
+                  {entry.data.toDate ? new Date(entry.data.toDate).toLocaleDateString('no-NO', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Ingen slutt'}
+                </span>
               </div>
-              <div>
-                <label className="text-[10px] text-muted-foreground block mb-1">Til (valgfri)</label>
-                <input type="month" className="h-7 w-full rounded border border-border bg-background px-2 text-xs outline-none focus:border-primary"
-                  value={to} onChange={e => setTo(e.target.value)} />
+              <button className="text-muted-foreground hover:text-red-400 transition-colors p-1" onClick={() => onRemovePeriod(entry.data.id)}>
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          ) : (
+            <div key={entry.data.id} className="flex items-center justify-between rounded border border-indigo-500/20 bg-indigo-500/5 px-2.5 py-2 text-xs">
+              <div className="flex flex-col gap-0.5">
+                <span className="font-mono font-medium">{Math.round(entry.data.amount).toLocaleString('no-NO')} kr</span>
+                <span className="text-muted-foreground text-[10px]">
+                  {new Date(entry.data.date).toLocaleDateString('no-NO', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  {entry.data.note ? ` · ${entry.data.note}` : ''}
+                </span>
               </div>
+              <button className="text-muted-foreground hover:text-red-400 transition-colors p-1" onClick={() => onRemoveContribution(entry.data.id)}>
+                <Trash2 className="h-3 w-3" />
+              </button>
             </div>
-            <div className="flex gap-1.5 justify-end">
-              <button onClick={() => setAdding(false)}
-                className="px-3 py-1 rounded text-xs border border-border text-muted-foreground hover:text-foreground transition-colors">Avbryt</button>
-              <button onClick={save} disabled={!amount || parseFloat(amount) <= 0}
-                className="px-3 py-1 rounded text-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50">Lagre</button>
-            </div>
-          </div>
+          )
         )}
       </CardContent>
     </Card>
@@ -918,7 +986,7 @@ function PortfolioSettings({
 // ------------------------------------------------------------
 
 export function FondPage() {
-  const { fondPortfolio, setFondPortfolio, addFondSnapshot, removeFondSnapshot } = useActiveEconomyStore()
+  const { fondPortfolio, setFondPortfolio, addFondSnapshot, removeFondSnapshot, addFondContribution, removeFondContribution } = useActiveEconomyStore()
 
   const [showSettings, setShowSettings] = useState(false)
   const [livePrices, setLivePrices] = useState<Record<string, LivePrice>>({})
@@ -1062,7 +1130,10 @@ export function FondPage() {
         {/* Spareplan */}
         <SpareplanCard
           portfolio={fondPortfolio}
-          onUpdate={setFondPortfolio}
+          onAddContribution={addFondContribution}
+          onRemoveContribution={removeFondContribution}
+          onAddPeriod={(p) => setFondPortfolio({ ...fondPortfolio, contributionPeriods: [...(fondPortfolio.contributionPeriods ?? []), p] })}
+          onRemovePeriod={(id) => setFondPortfolio({ ...fondPortfolio, contributionPeriods: (fondPortfolio.contributionPeriods ?? []).filter(p => p.id !== id) })}
         />
 
         {/* Allocation donut + fund list */}

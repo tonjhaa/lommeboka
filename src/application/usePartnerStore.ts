@@ -453,6 +453,21 @@ export const usePartnerStore = create<EconomyState>()(
             snapshots: s.fondPortfolio.snapshots.filter((snap) => snap.date !== date),
           },
         })),
+      addFondContribution: (c) =>
+        set((s) => ({
+          fondPortfolio: {
+            ...s.fondPortfolio,
+            contributions: [...(s.fondPortfolio.contributions ?? []).filter(x => x.id !== c.id), c]
+              .sort((a, b) => a.date.localeCompare(b.date)),
+          },
+        })),
+      removeFondContribution: (id) =>
+        set((s) => ({
+          fondPortfolio: {
+            ...s.fondPortfolio,
+            contributions: (s.fondPortfolio.contributions ?? []).filter(c => c.id !== id),
+          },
+        })),
 
       // ── Partner-veikart — stub (partner doesn't have a sub-partner) ────────
       partnerVeikart: STUB_PARTNER_VEIKART,

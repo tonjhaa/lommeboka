@@ -572,6 +572,7 @@ export interface FondPortfolio {
   funds: FondEntry[]
   snapshots: FondPortfolioSnapshot[]
   contributionPeriods?: ContributionPeriod[]
+  contributions?: SavingsContribution[]  // enkeltinnskudd (fremtidige planlagte)
 }
 
 // ------------------------------------------------------------

@@ -644,18 +644,26 @@ function InnskuddCell({ value, onChange, isOverridden, onFillDown }: {
   )
 }
 
-function getFondContribForMonth(portfolio: import('@/types/economy').FondPortfolio, year: number, month: number): number {
+function getFondContribForMonth(portfolio: import('@/types/economy').FondPortfolio, year: number, month: number, nowISO?: string): number {
+  const ym = `${year}-${String(month).padStart(2, '0')}`
+  // Enkeltinnskudd planlagt for denne måneden
+  const oneTime = (portfolio.contributions ?? [])
+    .filter(c => (!nowISO || c.date > nowISO) && c.date.slice(0, 7) === ym)
+    .reduce((s, c) => s + c.amount, 0)
+  // Periodisk innskudd
   const periods = portfolio.contributionPeriods
+  let base = 0
   if (periods && periods.length > 0) {
-    const ym = `${year}-${String(month).padStart(2, '0')}`
     const period = periods.find(p => {
       const from = p.fromDate ? p.fromDate.slice(0, 7) : '0000-00'
       const to = p.toDate ? p.toDate.slice(0, 7) : '9999-99'
       return ym >= from && ym <= to
     })
-    return period ? Math.round(period.amount) : 0
+    base = period ? Math.round(period.amount) : 0
+  } else {
+    base = Math.round(portfolio.monthlyDeposit)
   }
-  return Math.round(portfolio.monthlyDeposit)
+  return base + oneTime
 }
 
 function MånedsoversiktTable({
@@ -839,7 +847,8 @@ function MånedsoversiktTable({
         const to = p.toDate ? p.toDate.slice(0, 7) : '9999-99'
         return ym >= from && ym <= to
       }) ?? null
-      const baseFondMnd = fondPortfolio ? getFondContribForMonth(fondPortfolio, year, month) : fondMonthlyDeposit
+      const nowISO = now.toISOString().slice(0, 10)
+      const baseFondMnd = fondPortfolio ? getFondContribForMonth(fondPortfolio, year, month, nowISO) : fondMonthlyDeposit
       const effectiveFondMnd = fondKey in contribOverrides ? contribOverrides[fondKey] : baseFondMnd
       // Bruk faktisk snapshot for denne måneden hvis det finnes
       const snapshotThisMonth = fondPortfolio?.snapshots?.find(s => s.date.slice(0, 7) === ym)

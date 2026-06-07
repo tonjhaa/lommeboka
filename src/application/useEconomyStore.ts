@@ -195,6 +195,8 @@ export interface EconomyState {
   setFondPortfolio: (p: FondPortfolio) => void
   addFondSnapshot: (snapshot: FondPortfolioSnapshot) => void
   removeFondSnapshot: (date: string) => void
+  addFondContribution: (c: SavingsContribution) => void
+  removeFondContribution: (id: string) => void
 
   updateBudgetTemplate: (template: Partial<BudgetTemplate>) => void
   addBudgetLine: (line: BudgetLine) => void
@@ -940,6 +942,21 @@ export const useEconomyStore = create<EconomyState>()(
           fondPortfolio: {
             ...s.fondPortfolio,
             snapshots: s.fondPortfolio.snapshots.filter((snap) => snap.date !== date),
+          },
+        })),
+      addFondContribution: (c) =>
+        set((s) => ({
+          fondPortfolio: {
+            ...s.fondPortfolio,
+            contributions: [...(s.fondPortfolio.contributions ?? []).filter(x => x.id !== c.id), c]
+              .sort((a, b) => a.date.localeCompare(b.date)),
+          },
+        })),
+      removeFondContribution: (id) =>
+        set((s) => ({
+          fondPortfolio: {
+            ...s.fondPortfolio,
+            contributions: (s.fondPortfolio.contributions ?? []).filter(c => c.id !== id),
           },
         })),
 
