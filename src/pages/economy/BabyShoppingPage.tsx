@@ -25,6 +25,7 @@ export interface BabyShoppingItem {
   note: string
   storeUrl?: string
   bestPriceNote?: string
+  bestPriceUrl?: string
 }
 
 const STATUS_LABELS: Record<ItemStatus, string> = {
@@ -308,7 +309,11 @@ export function BabyShoppingPage() {
                     ) : <span className="text-muted-foreground/40 text-[11px]">—</span>}
                   </td>
                   <td className="py-2 px-3 text-[11px] text-muted-foreground max-w-[140px]" onClick={() => openEdit(item)}>
-                    <span className="truncate block">{item.bestPriceNote || <span className="opacity-30">—</span>}</span>
+                    {item.bestPriceNote
+                      ? item.bestPriceUrl
+                        ? <a href={item.bestPriceUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-primary hover:underline truncate"><ExternalLink className="h-3 w-3 shrink-0" /><span className="truncate">{item.bestPriceNote}</span></a>
+                        : <span className="truncate block">{item.bestPriceNote}</span>
+                      : <span className="opacity-30">—</span>}
                   </td>
                   <td className="py-2 px-3 text-right font-mono" onClick={() => openEdit(item)}>{fmtNOK(item.budgeted)}</td>
                   <td className={cn('py-2 px-3 text-right font-mono', item.actual > 0 && 'text-green-400')} onClick={() => openEdit(item)}>{fmtNOK(item.actual)}</td>
@@ -362,6 +367,8 @@ function ItemDialog({ item, isNew, categories, onSave, onClose, onDelete }: {
   const [form, setForm] = useState<BabyShoppingItem>(item)
   const [scraping, setScraping] = useState(false)
   const [scrapeError, setScrapeError] = useState('')
+  const [findingPrice, setFindingPrice] = useState(false)
+  const [priceResults, setPriceResults] = useState<{ store: string; price: number; url: string }[]>([])
 
   useEffect(() => { setForm(item) }, [item])
 
@@ -388,6 +395,27 @@ function ItemDialog({ item, isNew, categories, onSave, onClose, onDelete }: {
     } finally {
       setScraping(false)
     }
+  }
+
+  async function findBestPrice() {
+    if (!form.name) return
+    setFindingPrice(true)
+    setPriceResults([])
+    try {
+      const res = await fetch(`/api/find-best-price?name=${encodeURIComponent(form.name)}`)
+      const data = await res.json()
+      setPriceResults(data.results ?? [])
+    } catch {
+      setPriceResults([])
+    } finally {
+      setFindingPrice(false)
+    }
+  }
+
+  function pickPrice(r: { store: string; price: number; url: string }) {
+    const note = r.price > 0 ? `${r.price.toLocaleString('no-NO')} kr – ${r.store}` : r.store
+    set({ bestPriceNote: note, bestPriceUrl: r.url })
+    setPriceResults([])
   }
 
   return (
@@ -444,18 +472,56 @@ function ItemDialog({ item, isNew, categories, onSave, onClose, onDelete }: {
             </div>
           </div>
 
-          {/* Status + Beste pris */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Status</Label>
-              <select value={form.status} onChange={e => set({ status: e.target.value as ItemStatus })} className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs">
-                {(Object.keys(STATUS_LABELS) as ItemStatus[]).map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-              </select>
+          {/* Status */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Status</Label>
+            <select value={form.status} onChange={e => set({ status: e.target.value as ItemStatus })} className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs">
+              {(Object.keys(STATUS_LABELS) as ItemStatus[]).map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+            </select>
+          </div>
+
+          {/* Beste pris */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Beste pris / butikk</Label>
+            <div className="flex gap-2">
+              {form.bestPriceNote ? (
+                <div className="flex-1 flex items-center gap-2 rounded-md border border-input bg-muted/30 px-3 h-8 text-xs">
+                  {form.bestPriceUrl
+                    ? <a href={form.bestPriceUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate flex items-center gap-1"><ExternalLink className="h-3 w-3 shrink-0" />{form.bestPriceNote}</a>
+                    : <span className="truncate">{form.bestPriceNote}</span>}
+                  <button onClick={() => set({ bestPriceNote: '', bestPriceUrl: '' })} className="ml-auto text-muted-foreground hover:text-foreground shrink-0"><X className="h-3 w-3" /></button>
+                </div>
+              ) : (
+                <span className="flex-1 flex items-center text-xs text-muted-foreground italic">Ikke funnet ennå</span>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs shrink-0 gap-1.5"
+                disabled={findingPrice || !form.name}
+                onClick={findBestPrice}
+              >
+                {findingPrice ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                Finn beste pris
+              </Button>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Beste pris / butikk</Label>
-              <Input value={form.bestPriceNote ?? ''} onChange={e => set({ bestPriceNote: e.target.value })} placeholder="Finn.no, Jollyroom..." className="text-xs h-8" />
-            </div>
+            {findingPrice && <p className="text-[11px] text-muted-foreground">Søker på norske nettbutikker...</p>}
+            {priceResults.length > 0 && (
+              <div className="rounded-md border border-border divide-y divide-border overflow-hidden">
+                {priceResults.map((r, i) => (
+                  <button
+                    key={i}
+                    onClick={() => pickPrice(r)}
+                    className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-muted/40 transition-colors text-left"
+                  >
+                    <span className="text-foreground">{r.store}</span>
+                    <span className="font-mono font-medium text-primary ml-4 shrink-0">
+                      {r.price > 0 ? `${r.price.toLocaleString('no-NO')} kr` : 'Se pris'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Budsjett + Faktisk */}
