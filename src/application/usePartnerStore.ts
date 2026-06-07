@@ -425,6 +425,8 @@ export const usePartnerStore = create<EconomyState>()(
       updateIvfTransaction: () => {},
       removeIvfTransaction: () => {},
       setIvfSettings: () => {},
+      babyShoppingItems: [],
+      setBabyShoppingItems: () => {},
 
       // ── Fond — stubs ───────────────────────────────────────────────────────
       fondPortfolio: DEFAULT_FOND_PORTFOLIO,

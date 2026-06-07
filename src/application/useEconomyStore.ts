@@ -84,6 +84,9 @@ export interface EconomyState {
   ivfTransactions: IVFTransaction[]
   ivfSettings: IVFSettings
 
+  // Baby-innkjøpsliste
+  babyShoppingItems: import('../pages/economy/BabyShoppingPage').BabyShoppingItem[]
+
   // Fond (KRON-portefølje)
   fondPortfolio: FondPortfolio
 
@@ -182,6 +185,8 @@ export interface EconomyState {
   removeIvfTransaction: (id: string) => void
   setIvfSettings: (settings: Partial<IVFSettings>) => void
 
+  setBabyShoppingItems: (items: import('../pages/economy/BabyShoppingPage').BabyShoppingItem[]) => void
+
   setFondPortfolio: (p: FondPortfolio) => void
   addFondSnapshot: (snapshot: FondPortfolioSnapshot) => void
   removeFondSnapshot: (date: string) => void
@@ -267,6 +272,7 @@ export const useEconomyStore = create<EconomyState>()(
       temporaryPayEntries: [],
       ivfTransactions: INITIAL_IVF_TRANSACTIONS,
       ivfSettings: DEFAULT_IVF_SETTINGS,
+      babyShoppingItems: [],
       fondPortfolio: DEFAULT_FOND_PORTFOLIO,
       partnerVeikart: {
         enabled: false,
@@ -899,6 +905,7 @@ export const useEconomyStore = create<EconomyState>()(
         set((s) => ({ ivfTransactions: s.ivfTransactions.filter((t) => t.id !== id) })),
       setIvfSettings: (settings) =>
         set((s) => ({ ivfSettings: { ...s.ivfSettings, ...settings } })),
+      setBabyShoppingItems: (items) => set({ babyShoppingItems: items }),
 
       // --- Fond ---
       setFondPortfolio: (p) => set({ fondPortfolio: p }),
