@@ -548,7 +548,10 @@ function PortfolioSettings({
 
   function addPeriod() {
     const amt = parseFloat(periodAmount)
-    if (!amt) return
+    if (!amt || amt <= 0) {
+      setPeriodAmount('')
+      return
+    }
     const newPeriod: ContributionPeriod = {
       id: crypto.randomUUID(),
       amount: amt,

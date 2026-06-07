@@ -433,11 +433,26 @@ export const usePartnerStore = create<EconomyState>()(
       dismissPriceAlert: () => {},
       setLastGlobalPriceCheckAt: () => {},
 
-      // ── Fond — stubs ───────────────────────────────────────────────────────
+      // ── Fond ──────────────────────────────────────────────────────────────
       fondPortfolio: DEFAULT_FOND_PORTFOLIO,
-      setFondPortfolio: () => {},
-      addFondSnapshot: () => {},
-      removeFondSnapshot: () => {},
+      setFondPortfolio: (p) => set({ fondPortfolio: p }),
+      addFondSnapshot: (snapshot) =>
+        set((s) => ({
+          fondPortfolio: {
+            ...s.fondPortfolio,
+            snapshots: [
+              ...s.fondPortfolio.snapshots.filter((snap) => snap.date !== snapshot.date),
+              snapshot,
+            ],
+          },
+        })),
+      removeFondSnapshot: (date) =>
+        set((s) => ({
+          fondPortfolio: {
+            ...s.fondPortfolio,
+            snapshots: s.fondPortfolio.snapshots.filter((snap) => snap.date !== date),
+          },
+        })),
 
       // ── Partner-veikart — stub (partner doesn't have a sub-partner) ────────
       partnerVeikart: STUB_PARTNER_VEIKART,
@@ -492,6 +507,7 @@ export const usePartnerStore = create<EconomyState>()(
             lonnsoppgjor: data.lonnsoppgjor ?? [],
             temporaryPayEntries: data.temporaryPayEntries ?? [],
             userPreferences: data.userPreferences ?? null,
+            fondPortfolio: data.fondPortfolio ?? DEFAULT_FOND_PORTFOLIO,
           })
         } catch {
           console.error('[PartnerStore] importData: ugyldig JSON')

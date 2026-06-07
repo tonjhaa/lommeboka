@@ -79,6 +79,21 @@ export function buildPartnerVeikartPatch(
         }))
       : existing.fondHoldings
 
+  // Synk månedlig fondinnskudd fra contributionPeriods eller monthlyDeposit
+  const fondMonthlyContribution = (() => {
+    if (!fondPortfolio) return existing.fondMonthlyContribution
+    const periods = fondPortfolio.contributionPeriods ?? []
+    if (periods.length > 0) {
+      const activePeriod = periods.find(p => {
+        const from = p.fromDate ? p.fromDate.slice(0, 7) : '0000-00'
+        const to = p.toDate ? p.toDate.slice(0, 7) : '9999-99'
+        return nowISO.slice(0, 7) >= from && nowISO.slice(0, 7) <= to
+      })
+      return activePeriod?.amount ?? fondPortfolio.monthlyDeposit ?? existing.fondMonthlyContribution
+    }
+    return fondPortfolio.monthlyDeposit ?? existing.fondMonthlyContribution
+  })()
+
   return {
     enabled: true,
     accounts,
@@ -88,5 +103,6 @@ export function buildPartnerVeikartPatch(
     debts: activeDebts,
     ...(fondHoldings ? { fondHoldings } : {}),
     ...(syncedFondValue != null ? { fondCurrentValue: syncedFondValue } : {}),
+    ...(fondMonthlyContribution != null ? { fondMonthlyContribution } : {}),
   }
 }

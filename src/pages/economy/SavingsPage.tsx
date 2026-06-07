@@ -730,7 +730,18 @@ function MånedsoversiktTable({
   const hasFond = fondCurrentValue > 0 || fondMonthlyDeposit > 0
   const hasPartner = partnerVeikart.enabled
 
-  const myAnnualIncome = ((profile?.baseMonthly ?? 0) + (profile?.fixedAdditions?.reduce((s, a) => s + a.amount, 0) ?? 0)) * 12
+  // Fallback: utled grunnlønn fra siste slip i monthHistory hvis profile.baseMonthly er 0
+  const { monthHistory } = useActiveEconomyStore()
+  const derivedBaseMonthly = (() => {
+    const base = profile?.baseMonthly ?? 0
+    if (base > 0) return base
+    const slips = [...monthHistory]
+      .filter(m => m.slipData?.maanedslonn)
+      .sort((a, b) => b.year !== a.year ? b.year - a.year : b.month - a.month)
+    return slips[0]?.slipData?.maanedslonn ?? 0
+  })()
+  const myAnnualIncome = (derivedBaseMonthly + (profile?.fixedAdditions?.reduce((s, a) => s + a.amount, 0) ?? 0)) * 12
+  const salaryNeedsUpdate = !profile || profile.baseMonthly === 0
   const partnerOnlyAnnualIncome = hasPartner ? partnerVeikart.annualIncome : 0
   const annualIncome = myAnnualIncome + partnerOnlyAnnualIncome
   const salaryGrowthPct = 3
@@ -948,7 +959,15 @@ function MånedsoversiktTable({
           {myAnnualIncome > 0 && (
             <span className="flex items-center gap-1">
               <span>Årslønn:</span>
-              <span className="text-foreground font-medium">{Math.round(myAnnualIncome / 1000)}k</span>
+              <span className={salaryNeedsUpdate ? 'text-amber-400 font-medium' : 'text-foreground font-medium'}>
+                {Math.round(myAnnualIncome / 1000)}k
+                {salaryNeedsUpdate && <span className="ml-0.5 text-[9px]">*</span>}
+              </span>
+            </span>
+          )}
+          {salaryNeedsUpdate && myAnnualIncome === 0 && (
+            <span className="text-amber-400 text-[10px] flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3" /> Sett opp lønnsprofil i Lønn-fanen
             </span>
           )}
         </span>
