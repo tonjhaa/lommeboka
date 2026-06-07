@@ -383,6 +383,7 @@ function ItemDialog({ item, isNew, categories, onSave, onClose, onDelete }: {
         if (!form.name) patch.name = clean
       }
       if (data.price && !form.budgeted) patch.budgeted = data.price
+      if (data.category && form.category === 'Annet') patch.category = data.category
       setForm(f => ({ ...f, ...patch }))
       if (!data.name && !data.price) setScrapeError('Fant ikke produktinfo på siden')
     } catch {

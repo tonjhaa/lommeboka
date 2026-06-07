@@ -123,7 +123,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    return res.json({ name: name || null, price: price || null })
+    const category = inferCategory(name, html)
+
+    return res.json({ name: name || null, price: price || null, category })
   } catch {
     return res.status(500).json({ error: 'Could not retrieve product information' })
   }
@@ -158,8 +160,25 @@ function extractPrice(obj: Record<string, unknown>): number | null {
 }
 
 function parseNOKPrice(raw: string): number | null {
-  const cleaned = raw.replace(/\s/g, '').replace(/\.(?=\d{3})/g, '').replace(',', '.')
+  const trimmed = raw.trim()
+  // Try direct float first — handles JSON-LD values like "15499.000000000"
+  const direct = parseFloat(trimmed)
+  if (isFinite(direct) && direct >= 1 && direct <= 500_000) return Math.round(direct)
+  // Norwegian format: dot as thousands separator (only strip dot followed by EXACTLY 3 digits)
+  const cleaned = trimmed.replace(/\s/g, '').replace(/\.(?=\d{3}(?!\d))/g, '').replace(',', '.')
   const n = parseFloat(cleaned)
-  // Sanity check: valid prices are 1–500 000 kr
   return isFinite(n) && n >= 1 && n <= 500_000 ? Math.round(n) : null
+}
+
+function inferCategory(name: string, html: string): string | null {
+  const text = (name + ' ' + html.slice(0, 20000)).toLowerCase()
+  if (/bilsete|bilstol|baksete|besafe|axkid|maxi.cosi|cybex cloud|britax/.test(text)) return 'Transport'
+  if (/barnevogn|bugaboo|stokke|cybex balios|uppababy|bæresele|bærestol|regnslag/.test(text)) return 'Transport'
+  if (/vugge|babyseng|sovepose|baby.alarm|lydovervåk|mørkelegging/.test(text)) return 'Søvn'
+  if (/stellebord|stelleunderlag|bleie|bleier|termometer|neglesaks|stellekrem|sesamolje/.test(text)) return 'Stell'
+  if (/brystpumpe|tåteflaske|sterilisator|smokk|smekke|bibs|høystol|morsmelk/.test(text)) return 'Ernæring'
+  if (/babybody|sparkebukse|sparkedress|babylue|babyvott|ytterdrakt|overall/.test(text)) return 'Klær'
+  if (/babybadekar|badetermometer|babysåpe|babyhåndkle/.test(text)) return 'Bad'
+  if (/gymstativ|aktivitetsteppe|babyleke|rasler/.test(text)) return 'Lek & utvikling'
+  return null
 }
