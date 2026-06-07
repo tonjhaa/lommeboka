@@ -4,7 +4,7 @@ import { useEconomyStore } from '@/application/useEconomyStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -479,7 +479,7 @@ function ItemDialog({ item, isNew, categories, onSave, onClose, onDelete }: {
           </div>
         </div>
 
-        <DialogFooter className="flex items-center gap-2">
+        <div className="flex items-center gap-2 pt-2 border-t border-border">
           {onDelete && (
             <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300 mr-auto text-xs" onClick={onDelete}>
               <Trash2 className="h-3.5 w-3.5 mr-1" /> Slett
@@ -487,7 +487,7 @@ function ItemDialog({ item, isNew, categories, onSave, onClose, onDelete }: {
           )}
           <Button variant="outline" size="sm" className="text-xs" onClick={onClose}>Avbryt</Button>
           <Button size="sm" className="text-xs" onClick={() => onSave(form)} disabled={!form.name}>Lagre</Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   )
