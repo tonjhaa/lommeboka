@@ -405,7 +405,7 @@ export function BudgetPage() {
       <div className="overflow-auto flex-1">
         <table className="text-xs border-collapse min-w-max">
           {/* === HEADER === */}
-          <thead className="sticky top-0 z-30">
+          <thead className="sticky top-0 z-30 [&_th]:bg-muted">
             {/* Row 1: Month names (each spans 2 cols) */}
             <tr className="bg-muted border-b border-border">
               <th className="sticky left-0 z-40 bg-muted px-3 py-2 text-left font-medium w-[180px] min-w-[180px] border-r border-border">
