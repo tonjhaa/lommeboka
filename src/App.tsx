@@ -105,6 +105,7 @@ function App() {
   const { user, initialized, initialize } = useAuthStore()
   const restoreProfileFromSlips = useEconomyStore((s) => s.restoreProfileFromSlips)
   const [syncing, setSyncing] = useState(false)
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     initialize()
@@ -127,7 +128,11 @@ function App() {
     localStorage.setItem('lommeboka-session-user', user.id)
 
     setSyncing(true)
-    loadFromSupabase().finally(() => setSyncing(false))
+    setLoadError(false)
+    loadFromSupabase()
+      .then((ok) => { if (!ok) setLoadError(true) })
+      .catch(() => setLoadError(true))
+      .finally(() => setSyncing(false))
 
     const stopSync = startAutoSync()
     const stopOwnDataSync = subscribeToOwnData(user.id)
@@ -166,6 +171,28 @@ function App() {
 
   if (!user) {
     return <LoginPage />
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-sm text-muted-foreground px-4 text-center">
+        <p className="text-base text-foreground font-medium">Kunne ikke laste data fra skyen</p>
+        <p className="text-xs">Sjekk internettforbindelsen og prøv igjen.</p>
+        <button
+          onClick={() => {
+            setLoadError(false)
+            setSyncing(true)
+            loadFromSupabase()
+              .then((ok) => { if (!ok) setLoadError(true) })
+              .catch(() => setLoadError(true))
+              .finally(() => setSyncing(false))
+          }}
+          className="px-4 py-2 rounded bg-primary text-primary-foreground text-xs hover:bg-primary/90 transition-colors"
+        >
+          Prøv igjen
+        </button>
+      </div>
+    )
   }
 
   return (

@@ -24,48 +24,65 @@ function setSyncStatus(s: SyncStatus) {
  * - Ingen data i Supabase → last opp lokale data
  * - Nettverksfeil → gjør ingenting (behold lokale data)
  */
-export async function loadFromSupabase(): Promise<boolean> {
+async function fetchEconomyData(userId: string): Promise<object | null> {
   const { data, error } = await supabase
     .from('user_data')
     .select('economy_data')
+    .eq('user_id', userId)
     .single()
-
   if (error) {
-    // PGRST116 = "no rows found" — ikke en ekte feil, bare ingen data ennå
-    if (error.code === 'PGRST116') {
-      const state = useEconomyStore.getState()
-      if (state.profile || state.monthHistory.length > 0) {
-        await saveToSupabase()
-      }
+    if (error.code === 'PGRST116') return undefined as unknown as null  // ingen rad ennå
+    throw new Error(error.message)
+  }
+  return data?.economy_data ?? null
+}
+
+export async function loadFromSupabase(): Promise<boolean> {
+  // Forsikre at auth er klar
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return false
+
+  let economyData: object | null
+  try {
+    economyData = await fetchEconomyData(user.id)
+  } catch (err) {
+    // Prøv én gang til etter 2 sekunder (nettverksfeil)
+    console.warn('[sync] loadFromSupabase feil, prøver på nytt:', err)
+    await new Promise(r => setTimeout(r, 2000))
+    try {
+      economyData = await fetchEconomyData(user.id)
+    } catch (err2) {
+      console.error('[sync] Retry feilet:', err2)
       return false
     }
-    // Ekte feil (nettverk, auth, etc.) — ikke overskriv cloud-data
-    console.error('[sync] loadFromSupabase feil:', error.message)
+  }
+
+  if (economyData === undefined) {
+    // Ingen rad i Supabase ennå — last opp lokale data
+    const state = useEconomyStore.getState()
+    if (state.profile || state.monthHistory.length > 0) await saveToSupabase()
     return false
   }
 
-  if (!data?.economy_data) {
+  if (!economyData) {
     // Rad finnes men economy_data er null — last opp lokale data
     const state = useEconomyStore.getState()
-    if (state.profile || state.monthHistory.length > 0) {
-      await saveToSupabase()
-    }
+    if (state.profile || state.monthHistory.length > 0) await saveToSupabase()
     return false
   }
 
-  // Ikke overskriv lokal data med tom Supabase-data — last heller opp det lokale
-  const remote = data.economy_data as { savingsAccounts?: unknown[]; monthHistory?: unknown[]; debts?: unknown[]; profile?: unknown }
+  // Ikke overskriv lokal data med tom Supabase-data
+  const remote = economyData as { savingsAccounts?: unknown[]; monthHistory?: unknown[]; debts?: unknown[]; profile?: unknown }
   const remoteIsEmpty = !remote.profile && !(remote.savingsAccounts?.length) && !(remote.monthHistory?.length) && !(remote.debts?.length)
   const localState = useEconomyStore.getState()
   const localHasData = localState.profile !== null || localState.savingsAccounts.length > 0 || localState.monthHistory.length > 0 || localState.debts.length > 0
   if (remoteIsEmpty && localHasData) {
-    // Supabase har tom data men lokalt finnes ekte data — last opp lokalt til Supabase
     await saveToSupabase()
     return true
   }
 
   setImporting(true)
-  useEconomyStore.getState().importData(JSON.stringify(data.economy_data))
+  useEconomyStore.getState().importData(JSON.stringify(economyData))
   setImporting(false)
 
   // Auto-merk onboarding som fullført hvis brukeren allerede har data (f.eks. ny enhet)
