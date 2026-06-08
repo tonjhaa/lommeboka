@@ -264,13 +264,14 @@ export function computeBudgetTable(
 
     // Feriepenger og ferietrekk (June only) — begge hører til inntektsområdet
     if (juneHoliday) {
+      const juneSlipData = monthMap.get(6)?.slipData
       inntekterRows.push(mkRow('feriepenger', 'Feriepenger (juni)', uniform12(
         (m) => budgetVal('feriepenger', m, m === 6 ? juneHoliday.holidayPay : 0),
-        () => null,
+        (m) => m === 6 && juneSlipData?.feriepenger != null ? juneSlipData.feriepenger : null,
       )))
       inntekterRows.push(mkRow('ferietrekk', 'Ferietrekk (25 dager)', uniform12(
         (m) => budgetVal('ferietrekk', m, m === 6 ? -juneHoliday.holidayLeaveDeduction : 0),
-        () => null,
+        (m) => m === 6 && juneSlipData?.ferietrekk != null ? -juneSlipData.ferietrekk : null,
       )))
     }
 
