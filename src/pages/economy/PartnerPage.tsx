@@ -104,7 +104,7 @@ export function PartnerPage() {
               )}
             >
               <Icon className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{label}</span>
+              <span>{label}</span>
             </button>
           ))}
           <div className="ml-auto pl-3 text-xs text-violet-400/60 font-medium shrink-0">

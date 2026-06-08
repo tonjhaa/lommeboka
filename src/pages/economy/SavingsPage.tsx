@@ -99,6 +99,9 @@ export function SavingsPage() {
 
   const { savingsTab: tab, setSavingsTab: setTab } = useAppStore()
   const bankPresets = useEconomyStore((s) => s.bankPresets)
+  const storeTypeTop = useActiveStoreType()
+  const isPartnerView = storeTypeTop === 'partner'
+  const partnerName = partnerVeikart?.employer || 'Partner'
 
   const [showAddAccount, setShowAddAccount] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -130,6 +133,12 @@ export function SavingsPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {/* Partner-visning-banner */}
+      {isPartnerView && (
+        <div className="shrink-0 px-4 py-2 bg-violet-500/10 border-b border-violet-500/30 flex items-center gap-2">
+          <span className="text-xs text-violet-400 font-medium">Viser {partnerName} sin sparing — ikke din egen</span>
+        </div>
+      )}
       {/* Flat 4-tab bar with contextual actions */}
       <div className="flex items-center gap-1 border-b border-border bg-card/40 px-4 shrink-0">
         {([
