@@ -94,6 +94,10 @@ export interface ParsetLonnsslipp {
   tabelltrekkBelop: number
   /** Trekktabellnummer fra /440-linjen (f.eks. 8010) */
   tabellnummer?: number
+  /** OF11: Utbetalte feriepenger i ferieåret (kun juni) */
+  feriepenger?: number
+  /** Sum OF19: Ferietrekk ordinært (kun juni, summer to forekomster) */
+  ferietrekk?: number
 }
 
 /** Siste kjente ATF-sats fra importert slipp, for én artskode */

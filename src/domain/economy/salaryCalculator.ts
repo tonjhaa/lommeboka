@@ -136,7 +136,8 @@ export function parseForsvarsSlipp(pdfText: string): ParsetLonnsslipp {
   }
 
   // 7005 (Gruppelivspremie) er arbeidsgiverbetalt — ikke del av brutto, vises som informasjonslinje
-  const fasteTilleggKoder = ['1501', '1162', '106G']
+  // OF11 (Utbet.FP ord.) inkluderes som tillegg slik at bruttoSum stemmer i junimåneder
+  const fasteTilleggKoder = ['1501', '1162', '106G', 'OF11']
   const trekkKoder = ['/440', '/441', '7000', '3020', '3209', '1620', '6100']
 
   // ---- Beløp ----
@@ -179,9 +180,20 @@ export function parseForsvarsSlipp(pdfText: string): ParsetLonnsslipp {
     .filter((l) => l.lastAmount > 0)
     .map((l) => ({ artskode: l.kode, navn: l.navn, belop: l.lastAmount }))
 
+  // OF19 (Ferietrekk) har typisk to forekomster i juni — sum dem alle
+  const ferietrekkTotal = artskodeLinjer
+    .filter((l) => l.kode === 'OF19')
+    .reduce((s, l) => s + Math.abs(l.lastAmount), 0)
+
   const trekk: ArtskopePost[] = lastPerKode(trekkKoder)
     .map((l) => ({ artskode: l.kode, navn: l.navn, belop: l.lastAmount }))
 
+  // OF19 legges til trekk-listen som navngitt rad (kun hvis tilstede)
+  if (ferietrekkTotal > 0) {
+    trekk.unshift({ artskode: 'OF19', navn: 'Ferietrekk', belop: -ferietrekkTotal })
+  }
+
+  // bruttoSum = månedslønn + tillegg (inkl. OF11 feriepenger) — OF19 er allerede ute av brutto
   const bruttoSum = maanedslonn + fasteTillegg.reduce((s, p) => s + p.belop, 0)
 
   // ---- Avregningsdato: "Avregningsdato: 12.03.2026" ----
@@ -288,7 +300,7 @@ export function parseForsvarsSlipp(pdfText: string): ParsetLonnsslipp {
   // Logg ukjente artskoder
   const kjentKoder = new Set([
     ...fasteTilleggKoder, ...trekkKoder,
-    '1S01', '1001', '7005', '10P2',
+    '1S01', '1001', '7005', '10P2', 'OF19',
     ...ATF_ARTSKODER,
   ])
   artskodeLinjer.forEach((l) => {
@@ -325,6 +337,8 @@ export function parseForsvarsSlipp(pdfText: string): ParsetLonnsslipp {
     tabelltrekkGrunnlag,
     tabelltrekkBelop,
     tabellnummer,
+    feriepenger: fasteTillegg.find(p => p.artskode === 'OF11')?.belop,
+    ferietrekk: ferietrekkTotal > 0 ? ferietrekkTotal : undefined,
   }
 }
 
