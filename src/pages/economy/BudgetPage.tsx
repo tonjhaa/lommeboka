@@ -403,7 +403,7 @@ export function BudgetPage() {
       {/* ---- Tabell view ---- */}
       {selectedView === 'tabell' && (
       <div className="overflow-auto flex-1">
-        <table className="text-xs border-collapse min-w-max">
+        <table className="text-xs border-separate border-spacing-0 min-w-max">
           {/* === HEADER === */}
           <thead className="sticky top-0 z-30 bg-muted [&_th]:bg-muted">
             {/* Row 1: Month names (each spans 2 cols) */}
