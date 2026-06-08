@@ -166,11 +166,12 @@ class PageErrorBoundary extends Component<
 
 export function EconomyPage() {
   const userPreferences = useEconomyStore((s) => s.userPreferences)
+  const hasData = useEconomyStore((s) => s.savingsAccounts.length > 0 || s.monthHistory.length > 0 || s.debts.length > 0 || s.profile !== null)
   const currentPage = useAppStore((s) => s.currentEconomyPage)
   const setCurrentPage = useAppStore((s) => s.setCurrentEconomyPage)
 
-  // Vis onboarding for nye brukere
-  if (!userPreferences?.onboardingCompleted) {
+  // Vis onboarding kun for reelt nye brukere uten noen data
+  if (!userPreferences?.onboardingCompleted && !hasData) {
     return (
       <div className="flex-1 overflow-y-auto h-full">
         <OnboardingWizard />
@@ -178,7 +179,7 @@ export function EconomyPage() {
     )
   }
 
-  const enabledPages = new Set(userPreferences.enabledTabs)
+  const enabledPages = new Set(userPreferences?.enabledTabs ?? [])
   const visibleNavItems = NAV_ITEMS.filter(
     ({ page }) => enabledPages.has(page) || page === 'settings'
   )

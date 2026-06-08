@@ -55,6 +55,20 @@ export async function loadFromSupabase(): Promise<boolean> {
 
   useEconomyStore.getState().importData(JSON.stringify(data.economy_data))
 
+  // Auto-merk onboarding som fullført hvis brukeren allerede har data (f.eks. ny enhet)
+  const storeAfterLoad = useEconomyStore.getState()
+  const hasExistingData = storeAfterLoad.savingsAccounts.length > 0 || storeAfterLoad.monthHistory.length > 0 || storeAfterLoad.debts.length > 0 || storeAfterLoad.profile !== null
+  if (hasExistingData && !storeAfterLoad.userPreferences?.onboardingCompleted) {
+    const prefs = storeAfterLoad.userPreferences
+    useEconomyStore.getState().setUserPreferences({
+      enabledTabs: prefs?.enabledTabs ?? [],
+      payDay: prefs?.payDay,
+      birthYear: prefs?.birthYear,
+      housingStatus: prefs?.housingStatus,
+      onboardingCompleted: true,
+    })
+  }
+
   // Migrer eventuelle lokale PDFer til Storage (kjøres om noe mangler)
   let slipMod: typeof import('./slipStorage') | null = null
   try {

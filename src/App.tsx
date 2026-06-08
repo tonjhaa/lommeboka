@@ -118,6 +118,14 @@ function App() {
   useEffect(() => {
     if (!user) return
 
+    // Rydd opp stale data fra en annen bruker på samme enhet
+    const STORE_KEYS = ['min-okonomi-v1', 'lommeboka-partner-v1', 'lommeboka-gaver-v1', 'lommeboka-permisjon-v1', 'boligkalkulator-storage']
+    const lastUserId = localStorage.getItem('lommeboka-session-user')
+    if (lastUserId && lastUserId !== user.id) {
+      STORE_KEYS.forEach(k => localStorage.removeItem(k))
+    }
+    localStorage.setItem('lommeboka-session-user', user.id)
+
     setSyncing(true)
     loadFromSupabase().finally(() => setSyncing(false))
 
