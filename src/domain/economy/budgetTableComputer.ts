@@ -566,6 +566,9 @@ export function computeBudgetTable(
   // ================================================================
   const gjeldRows: BudgetRow[] = []
   for (const debt of debts) {
+    const debtStart = (debt.startDate ?? '').substring(0, 7) // "YYYY-MM", tom = alltid
+    if (debtStart > `${year}-12`) continue  // lånet starter etter dette budsjettåret
+
     if (debt.status === 'nedbetalt') {
       if (!debt.paidOffDate) continue
       const paidMonth = debt.paidOffDate.substring(0, 7)
@@ -573,18 +576,17 @@ export function computeBudgetTable(
       gjeldRows.push(mkRow(`debt-${debt.id}`, debt.creditor, uniform12(
         (m) => {
           const monthKey = `${year}-${String(m).padStart(2, '0')}`
+          if (debtStart && monthKey < debtStart) return 0
           if (monthKey > paidMonth) return 0
           return budgetVal(`debt-${debt.id}`, m, -(debt.monthlyPayment + debt.termFee))
         },
         () => null,
       )))
     } else {
-      const debtStart = debt.startDate.substring(0, 7) // "YYYY-MM"
-      if (debtStart > `${year}-12`) continue  // lånet starter etter dette budsjettåret
       gjeldRows.push(mkRow(`debt-${debt.id}`, debt.creditor, uniform12(
         (m) => {
           const monthKey = `${year}-${String(m).padStart(2, '0')}`
-          if (monthKey < debtStart) return 0
+          if (debtStart && monthKey < debtStart) return 0
           return budgetVal(`debt-${debt.id}`, m, -(debt.monthlyPayment + debt.termFee))
         },
         () => null,
