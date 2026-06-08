@@ -1256,8 +1256,8 @@ function MånedsoversiktTable({
             return (
               <Fragment key={year}>
                 {/* Year row: første år = startsaldo (redigerbar); påfølgende år = forrige år summary */}
-                <tr className="bg-muted/60 border-y-2 border-border">
-                  <td className="sticky left-0 bg-muted/60 px-3 py-2 font-bold text-sm border-r border-border">{year}</td>
+                <tr className="bg-muted border-y-2 border-border">
+                  <td className="sticky left-0 bg-muted px-3 py-2 font-bold text-sm border-r border-border">{year}</td>
                   {accMeta.map(acc => {
                     if (isFirstYear) {
                       return (
