@@ -64,7 +64,9 @@ export async function loadFromSupabase(): Promise<boolean> {
     return true
   }
 
+  setImporting(true)
   useEconomyStore.getState().importData(JSON.stringify(data.economy_data))
+  setImporting(false)
 
   // Auto-merk onboarding som fullført hvis brukeren allerede har data (f.eks. ny enhet)
   const storeAfterLoad = useEconomyStore.getState()
@@ -155,6 +157,10 @@ export async function saveToSupabase(): Promise<void> {
 
 // Debounce-timer
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+// Blokker auto-lagring mens importData kjører (hindrer skriving av tom/delvis tilstand)
+let isImporting = false
+
+export function setImporting(v: boolean) { isImporting = v }
 
 /**
  * Starter automatisk synkronisering til Supabase ved endringer i storen.
@@ -162,6 +168,7 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null
  */
 export function startAutoSync(): () => void {
   const unsubscribe = useEconomyStore.subscribe(() => {
+    if (isImporting) return  // ikke lagre mens vi importerer data
     if (saveTimer) clearTimeout(saveTimer)
     setSyncStatus('saving')
     saveTimer = setTimeout(() => {
@@ -175,4 +182,31 @@ export function startAutoSync(): () => void {
     unsubscribe()
     if (saveTimer) clearTimeout(saveTimer)
   }
+}
+
+/**
+ * Abonnerer på sanntidsendringer i brukerens egne data fra andre enheter.
+ * Returnerer unsubscribe-funksjon.
+ */
+export function subscribeToOwnData(userId: string): () => void {
+  const channel = supabase
+    .channel(`own-data-${userId}`)
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'user_data', filter: `user_id=eq.${userId}` },
+      async (payload) => {
+        if (!payload.new?.economy_data) return
+        // Ikke overskriv med data vi nettopp lagret selv (blokkert av isImporting)
+        if (isImporting) return
+        const remote = payload.new.economy_data as { savingsAccounts?: unknown[]; monthHistory?: unknown[]; profile?: unknown }
+        const remoteHasData = !!(remote.profile || (remote.savingsAccounts as unknown[])?.length || (remote.monthHistory as unknown[])?.length)
+        if (!remoteHasData) return
+        setImporting(true)
+        useEconomyStore.getState().importData(JSON.stringify(payload.new.economy_data))
+        setImporting(false)
+      },
+    )
+    .subscribe()
+
+  return () => { supabase.removeChannel(channel) }
 }
