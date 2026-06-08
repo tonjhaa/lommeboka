@@ -407,8 +407,8 @@ export function BudgetPage() {
           {/* === HEADER === */}
           <thead className="sticky top-0 z-30">
             {/* Row 1: Month names (each spans 2 cols) */}
-            <tr className="bg-muted/90 border-b border-border">
-              <th className="sticky left-0 z-40 bg-muted/90 px-3 py-2 text-left font-medium w-[180px] min-w-[180px] border-r border-border">
+            <tr className="bg-muted border-b border-border">
+              <th className="sticky left-0 z-40 bg-muted px-3 py-2 text-left font-medium w-[180px] min-w-[180px] border-r border-border">
                 Post
               </th>
               {metas.map((meta) => (
@@ -454,8 +454,8 @@ export function BudgetPage() {
             </tr>
 
             {/* Row 2: Sub-headers (Bud | Fak or Prog) */}
-            <tr className="bg-muted/70 border-b border-border">
-              <th className="sticky left-0 z-40 bg-muted/70 px-3 py-1 w-[180px] min-w-[180px] border-r border-border" />
+            <tr className="bg-muted border-b border-border">
+              <th className="sticky left-0 z-40 bg-muted px-3 py-1 w-[180px] min-w-[180px] border-r border-border" />
               {metas.map((meta) => (
                 meta.hasSlip ? (
                   <th
@@ -506,7 +506,7 @@ export function BudgetPage() {
                     <tr key={`sh-${section.key}`} className="border-t-2 border-border/60 bg-muted/15">
                       <td
                         className={cn(
-                          'sticky left-0 z-10 px-3 py-1 text-[10px] font-semibold uppercase tracking-widest border-r border-border bg-muted/20',
+                          'sticky left-0 z-10 px-3 py-1 text-[10px] font-semibold uppercase tracking-widest border-r border-border bg-muted',
                           section.colorClass,
                           isCollapsible && 'cursor-pointer select-none hover:bg-muted/30',
                         )}
@@ -1253,7 +1253,7 @@ function DataRow({
     )}>
       <td className={cn(
         'sticky left-0 z-10 bg-background px-3 py-1.5 border-r border-border w-[180px]',
-        row.isBold ? 'font-bold bg-muted/20 text-[11px] uppercase tracking-wide' : '',
+        row.isBold ? 'font-bold bg-muted text-[11px] uppercase tracking-wide' : '',
         isGrunnlag && 'text-muted-foreground italic',
       )}>
         <span className="flex items-center justify-between gap-1">
