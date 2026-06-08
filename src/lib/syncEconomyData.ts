@@ -201,29 +201,3 @@ export function startAutoSync(): () => void {
   }
 }
 
-/**
- * Abonnerer på sanntidsendringer i brukerens egne data fra andre enheter.
- * Returnerer unsubscribe-funksjon.
- */
-export function subscribeToOwnData(userId: string): () => void {
-  const channel = supabase
-    .channel(`own-data-${userId}`)
-    .on(
-      'postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'user_data', filter: `user_id=eq.${userId}` },
-      async (payload) => {
-        if (!payload.new?.economy_data) return
-        // Ikke overskriv med data vi nettopp lagret selv (blokkert av isImporting)
-        if (isImporting) return
-        const remote = payload.new.economy_data as { savingsAccounts?: unknown[]; monthHistory?: unknown[]; profile?: unknown }
-        const remoteHasData = !!(remote.profile || (remote.savingsAccounts as unknown[])?.length || (remote.monthHistory as unknown[])?.length)
-        if (!remoteHasData) return
-        setImporting(true)
-        useEconomyStore.getState().importData(JSON.stringify(payload.new.economy_data))
-        setImporting(false)
-      },
-    )
-    .subscribe()
-
-  return () => { supabase.removeChannel(channel) }
-}

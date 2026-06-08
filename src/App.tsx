@@ -27,7 +27,7 @@ import { useAuthStore } from '@/store/useAuthStore'
 import { usePartnershipStore } from '@/store/usePartnershipStore'
 import { useSharedProjectStore } from '@/store/useSharedProjectStore'
 import { LoginPage } from '@/pages/LoginPage'
-import { loadFromSupabase, startAutoSync, subscribeToOwnData } from '@/lib/syncEconomyData'
+import { loadFromSupabase, startAutoSync } from '@/lib/syncEconomyData'
 import { useEconomyStore } from '@/application/useEconomyStore'
 
 const EconomyPage = lazyWithRetry(() =>
@@ -135,7 +135,6 @@ function App() {
       .finally(() => setSyncing(false))
 
     const stopSync = startAutoSync()
-    const stopOwnDataSync = subscribeToOwnData(user.id)
 
     // Initialiser partnerskap og håndter eventuelle invite-lenker
     const initPartnership = async () => {
@@ -158,7 +157,7 @@ function App() {
     }
     initPartnership()
 
-    return () => { stopSync(); stopOwnDataSync() }
+    return stopSync
   }, [user])
 
   if (!initialized || syncing) {
