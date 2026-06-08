@@ -42,7 +42,10 @@ async function fileToBase64(file: File): Promise<string> {
 }
 
 function isPartialParse(slip: ParsetLonnsslipp): boolean {
-  return slip.skattetrekk === 0 || slip.nettoUtbetalt === 0
+  if (slip.nettoUtbetalt === 0) return true
+  // Juni-slipper har legitimt ingen skattetrekk — feriepenger er skattefrie
+  if (slip.periode.month === 6 && (slip.feriepenger ?? 0) > 0) return false
+  return slip.skattetrekk === 0
 }
 
 function fmtNOK(n: number): string {
