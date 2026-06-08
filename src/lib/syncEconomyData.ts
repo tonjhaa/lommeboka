@@ -53,6 +53,17 @@ export async function loadFromSupabase(): Promise<boolean> {
     return false
   }
 
+  // Ikke overskriv lokal data med tom Supabase-data — last heller opp det lokale
+  const remote = data.economy_data as { savingsAccounts?: unknown[]; monthHistory?: unknown[]; debts?: unknown[]; profile?: unknown }
+  const remoteIsEmpty = !remote.profile && !(remote.savingsAccounts?.length) && !(remote.monthHistory?.length) && !(remote.debts?.length)
+  const localState = useEconomyStore.getState()
+  const localHasData = localState.profile !== null || localState.savingsAccounts.length > 0 || localState.monthHistory.length > 0 || localState.debts.length > 0
+  if (remoteIsEmpty && localHasData) {
+    // Supabase har tom data men lokalt finnes ekte data — last opp lokalt til Supabase
+    await saveToSupabase()
+    return true
+  }
+
   useEconomyStore.getState().importData(JSON.stringify(data.economy_data))
 
   // Auto-merk onboarding som fullført hvis brukeren allerede har data (f.eks. ny enhet)
