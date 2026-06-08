@@ -160,6 +160,8 @@ export function subscribeToPartnerData(
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'user_data', filter: `user_id=eq.${partnerId}` },
       (payload) => {
+        // Sikkerhetskontroll: verifiser at payload tilhører riktig partner
+        if (payload.new?.user_id && payload.new.user_id !== partnerId) return
         if (payload.new?.economy_data) onUpdate(payload.new.economy_data as object)
       },
     )

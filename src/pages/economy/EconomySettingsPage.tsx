@@ -678,6 +678,7 @@ function BankPresetsSection() {
 }
 
 export function EconomySettingsPage() {
+  const { user } = useAuthStore()
   return (
     <div className="h-full overflow-y-auto p-6 space-y-8 max-w-2xl">
       <div>
@@ -685,6 +686,11 @@ export function EconomySettingsPage() {
         <p className="text-sm text-muted-foreground mt-0.5">
           Konfigurer lønnsprofil, moduler og datahåndtering.
         </p>
+        {user?.email && (
+          <p className="text-xs text-muted-foreground/60 mt-1">
+            Innlogget som <span className="font-mono text-muted-foreground">{user.email}</span>
+          </p>
+        )}
       </div>
 
       <Separator />

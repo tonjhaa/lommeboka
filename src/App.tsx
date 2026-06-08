@@ -27,7 +27,7 @@ import { useAuthStore } from '@/store/useAuthStore'
 import { usePartnershipStore } from '@/store/usePartnershipStore'
 import { useSharedProjectStore } from '@/store/useSharedProjectStore'
 import { LoginPage } from '@/pages/LoginPage'
-import { loadFromSupabase, startAutoSync } from '@/lib/syncEconomyData'
+import { loadFromSupabase, startAutoSync, setImporting } from '@/lib/syncEconomyData'
 import { useEconomyStore } from '@/application/useEconomyStore'
 
 const EconomyPage = lazyWithRetry(() =>
@@ -129,10 +129,16 @@ function App() {
 
     setSyncing(true)
     setLoadError(false)
+    // Blokker auto-lagring mens Supabase-data lastes — hindrer initPartnership
+    // fra å trigge lagring av tom/delvis tilstand mens loadFromSupabase kjører
+    setImporting(true)
     loadFromSupabase()
       .then((ok) => { if (!ok) setLoadError(true) })
       .catch(() => setLoadError(true))
-      .finally(() => setSyncing(false))
+      .finally(() => {
+        setImporting(false)
+        setSyncing(false)
+      })
 
     const stopSync = startAutoSync()
 
