@@ -112,7 +112,13 @@ export function parseForsvarsSlipp(pdfText: string): ParsetLonnsslipp {
   // Alle ATF-artskoder (både dögn og timer) følger kolonneformat: ANTALL SATS BELØP
   //   → satsAmount = amounts[0] = antall, lastAmount = amounts[last] = beløp
   //   → sats per dag/time = beløp / antall = lastAmount / satsAmount
-  const ATF_ARTSKODER = new Set(['2230', '2232', '2233', '2236', '2237', '2238', '2242', '2243', '2244'])
+  const ATF_ARTSKODER = new Set([
+    '2230', '2232', '2233', '2236', '2237', '2238', '2242', '2243', '2244', // øvelse/ATF
+    '2531',                                   // Ettermiddagstillegg
+    '2003', '2004', '2A05', '2A10',           // Overtid 50%/100%/avrunding
+    '2572',                                   // Timelønn (Tariff)
+    '2698',                                   // Kompensasjon kvote 98
+  ])
   const atfRaterMap = new Map<string, number>()
   let atfBeløp = 0
   for (const l of artskodeLinjer) {
@@ -137,8 +143,9 @@ export function parseForsvarsSlipp(pdfText: string): ParsetLonnsslipp {
 
   // 7005 (Gruppelivspremie) er arbeidsgiverbetalt — ikke del av brutto, vises som informasjonslinje
   // OF11 (Utbet.FP ord.) inkluderes som tillegg slik at bruttoSum stemmer i junimåneder
-  const fasteTilleggKoder = ['1501', '1162', '106G', 'OF11']
-  const trekkKoder = ['/440', '/441', '7000', '3020', '3209', '1620', '6100']
+  const fasteTilleggKoder = ['1501', '1162', '106G', 'OF11', '1069']  // 1069 = Flyttebonus (variant)
+  const trekkKoder = ['/440', '/441', '7000', '3020', '3209', '1620', '6100', '3230', '8888']
+  // 3230 = Trekk fra reiseregning, 8888 = Skatt trukket på reise
 
   // ---- Beløp ----
   const maanedslonn = Math.abs(getPost('1S01')?.lastAmount ?? getPost('1001')?.lastAmount ?? 0)
@@ -302,6 +309,7 @@ export function parseForsvarsSlipp(pdfText: string): ParsetLonnsslipp {
     ...fasteTilleggKoder, ...trekkKoder,
     '1S01', '1001', '7005', '10P2', 'OF19',
     ...ATF_ARTSKODER,
+    '321H', '321P', '8180', '885F',  // motpost/husleie pendler, kost, flyttefaktura
   ])
   artskodeLinjer.forEach((l) => {
     if (!kjentKoder.has(l.kode)) {
