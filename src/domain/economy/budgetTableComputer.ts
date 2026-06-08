@@ -579,8 +579,14 @@ export function computeBudgetTable(
         () => null,
       )))
     } else {
+      const debtStart = debt.startDate.substring(0, 7) // "YYYY-MM"
+      if (debtStart > `${year}-12`) continue  // lånet starter etter dette budsjettåret
       gjeldRows.push(mkRow(`debt-${debt.id}`, debt.creditor, uniform12(
-        (m) => budgetVal(`debt-${debt.id}`, m, -(debt.monthlyPayment + debt.termFee)),
+        (m) => {
+          const monthKey = `${year}-${String(m).padStart(2, '0')}`
+          if (monthKey < debtStart) return 0
+          return budgetVal(`debt-${debt.id}`, m, -(debt.monthlyPayment + debt.termFee))
+        },
         () => null,
       )))
     }
