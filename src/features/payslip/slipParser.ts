@@ -4,12 +4,11 @@ import { parseGenericSlipp, isForsvarsSlipp } from '@/domain/economy/genericSlip
 // Vite løser dette til en hashed lokal URL i bundles — ingen CDN-avhengighet
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
-async function extractTextFromPDF(file: File): Promise<string> {
+async function extractTextFromPDF(data: ArrayBuffer | Uint8Array): Promise<string> {
   const pdfjsLib = await import('pdfjs-dist')
   pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc
 
-  const arrayBuffer = await file.arrayBuffer()
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+  const pdf = await pdfjsLib.getDocument({ data }).promise
 
   const allLines: string[] = []
 
@@ -42,11 +41,25 @@ async function extractTextFromPDF(file: File): Promise<string> {
  * Velger automatisk parser basert på format-deteksjon.
  */
 export async function parseSlipFromPDF(file: File): Promise<ParsetLonnsslipp> {
-  const fullText = await extractTextFromPDF(file)
+  return parseSlipFromData(await file.arrayBuffer())
+}
+
+/** Parser lønnsslipp fra rå PDF-bytes (brukes ved re-parsing av lagrede slipper). */
+export async function parseSlipFromData(data: ArrayBuffer | Uint8Array): Promise<ParsetLonnsslipp> {
+  const fullText = await extractTextFromPDF(data)
   if (isForsvarsSlipp(fullText)) {
     return parseForsvarsSlipp(fullText)
   }
   return parseGenericSlipp(fullText)
+}
+
+/** Dekoder en (data-URL eller ren) base64-PDF til bytes og parser den. */
+export async function parseSlipFromBase64(base64: string): Promise<ParsetLonnsslipp> {
+  const clean = base64.replace(/^data:application\/pdf;base64,/, '')
+  const binary = atob(clean)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return parseSlipFromData(bytes)
 }
 
 /**
@@ -59,7 +72,7 @@ export async function parseSlipFromPDFWithAI(file: File): Promise<ParsetLonnssli
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) throw new Error('Ikke innlogget')
 
-  const fullText = await extractTextFromPDF(file)
+  const fullText = await extractTextFromPDF(await file.arrayBuffer())
 
   const response = await fetch(
     `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-payslip`,

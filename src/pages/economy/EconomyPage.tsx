@@ -1,4 +1,4 @@
-import { lazy, Suspense, Component } from 'react'
+import { lazy, Suspense, Component, useEffect } from 'react'
 import type { ReactNode } from 'react'
 
 /* Auto-reload ved stale cache etter ny deploy (Failed to fetch dynamically imported module).
@@ -169,6 +169,14 @@ export function EconomyPage() {
   const hasData = useEconomyStore((s) => s.savingsAccounts.length > 0 || s.monthHistory.length > 0 || s.debts.length > 0 || s.profile !== null)
   const currentPage = useAppStore((s) => s.currentEconomyPage)
   const setCurrentPage = useAppStore((s) => s.setCurrentEconomyPage)
+
+  // Re-parse lagrede slipper automatisk når parserlogikken er oppdatert
+  useEffect(() => {
+    import('@/features/payslip/reparseSlips').then(({ SLIP_PARSER_VERSION, reparseAllSlips }) => {
+      if (useEconomyStore.getState().slipParserVersion >= SLIP_PARSER_VERSION) return
+      void reparseAllSlips()
+    })
+  }, [])
 
   // Vis onboarding kun for reelt nye brukere uten noen data
   if (!userPreferences?.onboardingCompleted && !hasData) {

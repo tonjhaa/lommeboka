@@ -43,6 +43,8 @@ import { DEFAULT_BANK_PRESETS } from '@/config/bankPresets'
 
 export interface EconomyState {
   storeVersion: number
+  /** Parserversjon slippene sist ble (re)parset med — se reparseSlips.ts */
+  slipParserVersion: number
 
   // Kjerne
   profile: EmploymentProfile | null
@@ -126,6 +128,7 @@ export interface EconomyState {
   lockMonth: (year: number, month: number) => void
   unlockMonth: (year: number, month: number) => void
   importSlip: (slip: ParsetLonnsslipp, pdfBase64?: string) => void
+  setSlipParserVersion: (v: number) => void
 
   addATFEntry: (entry: ATFEntry) => void
   updateATFEntry: (id: string, entry: Partial<ATFEntry>) => void
@@ -258,6 +261,7 @@ export const useEconomyStore = create<EconomyState>()(
   persist(
     (set, get) => ({
       storeVersion: 1,
+      slipParserVersion: 1,
       profile: null,
       userPreferences: null,
       budgetTemplate: DEFAULT_TEMPLATE,
@@ -404,9 +408,15 @@ export const useEconomyStore = create<EconomyState>()(
         }
 
         set((s) => {
+          const existing = s.monthHistory.find(
+            (m) => m.year === slip.periode.year && m.month === slip.periode.month
+          )
           const filtered = s.monthHistory.filter(
             (m) => !(m.year === slip.periode.year && m.month === slip.periode.month)
           )
+
+          // Behold Supabase-stien fra forrige import (re-import skal ikke miste den)
+          if (existing?.slipStoragePath) record.slipStoragePath = existing.slipStoragePath
 
           // Behold maks 12 PDF-er (fjern fra eldste slipper)
           let updated = [...filtered, record]
@@ -511,6 +521,8 @@ export const useEconomyStore = create<EconomyState>()(
           }).catch(() => { /* Stale chunk — ignorerer, PDF-opplasting kjøres ved neste økt */ })
         }
       },
+
+      setSlipParserVersion: (v) => set({ slipParserVersion: v }),
 
       // --- ATF ---
       addATFEntry: (entry) => set((s) => ({ atfEntries: [...s.atfEntries, entry] })),
@@ -1320,6 +1332,7 @@ export const useEconomyStore = create<EconomyState>()(
       },
       partialize: (state) => ({
         storeVersion: state.storeVersion,
+        slipParserVersion: state.slipParserVersion,
         profile: state.profile,
         userPreferences: state.userPreferences,
         budgetTemplate: state.budgetTemplate,

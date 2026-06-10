@@ -67,6 +67,8 @@ export const usePartnerStore = create<EconomyState>()(
   persist(
     (set, get) => ({
       storeVersion: 1,
+      slipParserVersion: 1,
+      setSlipParserVersion: (v: number) => set({ slipParserVersion: v }),
 
       // ── Profil ─────────────────────────────────────────────────────────────
       profile: null,
