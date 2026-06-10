@@ -114,6 +114,7 @@ export function parseForsvarsSlipp(pdfText: string): ParsetLonnsslipp {
   //   → sats per dag/time = beløp / antall = lastAmount / satsAmount
   const ATF_ARTSKODER = new Set([
     '2230', '2232', '2233', '2236', '2237', '2238', '2242', '2243', '2244', // øvelse/ATF
+    '2250',                                   // Øvelse døgn IP
     '2531',                                   // Ettermiddagstillegg
     '2003', '2004', '2A05', '2A10',           // Overtid 50%/100%/avrunding
     '2572',                                   // Timelønn (Tariff)
@@ -122,17 +123,26 @@ export function parseForsvarsSlipp(pdfText: string): ParsetLonnsslipp {
   const atfRaterMap = new Map<string, number>()
   let atfBeløp = 0
   for (const l of artskodeLinjer) {
-    if (!ATF_ARTSKODER.has(l.kode) || l.satsAmount <= 0 || l.lastAmount === 0) continue
-    const sats = l.lastAmount / l.satsAmount   // beløp / antall = sats per dag/time
-    const prev = atfRaterMap.get(l.kode) ?? 0
-    if (sats > prev) atfRaterMap.set(l.kode, sats)
-    atfBeløp += Math.abs(l.lastAmount)
+    if (!ATF_ARTSKODER.has(l.kode) || l.lastAmount === 0) continue
+    // Korreksjonsslipper reverserer gamle posteringer med negativt antall/beløp —
+    // signert sum gir netto faktisk utbetalt denne måneden.
+    atfBeløp += l.lastAmount
+    // Sats kun fra positive posteringer (reverseringer bruker gammel sats)
+    if (l.satsAmount > 0 && l.lastAmount > 0) {
+      const sats = l.lastAmount / l.satsAmount   // beløp / antall = sats per dag/time
+      const prev = atfRaterMap.get(l.kode) ?? 0
+      if (sats > prev) atfRaterMap.set(l.kode, sats)
+    }
   }
   const atfRater: Record<string, number> | undefined =
     atfRaterMap.size > 0 ? Object.fromEntries(atfRaterMap) : undefined
 
   // ---- Fungering (10P2) ----
-  const fungeringBeløp = Math.abs(getPost('10P2')?.lastAmount ?? 0)
+  // Signert sum av alle linjer: etterbetalingsslipper kan ha flere 10P2-perioder
+  // (alle er faktisk utbetalt denne måneden), korreksjoner er negative.
+  const fungeringBeløp = artskodeLinjer
+    .filter((l) => l.kode === '10P2')
+    .reduce((s, l) => s + l.lastAmount, 0)
 
   // Bruk SISTE forekomst av artskoden — ved flersiders slipper er siste side = inneværende måned.
   // Tidligere sider inneholder etterbetalinger fra tidligere perioder.
@@ -187,10 +197,13 @@ export function parseForsvarsSlipp(pdfText: string): ParsetLonnsslipp {
     .filter((l) => l.lastAmount > 0)
     .map((l) => ({ artskode: l.kode, navn: l.navn, belop: l.lastAmount }))
 
-  // OF19 (Ferietrekk) har typisk to forekomster i juni — sum dem alle
-  const ferietrekkTotal = artskodeLinjer
+  // OF19 (Ferietrekk) har typisk to forekomster i juni — signert sum, siden
+  // korreksjonsslipper (etter lønnsoppgjør) reverserer gamle trekk med positive beløp.
+  // Netto negativ = reelt trekk; netto positiv (ren tilbakeføring) ignoreres.
+  const of19Netto = artskodeLinjer
     .filter((l) => l.kode === 'OF19')
-    .reduce((s, l) => s + Math.abs(l.lastAmount), 0)
+    .reduce((s, l) => s + l.lastAmount, 0)
+  const ferietrekkTotal = of19Netto < 0 ? -of19Netto : 0
 
   const trekk: ArtskopePost[] = lastPerKode(trekkKoder)
     .map((l) => ({ artskode: l.kode, navn: l.navn, belop: l.lastAmount }))
@@ -200,8 +213,17 @@ export function parseForsvarsSlipp(pdfText: string): ParsetLonnsslipp {
     trekk.unshift({ artskode: 'OF19', navn: 'Ferietrekk', belop: -ferietrekkTotal })
   }
 
-  // bruttoSum = månedslønn + tillegg (inkl. OF11 feriepenger) — OF19 er allerede ute av brutto
+  // Ulønnet fravær (2700 Ferie u/lønn, 2713 Annet fravær u/lønn) reduserer brutto.
+  // Signert sum — korreksjoner kan være positive.
+  const fravaerNetto = artskodeLinjer
+    .filter((l) => l.kode === '2700' || l.kode === '2713')
+    .reduce((s, l) => s + l.lastAmount, 0)
+  const fravaerstrekkTotal = fravaerNetto < 0 ? -fravaerNetto : 0
+
+  // bruttoSum = månedslønn + tillegg (inkl. OF11 feriepenger) − ulønnet fravær
+  // — OF19 er allerede ute av brutto
   const bruttoSum = maanedslonn + fasteTillegg.reduce((s, p) => s + p.belop, 0)
+    - fravaerstrekkTotal
 
   // ---- Avregningsdato: "Avregningsdato: 12.03.2026" ----
   let avregningsdato: string | undefined
@@ -307,7 +329,7 @@ export function parseForsvarsSlipp(pdfText: string): ParsetLonnsslipp {
   // Logg ukjente artskoder
   const kjentKoder = new Set([
     ...fasteTilleggKoder, ...trekkKoder,
-    '1S01', '1001', '7005', '10P2', 'OF19',
+    '1S01', '1001', '7005', '10P2', 'OF19', '2700', '2713', '3021',
     ...ATF_ARTSKODER,
     '321H', '321P', '8180', '885F',  // motpost/husleie pendler, kost, flyttefaktura
   ])
@@ -340,13 +362,14 @@ export function parseForsvarsSlipp(pdfText: string): ParsetLonnsslipp {
     hittilPensjon,
     hittilForskuddstrekk,
     atfRater,
-    atfBeløp: atfBeløp > 0 ? atfBeløp : undefined,
-    fungeringBeløp: fungeringBeløp > 0 ? fungeringBeløp : undefined,
+    atfBeløp: atfBeløp !== 0 ? atfBeløp : undefined,
+    fungeringBeløp: fungeringBeløp !== 0 ? fungeringBeløp : undefined,
     tabelltrekkGrunnlag,
     tabelltrekkBelop,
     tabellnummer,
     feriepenger: fasteTillegg.find(p => p.artskode === 'OF11')?.belop,
     ferietrekk: ferietrekkTotal > 0 ? ferietrekkTotal : undefined,
+    fravaerstrekk: fravaerstrekkTotal > 0 ? fravaerstrekkTotal : undefined,
   }
 }
 

@@ -226,6 +226,112 @@ Lønnsavregning for April 2026
   })
 })
 
+describe('parseForsvarsSlipp — korreksjonsslipper (lønnsoppgjør/etterbetaling)', () => {
+  // Utdrag fra ekte februar 2026-slipp: gammel ATF-postering reversert (negativt antall),
+  // ny postering med oppjustert sats. Netto ATF-effekt = 27.056,80 − 25.904,80 = 1.152,00.
+  it('atfBeløp = signert nettosum når reverseringspar finnes', () => {
+    const text = `
+Lønnsavregning for Februar 2026
+2230 Øvelse døgn Ma-Fr 11.25 4,00- 6.476,20 25.904,80-
+2230 Øvelse døgn Ma-Fr 11.25 4,00 6.764,20 27.056,80
+1S01 Månedslønn 02.26 670.132 55.844,40
+/440 Tabelltrekk 02.26 61.278,00 8010 18.478,00-
+63.078,83 32.738,06- 9.177,75 39.518,52
+124.430,05 14.931,61
+`
+    const slip = parseForsvarsSlipp(text)
+    expect(slip.atfBeløp).toBeCloseTo(1152.00, 2)
+    expect(slip.atfRater?.['2230']).toBeCloseTo(6764.20, 2)
+  })
+
+  // Utdrag fra ekte november 2025-slipp: OF19-korreksjoner for juni etter lønnsoppgjør.
+  // Netto = +60.146,00 − 64.145,50 − 2.212,00 + 2.074,00 = −4.137,50 (ekstra trekk).
+  it('ferietrekk = netto av OF19-korreksjonslinjer, ikke abs-sum', () => {
+    const text = `
+Lønnsavregning for November 2025
+OF19 Ferietrekk ordinært 06.25 2.405,84 60.146,00
+OF19 Ferietrekk ordinært 06.25 2.565,82 64.145,50-
+OF19 Ferietrekk ordinært 06.25 25,00- 88,48 2.212,00-
+OF19 Ferietrekk ordinært 06.25 25,00 82,96 2.074,00
+1S01 Månedslønn 11.25 670.132 55.844,40
+/440 Tabelltrekk 11.25 61.278,00 8030 18.672,00-
+63.078,83 35.413,06- 17.164,50 44.830,27
+594.068,00 71.288,19
+`
+    const slip = parseForsvarsSlipp(text)
+    expect(slip.ferietrekk).toBeCloseTo(4137.50, 2)
+    const of19 = slip.trekk.find((t) => t.artskode === 'OF19')
+    expect(of19?.belop).toBeCloseTo(-4137.50, 2)
+  })
+
+  // Vanlig junislipp: begge OF19-linjer er trekk — netto skal fortsatt bli summen.
+  it('ferietrekk i ordinær juni summeres som før (begge linjer negative)', () => {
+    const text = `
+Lønnsavregning for Juni 2026
+OF19 Ferietrekk ordinært 06.26 25,00- 88,48 2.212,00-
+OF19 Ferietrekk ordinært 06.26 2.565,82 64.145,50-
+1S01 Månedslønn 06.26 670.132 55.844,40
+OF11 Utbet.FP ord. i ferieår 06.26 82.625,79
+/440 Tabelltrekk 06.26 11.566,00 8010 960,00-
+85.962,33 11.647,69- 10.157,60 84.472,24
+385.327,81 46.239,33
+`
+    const slip = parseForsvarsSlipp(text)
+    expect(slip.ferietrekk).toBeCloseTo(66357.50, 2)
+    expect(slip.feriepenger).toBeCloseTo(82625.79, 2)
+  })
+
+  // Utdrag fra ekte februar 2026-slipp: tre etterbetalte 10P2-linjer (okt–des),
+  // ingen fungering i inneværende måned. Faktisk utbetalt = 3 × 2.729,75.
+  it('fungeringBeløp = sum av alle 10P2-linjer, ikke bare siste', () => {
+    const text = `
+Lønnsavregning for Februar 2026
+10P2 Fungering pensgj 10.25 2.729,75
+10P2 Fungering pensgj 11.25 2.729,75
+10P2 Fungering pensgj 12.25 2.729,75
+1S01 Månedslønn 02.26 670.132 55.844,40
+/440 Tabelltrekk 02.26 61.278,00 8010 18.478,00-
+63.078,83 32.738,06- 9.177,75 39.518,52
+124.430,05 14.931,61
+`
+    const slip = parseForsvarsSlipp(text)
+    expect(slip.fungeringBeløp).toBeCloseTo(3 * 2729.75, 2)
+  })
+
+  // Utdrag fra ekte desember 2021-slipp: ulønnet fravær (2713/2700) reduserer brutto.
+  // Slippens "Brutto denne måned" = 45.291,70 − 2.088,80 − 6.266,40 = 36.936,50.
+  it('trekker ulønnet fravær (2700/2713) fra bruttoSum', () => {
+    const text = `
+Lønnsavregning for Desember 2021
+1001 Månedslønn 12.21 45.291,70
+2713 Annet fravær u/lønn < 1mn12.21 1,00- 2.088,80 2.088,80-
+2700 Ferie u/lønn 12.21 3,00- 2.088,80 6.266,40-
+7000 Pensjonstrekk 12.21 738,70-
+/441 Trukket %-trekk 12.21 36.271,00 22 % 3.989,00-
+36.936,50 5.706,03- 31.230,47
+172.811,60 20.737,38
+`
+    const slip = parseForsvarsSlipp(text)
+    expect(slip.fravaerstrekk).toBeCloseTo(2088.80 + 6266.40, 2)
+    expect(slip.bruttoSum).toBeCloseTo(36936.50, 2)
+  })
+
+  // Fra ekte juni 2026-slipp: artskode 2250 (Øvelse døgn IP) manglet i ATF-settet.
+  it('teller 2250 Øvelse døgn IP som ATF', () => {
+    const text = `
+Lønnsavregning for Juni 2026
+2250 Øvelse døgn IP Ma-Fr 05.26 1,00 10.157,60 10.157,60
+1S01 Månedslønn 06.26 670.132 55.844,40
+/440 Tabelltrekk 06.26 11.566,00 8010 960,00-
+85.962,33 11.647,69- 10.157,60 84.472,24
+385.327,81 46.239,33
+`
+    const slip = parseForsvarsSlipp(text)
+    expect(slip.atfBeløp).toBeCloseTo(10157.60, 2)
+    expect(slip.atfRater?.['2250']).toBeCloseTo(10157.60, 2)
+  })
+})
+
 describe('calculateHolidayPay', () => {
   it('beregner korrekt feriepengeprosent (12%)', () => {
     const basis = 670_128

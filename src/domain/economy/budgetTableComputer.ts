@@ -359,10 +359,14 @@ export function computeBudgetTable(
       (m) => {
         const slip = monthMap.get(m)?.slipData
         if (!slip) return null
+        // Ferietrekk (OF19) og ulønnet fravær (2700/2713) trekkes fra slik at
+        // raden matcher slippens "Brutto denne måned"
         return slip.maanedslonn
           + slip.fasteTillegg.reduce((s, t) => s + t.belop, 0)
           + (slip.atfBeløp ?? 0)
           + (slip.fungeringBeløp ?? 0)
+          - (slip.ferietrekk ?? 0)
+          - (slip.fravaerstrekk ?? 0)
       },
     )))
     grunnlagRows.push(mkRow('skattepliktig', 'Skattepliktig inntekt', uniform12(
@@ -370,7 +374,8 @@ export function computeBudgetTable(
       (m) => {
         const slip = monthMap.get(m)?.slipData
         if (!slip) return null
-        return slip.maanedslonn + slip.fasteTillegg.reduce((s, t) => s + t.belop, 0) + (atfByMonth.get(m) ?? 0)
+        return slip.maanedslonn + slip.fasteTillegg.reduce((s, t) => s + t.belop, 0)
+          + (slip.atfBeløp ?? 0) - (slip.ferietrekk ?? 0) - (slip.fravaerstrekk ?? 0)
       },
     )))
 
@@ -811,7 +816,9 @@ export function computeBudgetTable(
       const m = i + 1
       const slip = monthMap.get(m)?.slipData
       if (slip) {
-        ytdBruttoBudget += slip.bruttoSum
+        // Samme formel som Bruttoinntekt-raden: inkl. ATF/fungering, minus ferietrekk
+        ytdBruttoBudget += slip.bruttoSum + (slip.atfBeløp ?? 0)
+          + (slip.fungeringBeløp ?? 0) - (slip.ferietrekk ?? 0)
       } else {
         ytdBruttoBudget += inntekterRows.filter(r => !r.isHidden).reduce((s, r) => s + r.cells[i].budget, 0)
       }

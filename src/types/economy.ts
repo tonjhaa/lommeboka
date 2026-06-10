@@ -98,6 +98,8 @@ export interface ParsetLonnsslipp {
   feriepenger?: number
   /** Sum OF19: Ferietrekk ordinært (kun juni, summer to forekomster) */
   ferietrekk?: number
+  /** Sum 2700/2713: trekk for ulønnet fravær/ferie (positivt tall, reduserer brutto) */
+  fravaerstrekk?: number
 }
 
 /** Siste kjente ATF-sats fra importert slipp, for én artskode */
