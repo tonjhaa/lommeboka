@@ -49,13 +49,20 @@ const stubVeikart: PartnerVeikart = {
 
 describe('buildPartnerVeikartPatch', () => {
   it('mapper sparekonto til PartnerAccount med riktig saldo', () => {
-    const acc = makeSavingsAccount()
+    // computeEffectiveBalance teller kun REGISTRERTE innskudd — planlagt
+    // monthlyContribution ekstrapoleres ikke (ingen fantompenger i Veikart)
+    const acc = makeSavingsAccount({
+      contributions: [
+        { id: 'c1', date: '2025-06-01', amount: 2_000 },
+        { id: 'c2', date: '2026-01-15', amount: 2_000 },
+      ],
+    })
     const patch = buildPartnerVeikartPatch([acc], [], null, stubVeikart, now)
     expect(patch.accounts).toHaveLength(1)
     expect(patch.accounts[0].label).toBe('Sparekonto')
     expect(patch.accounts[0].rate).toBe(4.1)
     expect(patch.accounts[0].monthlyContribution).toBe(2_000)
-    expect(patch.accounts[0].balance).toBeGreaterThan(50_000)
+    expect(patch.accounts[0].balance).toBe(54_000)
   })
 
   it('ekskluderer BSU fra accounts-listen', () => {

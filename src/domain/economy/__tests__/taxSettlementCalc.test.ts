@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { analyzeTaxSettlements } from '../taxSettlementCalc'
 import type { TaxSettlementRecord } from '@/types/economy'
 
-// Husk: negativt skattTilGodeEllerRest = du får penger tilbake (tilgode)
-// Positivt = restskatt
+// Konvensjon (se types/economy.ts og taxSettlementParser):
+// positivt skattTilGodeEllerRest = til gode (du får penger), negativt = restskatt
 
 describe('analyzeTaxSettlements', () => {
   it('returnerer keep uten data', () => {
@@ -14,9 +14,9 @@ describe('analyzeTaxSettlements', () => {
 
   it('anbefaler reduce_extra ved systematisk tilgode (>5 000 kr snitt)', () => {
     const records: TaxSettlementRecord[] = [
-      { year: 2023, skattTilGodeEllerRest: -15_000 },  // 15k tilgode
-      { year: 2022, skattTilGodeEllerRest: -12_000 },  // 12k tilgode
-      { year: 2021, skattTilGodeEllerRest: -18_000 },  // 18k tilgode
+      { year: 2023, skattTilGodeEllerRest: 15_000 },  // 15k tilgode
+      { year: 2022, skattTilGodeEllerRest: 12_000 },  // 12k tilgode
+      { year: 2021, skattTilGodeEllerRest: 18_000 },  // 18k tilgode
     ]
     const result = analyzeTaxSettlements(records, 1_000)
     expect(result.recommendation).toBe('reduce_extra')
@@ -26,9 +26,9 @@ describe('analyzeTaxSettlements', () => {
 
   it('anbefaler increase_extra ved systematisk restskatt (> -5 000 kr snitt)', () => {
     const records: TaxSettlementRecord[] = [
-      { year: 2023, skattTilGodeEllerRest: 12_000 },  // restskatt
-      { year: 2022, skattTilGodeEllerRest: 8_000 },
-      { year: 2021, skattTilGodeEllerRest: 9_000 },
+      { year: 2023, skattTilGodeEllerRest: -12_000 },  // restskatt
+      { year: 2022, skattTilGodeEllerRest: -8_000 },
+      { year: 2021, skattTilGodeEllerRest: -9_000 },
     ]
     const result = analyzeTaxSettlements(records, 0)
     expect(result.recommendation).toBe('increase_extra')
@@ -47,10 +47,10 @@ describe('analyzeTaxSettlements', () => {
 
   it('bruker bare siste 3 år i analysen', () => {
     const records: TaxSettlementRecord[] = [
-      { year: 2023, skattTilGodeEllerRest: -20_000 },
-      { year: 2022, skattTilGodeEllerRest: -18_000 },
-      { year: 2021, skattTilGodeEllerRest: -22_000 },
-      { year: 2015, skattTilGodeEllerRest: 50_000 },  // gammelt år — skal ikke telle
+      { year: 2023, skattTilGodeEllerRest: 20_000 },
+      { year: 2022, skattTilGodeEllerRest: 18_000 },
+      { year: 2021, skattTilGodeEllerRest: 22_000 },
+      { year: 2015, skattTilGodeEllerRest: -50_000 },  // gammelt år — skal ikke telle
     ]
     const result = analyzeTaxSettlements(records, 1_000)
     // Snitt bør være ~20 000 tilgode, ikke påvirket av 2015
@@ -60,7 +60,7 @@ describe('analyzeTaxSettlements', () => {
 
   it('recommendedExtraAdjustment er rundet til nærmeste 100', () => {
     const records: TaxSettlementRecord[] = [
-      { year: 2023, skattTilGodeEllerRest: -12_000 },  // 1000/mnd tilgode
+      { year: 2023, skattTilGodeEllerRest: 12_000 },  // 1000/mnd tilgode
     ]
     const result = analyzeTaxSettlements(records, 2_000)
     expect(result.recommendedExtraAdjustment % 100).toBe(0)
@@ -68,7 +68,7 @@ describe('analyzeTaxSettlements', () => {
 
   it('reasoning inneholder nyttig tekst', () => {
     const records: TaxSettlementRecord[] = [
-      { year: 2023, skattTilGodeEllerRest: -20_000 },
+      { year: 2023, skattTilGodeEllerRest: 20_000 },
     ]
     const result = analyzeTaxSettlements(records, 1_000)
     expect(result.reasoning.length).toBeGreaterThan(10)

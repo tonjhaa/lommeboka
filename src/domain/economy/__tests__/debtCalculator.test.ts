@@ -71,34 +71,36 @@ describe('buildRepaymentPlan', () => {
   })
 
   it('tar hensyn til renteendring midtveis (rateHistory)', () => {
+    // Planen bygges fra dagens dato — rentehoppet legges derfor relativt til nå
+    const now = new Date()
+    const jumpDate = new Date(now.getFullYear(), now.getMonth() + 8, 1)
+    const jumpISO = jumpDate.toISOString().slice(0, 10)
+
     const debt = makeDebt({
       currentBalance: 100_000,
       monthlyPayment: 2_000,
       startDate: '2024-01-01',
       rateHistory: [
-        { fromDate: '2024-01-01', nominalRate: 4.0 },
-        { fromDate: '2025-01-01', nominalRate: 6.0 },  // rentehopp etter 12 mnd
+        { fromDate: '2020-01-01', nominalRate: 4.0 },
+        { fromDate: jumpISO, nominalRate: 6.0 },  // rentehopp om 8 mnd
       ],
     })
     const plan = buildRepaymentPlan(debt)
 
-    // Rente i mnd 1 = 4%
-    const month1Rate = plan.rows[0].rate
-    // Rente i mnd 13 = 6%
-    const month13Rate = plan.rows[12]?.rate ?? 0
-
-    expect(month1Rate).toBe(4.0)
-    expect(month13Rate).toBe(6.0)
+    // Første termin (neste måned) ligger før hoppet
+    expect(plan.rows[0].rate).toBe(4.0)
+    // Termin 13 (>12 mnd frem) ligger etter hoppet
+    expect(plan.rows[12]?.rate ?? 0).toBe(6.0)
   })
 })
 
 describe('calculateTotalMonthlyDebtCost', () => {
-  it('summerer terminbeløp + gebyr', () => {
+  it('summerer terminbeløp (termFee inngår allerede i monthlyPayment)', () => {
     const debts: DebtAccount[] = [
       makeDebt({ monthlyPayment: 2_000, termFee: 50 }),
       makeDebt({ id: 'd2', monthlyPayment: 1_500, termFee: 0 }),
     ]
-    expect(calculateTotalMonthlyDebtCost(debts)).toBe(3_550)
+    expect(calculateTotalMonthlyDebtCost(debts)).toBe(3_500)
   })
 
   it('returnerer 0 for tom liste', () => {
