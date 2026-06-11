@@ -86,6 +86,7 @@ export function BudgetPage() {
     updateSavingsAccount: updateSavingsAccountInBudget,
     removeWithdrawal,
     absenceHireDate,
+    lonnsoppgjor,
   } = useActiveEconomyStore()
 
   const now = new Date()
@@ -168,6 +169,7 @@ export function BudgetPage() {
     ivfSettings?.selfLabel,
     trekktabellLookup,
     absenceHireDate,
+    lonnsoppgjor,
   )
 
   const { metas, sections } = tableData

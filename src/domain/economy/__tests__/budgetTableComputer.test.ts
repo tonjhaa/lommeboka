@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { computeBudgetTable } from '../budgetTableComputer'
-import type { EmploymentProfile, BudgetTemplate, BudgetLine } from '@/types/economy'
+import type { EmploymentProfile, BudgetTemplate, BudgetLine, LonnsoppgjorRecord } from '@/types/economy'
 
 const profile: EmploymentProfile = {
   employer: 'forsvaret',
@@ -30,6 +30,7 @@ function compute(opts: {
   year?: number
   template?: BudgetTemplate
   employmentStartDate?: string | null
+  lonnsoppgjor?: LonnsoppgjorRecord[]
 } = {}) {
   return computeBudgetTable(
     opts.year ?? 2026,
@@ -50,7 +51,20 @@ function compute(opts: {
     undefined, // ivfSelfLabel
     undefined, // trekktabellLookup
     opts.employmentStartDate,
+    opts.lonnsoppgjor,
   )
+}
+
+function mkOppgjor(partial: Partial<LonnsoppgjorRecord> & Pick<LonnsoppgjorRecord, 'effectiveDate' | 'maanedslonn'>): LonnsoppgjorRecord {
+  return {
+    id: crypto.randomUUID(),
+    year: Number(partial.effectiveDate.slice(0, 4)),
+    forrigeMaanedslonn: 0,
+    htaTillegg: 0,
+    notes: '',
+    source: 'slip',
+    ...partial,
+  }
 }
 
 describe('computeBudgetTable — BRUTTO-rad', () => {
@@ -129,6 +143,36 @@ describe('computeBudgetTable — manuelle trekk- og gjeldslinjer', () => {
     const row = gjeld.rows.find((r) => r.id === 'debt-t-l2')
     expect(row).toBeDefined()
     expect(row!.cells[0].budget).toBe(-1_200)
+  })
+})
+
+describe('computeBudgetTable — lønnsoppgjør som prognosekilde', () => {
+  const oppgjor = [
+    mkOppgjor({ effectiveDate: '2025-11-01', maanedslonn: 55_844 }),
+    mkOppgjor({ effectiveDate: '2026-05-01', maanedslonn: 57_352, source: 'forventet' }),
+  ]
+
+  it('bruker gjeldende oppgjør per måned, inkl. forventet oppgjør fremover', () => {
+    const data = compute({ year: 2026, lonnsoppgjor: oppgjor })
+    const lonn = data.sections.find((s) => s.key === 'INNTEKTER')!.rows.find((r) => r.id === 'lonn')!
+    for (let m = 1; m <= 4; m++) expect(lonn.cells[m - 1].budget).toBe(55_844)
+    for (let m = 5; m <= 12; m++) expect(lonn.cells[m - 1].budget).toBe(57_352)
+  })
+
+  it('faller tilbake på profil-grunnlønn for måneder før første oppgjør', () => {
+    const data = compute({ year: 2024, lonnsoppgjor: oppgjor })
+    const lonn = data.sections.find((s) => s.key === 'INNTEKTER')!.rows.find((r) => r.id === 'lonn')!
+    expect(lonn.cells[0].budget).toBe(50_000) // profile.baseMonthly
+  })
+
+  it('historiske år bruker datidens oppgjørslønn, ikke dagens', () => {
+    const historisk = [
+      mkOppgjor({ effectiveDate: '2022-07-01', maanedslonn: 46_125 }),
+      ...oppgjor,
+    ]
+    const data = compute({ year: 2023, lonnsoppgjor: historisk })
+    const lonn = data.sections.find((s) => s.key === 'INNTEKTER')!.rows.find((r) => r.id === 'lonn')!
+    expect(lonn.cells[0].budget).toBe(46_125)
   })
 })
 

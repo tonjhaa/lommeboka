@@ -11,6 +11,7 @@ import type {
   JuneForecast,
   IVFTransaction,
   FondPortfolio,
+  LonnsoppgjorRecord,
 } from '@/types/economy'
 import { estimateSalaryTrend, projectMonthlySalary } from './salaryCalculator'
 import { ARTSKODE_NAVN } from '@/config/economy.config'
@@ -169,12 +170,29 @@ export function computeBudgetTable(
   trekktabellLookup?: (grunnlag: number) => number | undefined,
   /** Ansettelsesdato (ISO). Måneder før denne får ingen lønns-/trekk-prognose. */
   employmentStartDate?: string | null,
+  /** Lønnsoppgjør-historikk (inkl. forventede) — beste kilde for grunnlønn per måned. */
+  lonnsoppgjor: LonnsoppgjorRecord[] = [],
 ): BudgetTableData {
 
   // Måneder før ansettelse skal ikke ha lønnsprognose eller faste trekk
   const employmentStartMonth = employmentStartDate ? employmentStartDate.slice(0, 7) : null
   const beforeEmployment = (m: number): boolean =>
     employmentStartMonth !== null && `${year}-${String(m).padStart(2, '0')}` < employmentStartMonth
+
+  // Grunnlønn fra lønnsoppgjør: siste oppgjør (inkl. forventet) som har trådt i kraft
+  // innen utgangen av måneden. null = ingen oppgjør registrert så langt tilbake.
+  const oppgjorSorted = lonnsoppgjor
+    .filter((r) => r.maanedslonn > 0)
+    .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
+  const salaryFromOppgjor = (m: number): number | null => {
+    const monthEnd = `${year}-${String(m).padStart(2, '0')}-31`
+    let found: number | null = null
+    for (const r of oppgjorSorted) {
+      if (r.effectiveDate <= monthEnd) found = r.maanedslonn
+      else break
+    }
+    return found
+  }
 
   // ---- Month lookup (locked months in this year) ----
   const monthMap = new Map<number, MonthRecord>()
@@ -218,9 +236,12 @@ export function computeBudgetTable(
     if (slip) return slip.maanedslonn
     // Før ansettelse: ingen lønn å prognostisere
     if (beforeEmployment(month)) return 0
+    // Lønnsoppgjør (inkl. forventede) er beste kilde for grunnlønn per måned
+    const fromOppgjor = salaryFromOppgjor(month)
     // Fungering aktiv: vis basislønn — mellomlegget håndteres i Fungering-raden
-    if (fungeringByMonth.has(month)) return profile.baseMonthly ?? projectMonthlySalary(trend, year, month)
-    // Ingen slipphistorikk (f.eks. ny bruker): fall tilbake på profil-grunnlønn
+    if (fungeringByMonth.has(month)) return fromOppgjor ?? profile.baseMonthly ?? projectMonthlySalary(trend, year, month)
+    if (fromOppgjor !== null) return Math.round(fromOppgjor)
+    // Ingen oppgjørshistorikk: trend fra slipper, deretter profil-grunnlønn
     const projected = projectMonthlySalary(trend, year, month)
     return projected > 0 ? projected : (profile.baseMonthly ?? 0)
   }
