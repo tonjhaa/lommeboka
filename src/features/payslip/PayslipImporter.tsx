@@ -57,6 +57,7 @@ export function PayslipImporter({ onImported, compact }: PayslipImporterProps) {
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const importSlip = useEconomyStore((s) => s.importSlip)
+  const absenceHireDate = useEconomyStore((s) => s.absenceHireDate)
 
   async function processFiles(files: File[], useAI = false) {
     const pdfs = files
@@ -77,7 +78,15 @@ export function PayslipImporter({ onImported, compact }: PayslipImporterProps) {
         } else {
           slip = await parseSlipFromPDF(pdfs[i])
         }
-        results.push({ file: pdfs[i], slip })
+        const periodKey = `${slip.periode.year}-${String(slip.periode.month).padStart(2, '0')}`
+        if (absenceHireDate && periodKey < absenceHireDate.slice(0, 7)) {
+          results.push({
+            file: pdfs[i],
+            error: `Slippen er datert ${periodKey}, før ansettelsesdatoen din (${absenceHireDate}). Sjekk PDF-en, eller juster ansettelsesdato under Innstillinger → Personalia.`,
+          })
+        } else {
+          results.push({ file: pdfs[i], slip })
+        }
       } catch (err) {
         results.push({
           file: pdfs[i],

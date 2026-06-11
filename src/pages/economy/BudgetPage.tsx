@@ -81,9 +81,11 @@ export function BudgetPage() {
     clearBudgetOverride,
     _budgetUndoStack,
     undoBudget,
+    addContribution,
     removeContribution,
     updateSavingsAccount: updateSavingsAccountInBudget,
     removeWithdrawal,
+    absenceHireDate,
   } = useActiveEconomyStore()
 
   const now = new Date()
@@ -165,6 +167,7 @@ export function BudgetPage() {
     fondPortfolio,
     ivfSettings?.selfLabel,
     trekktabellLookup,
+    absenceHireDate,
   )
 
   const { metas, sections } = tableData
@@ -186,6 +189,20 @@ export function BudgetPage() {
     'bolig', 'transport', 'mat', 'helse', 'abonnement', 'forsikring', 'klær', 'fritid', 'annet_forbruk',
   ])
   const SAVINGS_CATS_SET = new Set(['bsu', 'fond', 'krypto', 'buffer', 'annen_sparing'])
+  const INCOME_CATS_SET = new Set(['lonn', 'tillegg', 'atf', 'feriepenger', 'annen_inntekt'])
+  const TREKK_CATS_SET = new Set(['skatt', 'pensjon', 'fagforening', 'husleietrekk'])
+  const GJELD_CATS_SET = new Set(['studielaan', 'billaan', 'kredittkort', 'annen_gjeld'])
+
+  // RowId-konvensjonen må matche computeBudgetTable
+  function lineRowId(line: BudgetLine): string | null {
+    if (line.category === 'skatteoppgjor') return `skattoppgjor-${line.id}`
+    if (INCOME_CATS_SET.has(line.category)) return `income-${line.id}`
+    if (TREKK_CATS_SET.has(line.category)) return `trekk-${line.id}`
+    if (GJELD_CATS_SET.has(line.category)) return `debt-t-${line.id}`
+    if (EXPENSE_CATS_SET.has(line.category)) return line.isVariable ? `var-${line.id}` : `exp-${line.id}`
+    if (SAVINGS_CATS_SET.has(line.category)) return `sav-t-${line.id}`
+    return null
+  }
 
   // Alle manuelle (ikke-låste) rader: map fra rowId → lineId/linje for sletting/redigering
   const { deletableRowMap, editableRowMap } = useMemo(() => {
@@ -193,24 +210,17 @@ export function BudgetPage() {
     const editable: Record<string, BudgetLine> = {}
     for (const line of budgetTemplate.lines) {
       if (line.isLocked) continue
-      let rowId: string | null = null
-      if (line.category === 'skatteoppgjor') rowId = `skattoppgjor-${line.id}`
-      else if (line.category === 'annen_inntekt') rowId = `income-${line.id}`
-      else if (EXPENSE_CATS_SET.has(line.category)) rowId = line.isVariable ? `var-${line.id}` : `exp-${line.id}`
-      else if (SAVINGS_CATS_SET.has(line.category)) rowId = `sav-t-${line.id}`
+      const rowId = lineRowId(line)
       if (rowId) { deletable[rowId] = line.id; editable[rowId] = line }
     }
     return { deletableRowMap: deletable, editableRowMap: editable }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [budgetTemplate.lines])
   const temporaryMap = useMemo(() => {
     const map: Record<string, { isTemporary: boolean; onToggle: () => void }> = {}
     for (const line of budgetTemplate.lines) {
-      let rowId: string
-      if (line.category === 'annen_inntekt') rowId = `income-${line.id}`
-      else if (EXPENSE_CATS_SET.has(line.category) && !line.isVariable) rowId = `exp-${line.id}`
-      else if (EXPENSE_CATS_SET.has(line.category) && line.isVariable) rowId = `var-${line.id}`
-      else if (SAVINGS_CATS_SET.has(line.category)) rowId = `sav-t-${line.id}`
-      else continue
+      const rowId = lineRowId(line)
+      if (!rowId || line.category === 'skatteoppgjor') continue
       const lineId = line.id
       map[rowId] = {
         isTemporary: !!line.isTemporary,
@@ -226,7 +236,12 @@ export function BudgetPage() {
     else setBudgetOverride(activeYear, month, rowId, value)
   }
 
-  const hasUnsavedOverrides = Object.keys(yearOverrides).length > 0
+  // Kun overrides på manuelle budsjettlinjer kan bakes inn i malen.
+  // Overrides på beregnede rader (lønn, tillegg, skatt …) er varige og skal aldri slettes her.
+  const hasUnsavedOverrides = Object.keys(yearOverrides).some((key) => {
+    const rowId = key.slice(key.indexOf(':') + 1)
+    return rowId in editableRowMap
+  })
 
   function handleSaveBudget() {
     // Baker overrides inn i malen: oppdaterer linjenes basisverdi og fjerner yellow-merket
@@ -238,8 +253,9 @@ export function BudgetPage() {
       const month = parseInt(key.slice(0, colonIdx))
       const rowId = key.slice(colonIdx + 1)
       const line = editableRowMap[rowId]
+      if (!line) continue
       // Bruk første måneds verdi som ny basisverdi for linjen
-      if (line && !lineUpdates.has(line.id)) {
+      if (!lineUpdates.has(line.id)) {
         lineUpdates.set(line.id, value)
       }
       toClear.push([month, rowId])
@@ -489,6 +505,7 @@ export function BudgetPage() {
               const isReadOnly = section.key === 'NETTO' || section.key === 'BUNN' || section.key === 'OPPSUMMERING'
               const SECTION_ADD_PREFILL: Record<string, Partial<BudgetLine>> = {
                 INNTEKTER:     { category: 'annen_inntekt' },
+                TREKK:         { category: 'skatt' },
                 SKATTEOPPGJOR: { category: 'skatteoppgjor', isRecurring: false, label: `Skattetilgode ${activeYear - 1}` },
                 FASTE:         { category: 'annet_forbruk', isVariable: false },
                 VARIABLE:      { category: 'annet_forbruk', isVariable: true },
@@ -535,7 +552,9 @@ export function BudgetPage() {
                       </td>
                       {isCollapsed
                         ? metas.map((meta) => {
+                            // Sumrader (isBold) ekskluderes — ellers dobbelttelles seksjonen
                             const sum = section.rows.reduce((acc, row) => {
+                              if (row.isBold) return acc
                               const cell = row.cells[meta.month - 1]
                               const val = cell?.actual ?? cell?.budget ?? 0
                               return acc + val
@@ -559,6 +578,7 @@ export function BudgetPage() {
                       {isCollapsed && (
                         <td className="px-3 py-1 text-right text-xs tabular-nums border-l border-border/40 text-muted-foreground">
                           {section.rows.reduce((acc, row) => {
+                            if (row.isBold) return acc
                             const annual = row.cells.reduce((s, cell) => s + (cell?.actual ?? cell?.budget ?? 0), 0)
                             return acc + annual
                           }, 0).toLocaleString('no-NO')}
@@ -568,7 +588,13 @@ export function BudgetPage() {
                   )}
 
                   {/* Datarader — skjules når kollapsert */}
-                  {!isCollapsed && section.rows.map((row) => (
+                  {!isCollapsed && section.rows.map((row) => {
+                    // Sparekonto-rader: celle-input oppretter ekte innskudd på kontoen
+                    // (synlig i Sparing-fanen) i stedet for et budsjett-override.
+                    const savingsAccId = row.id.startsWith('sav-') && !row.id.startsWith('sav-t-')
+                      ? row.id.slice(4)
+                      : null
+                    return (
                     <DataRow
                       key={row.id}
                       row={row}
@@ -577,9 +603,22 @@ export function BudgetPage() {
                       isEditable={!isReadOnly && !row.isBold}
                       yearOverrides={yearOverrides}
                       onOverride={(month, value) => handleOverride(row.id, month, value)}
-                      onCopyForward={(fromMonth, value) => {
+                      onCopyForward={savingsAccId ? undefined : (fromMonth, value) => {
                         for (let m = fromMonth; m <= 12; m++) handleOverride(row.id, m, value)
                       }}
+                      onDeposit={savingsAccId
+                        ? (month, amount) => {
+                            const now = new Date()
+                            const day = activeYear === now.getFullYear() && month === now.getMonth() + 1
+                              ? now.getDate() : 1
+                            addContribution(savingsAccId, {
+                              id: crypto.randomUUID(),
+                              date: `${activeYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+                              amount,
+                              note: 'Lagt inn fra budsjettet',
+                            })
+                          }
+                        : undefined}
                       highlightedMonth={highlightedMonth}
                       temporaryInfo={temporaryMap[row.id]}
                       onEdit={editableRowMap[row.id]
@@ -588,11 +627,12 @@ export function BudgetPage() {
                       onDelete={deletableRowMap[row.id]
                         ? () => setConfirmingDelete({ lineId: deletableRowMap[row.id], label: row.label })
                         : undefined}
-                      onActualCellClick={row.id.startsWith('sav-') && !row.id.startsWith('sav-t-')
-                        ? (month) => setContribDialog({ accId: row.id.slice(4), month })
+                      onActualCellClick={savingsAccId
+                        ? (month) => setContribDialog({ accId: savingsAccId, month })
                         : undefined}
                     />
-                  ))}
+                    )
+                  })}
 
                   {/* "+ Legg til"-knapp under seksjonen når utvidet */}
                   {!isCollapsed && !isReadOnly && isCollapsible && (
@@ -1147,6 +1187,7 @@ function DataRow({
   onDelete,
   onCopyForward,
   onActualCellClick,
+  onDeposit,
 }: {
   row: BudgetRow
   metas: MonthMeta[]
@@ -1160,6 +1201,8 @@ function DataRow({
   onDelete?: () => void
   onCopyForward?: (fromMonth: number, value: number) => void
   onActualCellClick?: (month: number) => void
+  /** Sparekonto-rader: opprett innskudd (positivt beløp) i stedet for budsjett-override */
+  onDeposit?: (month: number, amount: number) => void
 }) {
   const [editingMonth, setEditingMonth] = useState<number | null>(null)
   const [editValue, setEditValue] = useState('')
@@ -1171,7 +1214,13 @@ function DataRow({
   function commitEdit() {
     if (editingMonth === null) return
     const v = parseFloat(editValue)
-    if (!isNaN(v)) onOverride?.(editingMonth, v)
+    if (!isNaN(v)) {
+      if (onDeposit) {
+        if (Math.abs(v) > 0) onDeposit(editingMonth, Math.abs(v))
+      } else {
+        onOverride?.(editingMonth, v)
+      }
+    }
     setEditingMonth(null)
   }
   function cancelEdit() { setEditingMonth(null) }
@@ -1242,7 +1291,6 @@ function DataRow({
     )
   }
 
-  const isGrunnlag = row.id === 'brutto-inntekt' || row.id === 'skattepliktig'
   const isHidden = !!row.isHidden
 
   return (
@@ -1254,21 +1302,10 @@ function DataRow({
       <td className={cn(
         'sticky left-0 z-10 bg-background px-3 py-1.5 border-r border-border w-[180px]',
         row.isBold ? 'font-bold bg-muted text-[11px] uppercase tracking-wide' : '',
-        isGrunnlag && 'text-muted-foreground italic',
       )}>
         <span className="flex items-center justify-between gap-1">
           <span className={cn('flex items-center gap-1', isHidden && 'line-through')}>
             <span title={row.label}>{row.label}</span>
-            {isGrunnlag && (
-              <span
-                className="shrink-0 text-[9px] px-1 py-0.5 rounded bg-muted/40 text-muted-foreground cursor-help leading-none"
-                title={
-                  row.id === 'brutto-inntekt'
-                    ? 'Referanserad — sum av alle inntektsposter. Inngår ikke i Netto.'
-                    : 'Referanserad — skattepliktig grunnlag brukt for skatteberegning. Inngår ikke i Netto.'
-                }
-              >i</span>
-            )}
           </span>
           <span className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover/row:opacity-100 transition-opacity">
             {temporaryInfo && !isHidden && (
@@ -1352,16 +1389,33 @@ function DataRow({
               )}
               onClick={() => isEditable && startEdit(meta.month, displayVal)}
             >
-              {fmtNOK(displayVal)}
+              {hasOverride && displayVal === 0 ? '0' : fmtNOK(displayVal)}
             </td>
           )
         }
 
         if (meta.hasSlip || cell.actual !== null) {
+          if (editingMonth === meta.month && onDeposit) {
+            return (
+              <td key={`${meta.month}-edit`} colSpan={2} className={cn('px-1 py-0.5 border-r border-border/40', hl && 'bg-sky-500/15')}>
+                <input
+                  type="number"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={commitEdit}
+                  onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit() }}
+                  autoFocus
+                  placeholder="innskudd"
+                  className="w-full bg-muted/30 text-right text-xs px-1 py-0.5 rounded outline-none tabular-nums"
+                />
+              </td>
+            )
+          }
           const actual = cell.actual ?? 0
           const deviation = !isHidden && actual !== 0 && cell.budget !== 0 ? actual - cell.budget : null
           const deviationPct = deviation !== null && cell.budget !== 0 ? Math.abs(deviation) / Math.abs(cell.budget) : 0
-          const bigDeviation = deviationPct > 0.1
+          // Markeres kun ved >10 % avvik OG minst 500 kr — småbeløp gir bare støy
+          const bigDeviation = deviationPct > 0.1 && deviation !== null && Math.abs(deviation) > 500
           const deviationDir = deviation !== null && deviation > 0 ? 'over' : 'under'
           return (
             <td
@@ -1373,11 +1427,13 @@ function DataRow({
                   actual < 0 ? 'text-red-400' : actual > 0 ? 'text-foreground' : 'text-muted-foreground',
                 !isHidden && bigDeviation && deviationDir === 'over' && 'bg-emerald-500/8',
                 !isHidden && bigDeviation && deviationDir === 'under' && 'bg-red-500/8',
+                onDeposit && 'cursor-text hover:bg-muted/20',
                 hl && '!bg-sky-500/15',
               )}
+              onClick={onDeposit ? () => startEdit(meta.month, 0) : undefined}
               title={deviation !== null
                 ? `Avvik fra budsjett: ${deviation > 0 ? '+' : ''}${Math.round(deviation).toLocaleString('no-NO')} kr (${deviationPct >= 0.01 ? (deviationPct * 100).toFixed(0) + '%' : '<1%'})`
-                : undefined}
+                : onDeposit ? 'Klikk for å registrere innskudd' : undefined}
             >
               {fmtNOK(actual)}
               {onActualCellClick && actual !== 0 && (
@@ -1426,11 +1482,11 @@ function DataRow({
               !isHidden && isEditable && !meta.isLocked && 'cursor-text hover:bg-muted/20',
               hl && 'bg-sky-500/15',
             )}
-            onClick={() => isEditable && !meta.isLocked && startEdit(meta.month, displayVal)}
+            onClick={() => isEditable && !meta.isLocked && startEdit(meta.month, onDeposit ? Math.abs(displayVal) : displayVal)}
           >
             <span className="flex items-center justify-end gap-1">
-              {fmtNOK(displayVal)}
-              {isEditable && !meta.isLocked && (
+              {hasOverride && displayVal === 0 ? '0' : fmtNOK(displayVal)}
+              {isEditable && !meta.isLocked && !onDeposit && (
                 <button
                   className={cn(
                     'text-xs leading-none transition-colors',

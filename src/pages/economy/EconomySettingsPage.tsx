@@ -64,6 +64,8 @@ function HousingToggle({ value, onChange }: { value: 'leier' | 'eier' | undefine
 function PersonaliaSection() {
   const userPreferences = useEconomyStore((s) => s.userPreferences)
   const setUserPreferences = useEconomyStore((s) => s.setUserPreferences)
+  const absenceHireDate = useEconomyStore((s) => s.absenceHireDate)
+  const setAbsenceHireDate = useEconomyStore((s) => s.setAbsenceHireDate)
 
   const [birthYearInput, setBirthYearInput] = useState(
     userPreferences?.birthYear ? String(userPreferences.birthYear) : ''
@@ -136,6 +138,20 @@ function PersonaliaSection() {
           <div className="space-y-1.5">
             <Label className="text-xs">Boligstatus</Label>
             <HousingToggle value={userPreferences?.housingStatus} onChange={setHousingStatus} />
+          </div>
+
+          <div className="space-y-1.5 col-span-2">
+            <Label className="text-xs">Ansatt siden</Label>
+            <Input
+              type="date"
+              value={absenceHireDate ?? ''}
+              onChange={(e) => setAbsenceHireDate(e.target.value || null)}
+              className="h-8 text-sm w-40"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Brukes av budsjettprognosen (ingen lønn før denne datoen), egenmeldingsreglene i
+              Fravær-fanen og validering av slippimport.
+            </p>
           </div>
         </div>
       </div>
