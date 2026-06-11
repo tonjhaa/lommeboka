@@ -13,6 +13,7 @@ import type {
   FondPortfolio,
 } from '@/types/economy'
 import { estimateSalaryTrend, projectMonthlySalary } from './salaryCalculator'
+import { ARTSKODE_NAVN } from '@/config/economy.config'
 import { computeMonthContributions, getBaseContribForPeriod } from './savingsCalculator'
 import { calcMonthlyTaxWithholding } from './norwegianTaxRules'
 
@@ -81,6 +82,20 @@ function uniform12(budgetFn: (m: number) => number, actualFn: (m: number) => num
     budget: budgetFn(i + 1),
     actual: actualFn(i + 1),
   }))
+}
+
+/** Sumceller over en samling rader (ekskluderer isHidden-rader).
+ *  Faktisk vises bare når minst én rad har faktisk-verdi; budsjett brukes som fallback per rad. */
+function mkSumCells(rows: BudgetRow[]): BudgetCell[] {
+  return Array.from({ length: 12 }, (_, i) => {
+    const vis = rows.filter((r) => !r.isHidden)
+    const budget = vis.reduce((s, r) => s + r.cells[i].budget, 0)
+    const hasActual = vis.some((r) => r.cells[i].actual !== null)
+    return {
+      budget,
+      actual: hasActual ? vis.reduce((s, r) => s + (r.cells[i].actual ?? r.cells[i].budget), 0) : null,
+    }
+  })
 }
 
 function subMonthAmount(sub: SubscriptionEntry, year: number, month: number): number {
@@ -152,7 +167,14 @@ export function computeBudgetTable(
   /** Slår opp skattetrekk fra faktisk trekktabell for et gitt grunnlag.
    *  Returnerer undefined ved cache-miss — da brukes trekkrutinen som fallback. */
   trekktabellLookup?: (grunnlag: number) => number | undefined,
+  /** Ansettelsesdato (ISO). Måneder før denne får ingen lønns-/trekk-prognose. */
+  employmentStartDate?: string | null,
 ): BudgetTableData {
+
+  // Måneder før ansettelse skal ikke ha lønnsprognose eller faste trekk
+  const employmentStartMonth = employmentStartDate ? employmentStartDate.slice(0, 7) : null
+  const beforeEmployment = (m: number): boolean =>
+    employmentStartMonth !== null && `${year}-${String(m).padStart(2, '0')}` < employmentStartMonth
 
   // ---- Month lookup (locked months in this year) ----
   const monthMap = new Map<number, MonthRecord>()
@@ -194,6 +216,8 @@ export function computeBudgetTable(
     // Har vi slipp for denne måneden i budsjettåret, bruk faktisk lønn (allerede basislønn fra slip)
     const slip = monthMap.get(month)?.slipData
     if (slip) return slip.maanedslonn
+    // Før ansettelse: ingen lønn å prognostisere
+    if (beforeEmployment(month)) return 0
     // Fungering aktiv: vis basislønn — mellomlegget håndteres i Fungering-raden
     if (fungeringByMonth.has(month)) return profile.baseMonthly ?? projectMonthlySalary(trend, year, month)
     // Ingen slipphistorikk (f.eks. ny bruker): fall tilbake på profil-grunnlønn
@@ -251,8 +275,11 @@ export function computeBudgetTable(
     for (const addition of profile.fixedAdditions) {
       if (addition.amount <= 0) continue
       const rowId = `tillegg-${addition.kode}`
-      const row = mkRow(rowId, `${addition.label} (${addition.kode})`, uniform12(
-        (m) => budgetVal(rowId, m, addition.amount),
+      // Rene navn fra artskode-mappingen; rå slipptekst (med periodesuffiks) som fallback
+      const cleanLabel = ARTSKODE_NAVN[addition.kode]
+        ?? addition.label.replace(/\s*\d{2}\.\d{2}\s*$/, '')
+      const row = mkRow(rowId, `${cleanLabel} (${addition.kode})`, uniform12(
+        (m) => budgetVal(rowId, m, beforeEmployment(m) ? 0 : addition.amount),
         (m) => {
           const slip = monthMap.get(m)?.slipData
           if (!slip) return null
@@ -308,9 +335,11 @@ export function computeBudgetTable(
     }
   }
 
-  // Template income lines (annen_inntekt) — recurring + once-off for this year
+  // Template income lines — recurring + once-off for this year.
+  // Dekker alle inntektskategorier som kan velges i «Ny linje»-modalen.
+  const INCOME_CATS = new Set(['lonn', 'tillegg', 'atf', 'feriepenger', 'annen_inntekt'])
   for (const line of budgetTemplate.lines.filter((l) =>
-    l.category === 'annen_inntekt' && !(hideTemporary && l.isTemporary) &&
+    INCOME_CATS.has(l.category) && !(hideTemporary && l.isTemporary) &&
     (l.isRecurring || (l.specificMonth != null && (!l.specificYear || l.specificYear === year)))
   )) {
     const rowId = `income-${line.id}`
@@ -328,7 +357,6 @@ export function computeBudgetTable(
   // TREKK (dualColumn = true)
   // ================================================================
   const trekkRows: BudgetRow[] = []
-  const grunnlagRows: BudgetRow[] = []
 
   // Pensjonerbare artskoder fra SPK-regelverket (1162 = HTA-tillegg)
   // 10P2 (fungering) er variabel og ikke inkludert i budsjettbasen
@@ -349,38 +377,12 @@ export function computeBudgetTable(
       profile.fixedAdditions.reduce((s, a) => {
         if (a.amount <= 0) return s
         if (hideTemporary && a.isTemporary) return s
-        return s + budgetVal(`tillegg-${a.kode}`, m, a.amount)
+        return s + budgetVal(`tillegg-${a.kode}`, m, beforeEmployment(m) ? 0 : a.amount)
       }, 0)
-
-    // ---- Grunnlagsrader (vises mellom INNTEKTER og TREKK) ----
-    // Skattepliktig inntekt = lønn + faste tillegg + ATF (/440-grunnlag)
-    grunnlagRows.push(mkRow('brutto-inntekt', 'Bruttoinntekt', uniform12(
-      (m) => inntekterRows.filter(r => !r.isHidden).reduce((s, r) => s + r.cells[m - 1].budget, 0),
-      (m) => {
-        const slip = monthMap.get(m)?.slipData
-        if (!slip) return null
-        // Ferietrekk (OF19) og ulønnet fravær (2700/2713) trekkes fra slik at
-        // raden matcher slippens "Brutto denne måned"
-        return slip.maanedslonn
-          + slip.fasteTillegg.reduce((s, t) => s + t.belop, 0)
-          + (slip.atfBeløp ?? 0)
-          + (slip.fungeringBeløp ?? 0)
-          - (slip.ferietrekk ?? 0)
-          - (slip.fravaerstrekk ?? 0)
-      },
-    )))
-    grunnlagRows.push(mkRow('skattepliktig', 'Skattepliktig inntekt', uniform12(
-      (m) => effectiveSalaryForMonth(m) + effectiveTilleggForMonth(m) + (atfByMonth.get(m) ?? 0),
-      (m) => {
-        const slip = monthMap.get(m)?.slipData
-        if (!slip) return null
-        return slip.maanedslonn + slip.fasteTillegg.reduce((s, t) => s + t.belop, 0)
-          + (slip.atfBeløp ?? 0) - (slip.ferietrekk ?? 0) - (slip.fravaerstrekk ?? 0)
-      },
-    )))
 
     trekkRows.push(mkRow('skatt', 'Skattetrekk', uniform12(
       (m) => {
+        if (beforeEmployment(m)) return budgetVal('skatt', m, 0)
         const atfAmount = atfByMonth.get(m) ?? 0
         if (m === 6 && juneHoliday) {
           // Juni: bruk skattetrekk direkte fra JuneForecast (samme kilde som feriepengefanen)
@@ -415,7 +417,8 @@ export function computeBudgetTable(
 
     // Pensjonstrekk — 2% av (effektiv lønn inkl. override + pensjonerbare faste tillegg, f.eks. 1162 HTA)
     trekkRows.push(mkRow('pensjon', 'Pensjonstrekk SPK', uniform12(
-      (m) => budgetVal('pensjon', m, -((effectiveSalaryForMonth(m) + pensjonableTillegg) * profile.pensionPercent / 100)),
+      (m) => budgetVal('pensjon', m, beforeEmployment(m) ? 0
+        : -((effectiveSalaryForMonth(m) + pensjonableTillegg) * profile.pensionPercent / 100)),
       (m) => {
         const slip = monthMap.get(m)?.slipData
         return slip ? -slip.pensjonstrekk : null
@@ -425,7 +428,7 @@ export function computeBudgetTable(
     // Fagforeningskontingent
     if (profile.unionFee > 0) {
       trekkRows.push(mkRow('fagforening', 'Fagforeningskontingent', uniform12(
-        (m) => budgetVal('fagforening', m, -profile.unionFee),
+        (m) => budgetVal('fagforening', m, beforeEmployment(m) ? 0 : -profile.unionFee),
         (m) => {
           const slip = monthMap.get(m)?.slipData
           return slip ? -slip.fagforeningskontingent : null
@@ -436,7 +439,7 @@ export function computeBudgetTable(
     // Husleietrekk — vises alltid, men markeres isHidden hvis housingDeductionIsTemporary=true
     if (profile.housingDeduction > 0) {
       const husleieRow = mkRow('husleie', 'Husleietrekk', uniform12(
-        (m) => budgetVal('husleie', m, -profile.housingDeduction),
+        (m) => budgetVal('husleie', m, beforeEmployment(m) ? 0 : -profile.housingDeduction),
         (m) => {
           const slip = monthMap.get(m)?.slipData
           return slip ? -slip.husleietrekk : null
@@ -450,7 +453,7 @@ export function computeBudgetTable(
     // Ekstra forskuddstrekk
     if (profile.extraTaxWithholding > 0) {
       trekkRows.push(mkRow('ekstra', 'Ekstra forskuddstrekk', uniform12(
-        (m) => budgetVal('ekstra', m, -profile.extraTaxWithholding),
+        (m) => budgetVal('ekstra', m, beforeEmployment(m) ? 0 : -profile.extraTaxWithholding),
         (m) => {
           const slip = monthMap.get(m)?.slipData
           return slip ? (slip.ekstraTrekk > 0 ? -slip.ekstraTrekk : 0) : null
@@ -469,6 +472,23 @@ export function computeBudgetTable(
       )))
     }
 
+  }
+
+  // Template trekk lines (manuelle trekk-linjer fra «Ny linje»-modalen)
+  const TREKK_CATS = new Set(['skatt', 'pensjon', 'fagforening', 'husleietrekk'])
+  for (const line of budgetTemplate.lines.filter((l) =>
+    TREKK_CATS.has(l.category) && !(hideTemporary && l.isTemporary) &&
+    (l.isRecurring || (l.specificMonth != null && (!l.specificYear || l.specificYear === year)))
+  )) {
+    const rowId = `trekk-${line.id}`
+    trekkRows.push(mkRow(rowId, line.label, uniform12(
+      (m) => {
+        if (!line.isRecurring && m !== line.specificMonth) return 0
+        if (!monthInDateRange(year, m, line.temporaryFromDate, line.temporaryToDate)) return 0
+        return budgetVal(rowId, m, lineAmt(line, year, m))
+      },
+      () => null,
+    )))
   }
 
   // ================================================================
@@ -600,6 +620,23 @@ export function computeBudgetTable(
     }
   }
 
+  // Template gjeld lines (manuelle gjeldslinjer fra «Ny linje»-modalen)
+  const GJELD_CATS = new Set(['studielaan', 'billaan', 'kredittkort', 'annen_gjeld'])
+  for (const line of budgetTemplate.lines.filter((l) =>
+    GJELD_CATS.has(l.category) && !(hideTemporary && l.isTemporary) &&
+    (l.isRecurring || (l.specificMonth != null && (!l.specificYear || l.specificYear === year)))
+  )) {
+    const rowId = `debt-t-${line.id}`
+    gjeldRows.push(mkRow(rowId, line.label, uniform12(
+      (m) => {
+        if (!line.isRecurring && m !== line.specificMonth) return 0
+        if (!monthInDateRange(year, m, line.temporaryFromDate, line.temporaryToDate)) return 0
+        return budgetVal(rowId, m, lineAmt(line, year, m))
+      },
+      () => null,
+    )))
+  }
+
   // ================================================================
   // SPARING (dualColumn = false)
   // ================================================================
@@ -726,54 +763,61 @@ export function computeBudgetTable(
   // ================================================================
   const sections: BudgetSection[] = []
 
-  // BRUTTO-sumrad (ekskluderer isHidden-rader)
-  const bruttoSumCells: BudgetCell[] = Array.from({ length: 12 }, (_, i) => {
-    const vis = inntekterRows.filter(r => !r.isHidden)
-    const budget = vis.reduce((s, r) => s + r.cells[i].budget, 0)
-    const hasActual = vis.some((r) => r.cells[i].actual !== null)
+  // BRUTTO-rad: budsjett = sum av synlige inntektsrader,
+  // faktisk = slippens «Brutto denne måned» (inkl. ATF/fungering, minus ferietrekk/ulønnet fravær)
+  const bruttoSumCells: BudgetCell[] = mkSumCells(inntekterRows).map((cell, i) => {
+    const slip = monthMap.get(i + 1)?.slipData
+    if (!slip) return cell
     return {
-      budget,
-      actual: hasActual ? vis.reduce((s, r) => s + (r.cells[i].actual ?? r.cells[i].budget), 0) : null,
-    }
-  })
-
-  // SUM TREKK-rad (ekskluderer isHidden-rader)
-  const trekkSumCells: BudgetCell[] = Array.from({ length: 12 }, (_, i) => {
-    const vis = trekkRows.filter(r => !r.isHidden)
-    const budget = vis.reduce((s, r) => s + r.cells[i].budget, 0)
-    const hasActual = vis.some((r) => r.cells[i].actual !== null)
-    return {
-      budget,
-      actual: hasActual ? vis.reduce((s, r) => s + (r.cells[i].actual ?? r.cells[i].budget), 0) : null,
+      budget: cell.budget,
+      actual: slip.maanedslonn
+        + slip.fasteTillegg.reduce((s, t) => s + t.belop, 0)
+        + (slip.atfBeløp ?? 0)
+        + (slip.fungeringBeløp ?? 0)
+        - (slip.ferietrekk ?? 0)
+        - (slip.fravaerstrekk ?? 0),
     }
   })
 
   if (inntekterRows.length > 0) {
     sections.push({
       key: 'INNTEKTER', label: 'Inntekter', colorClass: 'text-green-400', dualColumn: true,
-      rows: [...inntekterRows, ...grunnlagRows, mkRow('brutto', 'BRUTTO', bruttoSumCells, true)],
+      rows: [...inntekterRows, mkRow('brutto', 'BRUTTO', bruttoSumCells, true)],
     })
   }
   if (trekkRows.length > 0) {
     sections.push({
       key: 'TREKK', label: 'Trekk', colorClass: 'text-red-400', dualColumn: true,
-      rows: [...trekkRows, mkRow('sum-trekk', 'SUM TREKK', trekkSumCells, true)],
+      rows: [...trekkRows, mkRow('sum-trekk', 'SUM TREKK', mkSumCells(trekkRows), true)],
     })
   }
 
   sections.push({ key: 'NETTO', label: 'Netto utbetalt', colorClass: 'text-foreground', dualColumn: true, rows: [mkRow('netto', 'NETTO', nettoCells, true)] })
 
   if (fasteRows.length > 0) {
-    sections.push({ key: 'FASTE', label: 'Faste utgifter', colorClass: 'text-blue-400', dualColumn: false, rows: fasteRows })
+    sections.push({
+      key: 'FASTE', label: 'Faste utgifter', colorClass: 'text-blue-400', dualColumn: false,
+      rows: [...fasteRows, mkRow('sum-faste', 'SUM FASTE', mkSumCells(fasteRows), true)],
+    })
   }
   if (variableRows.length > 0 || skatteoppgjorRows.length > 0) {
-    sections.push({ key: 'VARIABLE', label: 'Variable utgifter', colorClass: 'text-yellow-400', dualColumn: false, rows: [...variableRows, ...skatteoppgjorRows] })
+    const varAll = [...variableRows, ...skatteoppgjorRows]
+    sections.push({
+      key: 'VARIABLE', label: 'Variable utgifter', colorClass: 'text-yellow-400', dualColumn: false,
+      rows: [...varAll, mkRow('sum-variable', 'SUM VARIABLE', mkSumCells(varAll), true)],
+    })
   }
   if (gjeldRows.length > 0) {
-    sections.push({ key: 'GJELD', label: 'Gjeld', colorClass: 'text-orange-400', dualColumn: false, rows: gjeldRows })
+    sections.push({
+      key: 'GJELD', label: 'Gjeld', colorClass: 'text-orange-400', dualColumn: false,
+      rows: [...gjeldRows, mkRow('sum-gjeld', 'SUM GJELD', mkSumCells(gjeldRows), true)],
+    })
   }
   if (sparingRows.length > 0) {
-    sections.push({ key: 'SPARING', label: 'Sparing', colorClass: 'text-purple-400', dualColumn: true, rows: sparingRows })
+    sections.push({
+      key: 'SPARING', label: 'Sparing', colorClass: 'text-purple-400', dualColumn: true,
+      rows: [...sparingRows, mkRow('sum-sparing', 'SUM SPARING', mkSumCells(sparingRows), true)],
+    })
   }
 
   // SUM UT = sum av alle utgiftsrader (faktisk der tilgjengelig, ellers budsjett)
@@ -797,7 +841,6 @@ export function computeBudgetTable(
   sections.push({
     key: 'BUNN', label: 'Oppsummering', colorClass: 'text-foreground', dualColumn: true,
     rows: [
-      mkRow('sum-inn', 'SUM INN', nettoCells, true),
       mkRow('sum-ut', 'SUM UT', sumUtCells, true),
       mkRow('overskudd', 'OVERSKUDD', overskuddCells, true),
     ],
@@ -831,7 +874,7 @@ export function computeBudgetTable(
     for (let i = 0; i < 12; i++) {
       const m = i + 1
       const slip = monthMap.get(m)?.slipData
-      ytdFerieBudget += budgetSalary(m) + pensjonableTillegg
+      ytdFerieBudget += budgetSalary(m) + (beforeEmployment(m) ? 0 : pensjonableTillegg)
       ytdFerieCells.push({ budget: ytdFerieBudget, actual: slip?.feriepengegrunnlag ?? null })
     }
 

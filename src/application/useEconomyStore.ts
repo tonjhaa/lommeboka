@@ -461,9 +461,10 @@ export const useEconomyStore = create<EconomyState>()(
               // Faste tillegg: merge med eksisterende — slipper mangler noen ganger tillegg
               // som ikke var aktive den måneden (f.eks. 1501 kun på visse slipper).
               // Ny slipp oppdaterer beløp der den har koden, eksisterende beholdes ellers.
+              // OF11 (feriepenger juni) er en engangsutbetaling — aldri et månedlig tillegg.
               fixedAdditions: (() => {
                 const fromSlip = slip.fasteTillegg
-                  .filter((t) => t.artskode !== '3209')
+                  .filter((t) => t.artskode !== '3209' && t.artskode !== 'OF11')
                   .map((t) => ({ kode: t.artskode, label: t.navn, amount: t.belop }))
                 const fromSlipKoder = new Set(fromSlip.map((t) => t.kode))
                 const kept = (baseProfile.fixedAdditions ?? []).filter((t) => !fromSlipKoder.has(t.kode))
@@ -1045,7 +1046,7 @@ export const useEconomyStore = create<EconomyState>()(
           employer: 'forsvaret',
           baseMonthly: slip.maanedslonn,
           fixedAdditions: slip.fasteTillegg
-            .filter((t) => t.artskode !== '3209')
+            .filter((t) => t.artskode !== '3209' && t.artskode !== 'OF11')
             .map((t) => ({ kode: t.artskode, label: t.navn, amount: t.belop })),
           lastKnownTaxWithholding: slip.skattetrekk,
           extraTaxWithholding: slip.ekstraTrekk > 0 ? slip.ekstraTrekk : 0,
@@ -1191,7 +1192,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 17,
+      version: 18,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v1 → v2: inkluder artskode 1501 (husleiekompensasjon) i fixedAdditions
@@ -1327,6 +1328,20 @@ export const useEconomyStore = create<EconomyState>()(
           const defaultIds = new Set(DEFAULT_BANK_PRESETS.map((p) => p.id))
           const customPresets = (state.bankPresets as BankAccountPreset[]).filter((p) => !defaultIds.has(p.id))
           state.bankPresets = [...DEFAULT_BANK_PRESETS, ...customPresets]
+        }
+        // v17 → v18: OF11 (feriepenger juni) skal aldri ligge som månedlig fast tillegg.
+        // Fjern fra profilen og rydd manuelle null-overrides brukeren la inn som workaround.
+        if (fromVersion < 18) {
+          const profile = state.profile as { fixedAdditions?: Array<{ kode: string }> } | null
+          if (profile && Array.isArray(profile.fixedAdditions)) {
+            profile.fixedAdditions = profile.fixedAdditions.filter((t) => t.kode !== 'OF11')
+          }
+          if (state.budgetOverrides && typeof state.budgetOverrides === 'object') {
+            const overrides = state.budgetOverrides as Record<string, number>
+            for (const key of Object.keys(overrides)) {
+              if (key.endsWith(':tillegg-OF11')) delete overrides[key]
+            }
+          }
         }
         return state
       },
