@@ -1125,9 +1125,22 @@ export const useEconomyStore = create<EconomyState>()(
           if (prefs?.enabledTabs && !prefs.enabledTabs.includes('partner')) {
             prefs.enabledTabs = [...prefs.enabledTabs, 'partner']
           }
+          // Saniter profil fra sky/backup: OF11 (feriepenger) skal aldri ligge som
+          // månedlig fast tillegg — eldre lagret data kan fortsatt ha den.
+          let importedProfile = (data.profile ?? null) as EmploymentProfile | null
+          if (importedProfile?.fixedAdditions) {
+            importedProfile = {
+              ...importedProfile,
+              fixedAdditions: importedProfile.fixedAdditions.filter((t) => t.kode !== 'OF11'),
+            }
+          }
+          // Normaliser htaTillegg lagret som årsbeløp (skal være kr/mnd)
+          const importedOppgjor = ((data.lonnsoppgjor ?? []) as LonnsoppgjorRecord[]).map((r) =>
+            r.htaTillegg > 10_000 ? { ...r, htaTillegg: Math.round(r.htaTillegg / 12) } : r
+          )
           const defaultPartnerVeikart = get().partnerVeikart
           set({
-            profile: data.profile ?? null,
+            profile: importedProfile,
             budgetTemplate: data.budgetTemplate ?? DEFAULT_TEMPLATE,
             monthHistory: data.monthHistory ?? [],
             atfEntries: data.atfEntries ?? [],
@@ -1142,7 +1155,7 @@ export const useEconomyStore = create<EconomyState>()(
             insurances: data.insurances ?? [],
             policyRateHistory: data.policyRateHistory ?? POLICY_RATE_HISTORY,
             temporaryPayEntries: data.temporaryPayEntries ?? [],
-            lonnsoppgjor: data.lonnsoppgjor ?? [],
+            lonnsoppgjor: importedOppgjor,
             ivfTransactions: (data.ivfTransactions ?? INITIAL_IVF_TRANSACTIONS).map(
               (t: Record<string, unknown>) => t.type === 'FAKTURA' ? { ...t, type: 'SVEA' } : t
             ),
@@ -1192,7 +1205,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 18,
+      version: 19,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v1 → v2: inkluder artskode 1501 (husleiekompensasjon) i fixedAdditions
@@ -1342,6 +1355,12 @@ export const useEconomyStore = create<EconomyState>()(
               if (key.endsWith(':tillegg-OF11')) delete overrides[key]
             }
           }
+        }
+        // v18 → v19: htaTillegg i lønnsoppgjør skal være kr/mnd — eldre records kan ha årsbeløp
+        if (fromVersion < 19 && Array.isArray(state.lonnsoppgjor)) {
+          state.lonnsoppgjor = (state.lonnsoppgjor as LonnsoppgjorRecord[]).map((r) =>
+            r.htaTillegg > 10_000 ? { ...r, htaTillegg: Math.round(r.htaTillegg / 12) } : r
+          )
         }
         return state
       },

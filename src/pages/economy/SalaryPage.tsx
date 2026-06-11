@@ -15,10 +15,16 @@ import { useEconomyStore } from '@/application/useEconomyStore'
 
 import { PayslipImporter } from '@/features/payslip/PayslipImporter'
 import type { EmploymentProfile, MonthRecord, TemporaryPayEntry, LonnsoppgjorRecord } from '@/types/economy'
-import { getKpiIndex } from '@/config/economy.config'
+import { getKpiIndex, ARTSKODE_NAVN } from '@/config/economy.config'
 
 function fmtNOK(n: number) {
   return Math.round(n).toLocaleString('no-NO') + ' kr'
+}
+
+/** Rent visningsnavn for artskode-tillegg: mappet navn, ellers slipptekst uten periodesuffiks («06.26») */
+function cleanTilleggLabel(kode: string, label: string): string {
+  const navn = ARTSKODE_NAVN[kode] ?? label.replace(/\s*\d{2}\.\d{2}\s*$/, '')
+  return `${navn} (${kode})`
 }
 
 const MONTH_NAMES = [
@@ -63,10 +69,13 @@ function TrekktabellKort({
   tabellnummer,
   grunnlag,
   faktiskTrekk,
+  kilde,
 }: {
   tabellnummer: number
   grunnlag: number
   faktiskTrekk: number
+  /** Hvilken slipp faktisk trekk er hentet fra, f.eks. «mai 2026» */
+  kilde?: string
 }) {
   const [estimert, setEstimert] = useState<number | null>(null)
   const [laster, setLaster] = useState(true)
@@ -103,9 +112,9 @@ function TrekktabellKort({
           <p className="text-sm text-destructive">{feil}</p>
         ) : (
           <div className="space-y-2 text-sm">
-            <InfoRow label="Grunnlag (lønn + tillegg)" value={fmtNOK(grunnlag)} />
+            <InfoRow label="Grunnlag (lønn + faste tillegg)" value={fmtNOK(grunnlag)} />
             <InfoRow label="Estimert trekk (tabell)" value={estimert !== null ? fmtNOK(estimert) : '—'} />
-            <InfoRow label="Faktisk trekk (siste slipp)" value={fmtNOK(faktiskTrekk)} />
+            <InfoRow label={`Faktisk trekk${kilde ? ` (${kilde})` : ''}`} value={fmtNOK(faktiskTrekk)} />
             {differanse !== null && Math.abs(differanse) > 10 && (
               <div className={`text-xs mt-1 ${differanse > 0 ? 'text-orange-500' : 'text-green-600'}`}>
                 {differanse > 0
@@ -138,12 +147,14 @@ export function SalaryPage() {
     deriveLonnsoppgjorFromSlips,
     bookEtterbetaling,
     removeEtterbetalingBooking,
+    absenceHireDate,
   } = useActiveEconomyStore()
 
   const [editingProfile, setEditingProfile] = useState(false)
   const [storageKB, setStorageKB] = useState(0)
   const [advanced, setAdvanced] = useState(false)
   const [showImporter, setShowImporter] = useState(false)
+  const [tab, setTab] = useState<'oversikt' | 'oppgjor' | 'historikk' | 'profil'>('oversikt')
 
   useEffect(() => {
     setStorageKB(getLocalStorageKB())
@@ -155,12 +166,29 @@ export function SalaryPage() {
 
   const latestSlipRecord = importedSlips[0] ?? null
 
-  // Sjekk om profil-grunnlønn avviker fra siste lønnsoppgjør
+  // «Normal» slipp = uten feriepenger (juni) og uten desember (halv skatt).
+  // Brukes som grunnlag for representative måneds-tall.
+  const normalSlips = importedSlips.filter(
+    (m) => m.slipData && m.slipData.bruttoSum > 0 && m.slipData.feriepenger == null && m.month !== 12,
+  )
+  const latestNormalSlip = normalSlips[0] ?? null
+
+  const todayIso = new Date().toISOString().split('T')[0]
+
+  // Profil-avvik: kun gjennomførte oppgjør (slipp/manuelt) — et forventet oppgjør
+  // er ikke utbetalt ennå og skal ikke be deg endre profilen.
+  // maanedslonn i oppgjør-records ER grunnlønn (1S01) — HTA-tillegg holdes utenfor.
   const latestOppgjor = [...lonnsoppgjor]
-    .filter(r => r.maanedslonn > 0 && r.effectiveDate <= new Date().toISOString().split('T')[0])
+    .filter(r => r.source !== 'forventet' && r.maanedslonn > 0 && r.effectiveDate <= todayIso)
     .sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate))[0] ?? null
-  const oppgjorBase = latestOppgjor ? latestOppgjor.maanedslonn - (latestOppgjor.htaTillegg ?? 0) : null
+  const oppgjorBase = latestOppgjor?.maanedslonn ?? null
   const profileMismatch = profile && oppgjorBase && Math.abs(oppgjorBase - profile.baseMonthly) > 100
+
+  // Forventet oppgjør som har trådt i kraft, men ennå ikke vises på slipp
+  const pendingOppgjor = [...lonnsoppgjor]
+    .filter(r => r.source === 'forventet' && r.maanedslonn > 0 && r.effectiveDate <= todayIso)
+    .sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate))
+    .find(r => profile && r.maanedslonn > profile.baseMonthly + 100) ?? null
 
   // CAGR fra lønnsoppgjør
   const sortedOppgjor = [...lonnsoppgjor]
@@ -173,26 +201,54 @@ export function SalaryPage() {
       ) - 1
     : null
 
-  // Effektiv skattesats per år
-  const taxByYear = new Map<number, { total: number; count: number }>()
+  // Effektiv skattesats per år: sum skatt / sum brutto (robust mot atypiske måneder)
+  const taxByYear = new Map<number, { skatt: number; brutto: number }>()
   importedSlips.forEach((m) => {
     if (m.slipData && m.slipData.bruttoSum > 0) {
-      const pct = (m.slipData.skattetrekk / m.slipData.bruttoSum) * 100
-      const prev = taxByYear.get(m.year) ?? { total: 0, count: 0 }
-      taxByYear.set(m.year, { total: prev.total + pct, count: prev.count + 1 })
+      const prev = taxByYear.get(m.year) ?? { skatt: 0, brutto: 0 }
+      taxByYear.set(m.year, { skatt: prev.skatt + m.slipData.skattetrekk, brutto: prev.brutto + m.slipData.bruttoSum })
     }
   })
   const taxHistory = [...taxByYear.entries()]
     .sort(([a], [b]) => a - b)
-    .map(([year, { total, count }]) => ({ year, pct: total / count }))
-  // Bruk gjennomsnitt av siste 3 slipp for å unngå at én atypisk måned blåser opp satsen
-  const recentSlips = [...importedSlips]
-    .sort((a, b) => a.year !== b.year ? b.year - a.year : b.month - a.month)
-    .filter(m => m.slipData && m.slipData.bruttoSum > 0)
-    .slice(0, 3)
-  const currentTaxRate = recentSlips.length > 0
-    ? recentSlips.reduce((s, m) => s + (m.slipData!.skattetrekk / m.slipData!.bruttoSum) * 100, 0) / recentSlips.length
+    .map(([year, { skatt, brutto }]) => ({ year, pct: (skatt / brutto) * 100 }))
+
+  // Én felles definisjon av «effektiv sats nå»: hittil i inneværende år
+  const nowYear = new Date().getFullYear()
+  const ytdTax = taxByYear.get(nowYear)
+  const ytdRate = ytdTax && ytdTax.brutto > 0 ? (ytdTax.skatt / ytdTax.brutto) * 100 : null
+
+  // Normalmåned-sats til simulatoren: snitt av siste 3 normale slipper
+  const recentNormal = normalSlips.slice(0, 3)
+  const normalTaxRate = recentNormal.length > 0
+    ? recentNormal.reduce((s, m) => s + (m.slipData!.skattetrekk / m.slipData!.bruttoSum) * 100, 0) / recentNormal.length
     : null
+
+  // KPI-grunnlag
+  const fasteTilleggMnd = profile?.fixedAdditions.reduce((s, a) => s + Math.max(0, a.amount), 0) ?? 0
+  const variableYTD = importedSlips
+    .filter((m) => m.year === nowYear)
+    .reduce((s, m) => s + (m.slipData?.atfBeløp ?? 0) + (m.slipData?.fungeringBeløp ?? 0), 0)
+  const normalNettos = normalSlips.slice(0, 6)
+    .map((m) => m.slipData?.nettoUtbetalt ?? m.nettoUtbetalt)
+    .filter((n) => n > 0)
+    .sort((a, b) => a - b)
+  const normalNettoMedian = normalNettos.length > 0
+    ? normalNettos[Math.floor(normalNettos.length / 2)]
+    : null
+
+  // Ansiennitet fra ansettelsesdato (Innstillinger → Personalia)
+  const hireDateInfo = absenceHireDate ? (() => {
+    const d = new Date(absenceHireDate)
+    const now = new Date()
+    const months = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth())
+    const years = Math.floor(months / 12)
+    const rem = months % 12
+    return {
+      label: d.toLocaleDateString('no-NO', { month: 'short', year: 'numeric' }),
+      tenure: `${years} år${rem > 0 ? ` ${rem} mnd` : ''}`,
+    }
+  })() : null
 
   return (
     <div className="h-full overflow-y-auto">
@@ -208,9 +264,37 @@ export function SalaryPage() {
       </Dialog>
 
       {/* ── HEADER ── */}
-      <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-2.5 border-b border-border bg-background/95 backdrop-blur">
+      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-6 py-2.5 border-b border-border bg-background/95 backdrop-blur flex-wrap">
         <div className="flex items-center gap-3">
-          {profile && (
+          <div className="flex gap-0.5 bg-muted/40 rounded-md p-0.5">
+            {([
+              ['oversikt', 'Oversikt'],
+              ['oppgjor', 'Lønnsoppgjør'],
+              ['historikk', 'Slipphistorikk'],
+              ['profil', 'Profil & innstillinger'],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={`text-[11px] px-2.5 py-1 rounded transition-colors ${
+                  tab === key
+                    ? 'bg-background text-foreground shadow-sm font-medium'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {storageKB > 4500 && (
+            <div className="flex items-center gap-1.5 text-xs text-yellow-400">
+              <AlertTriangle className="h-3 w-3" />
+              Lagringsplass nærmer seg grensen ({storageKB} KB)
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          {profile && tab === 'oversikt' && (
             <button
               onClick={() => setAdvanced(!advanced)}
               className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
@@ -219,55 +303,47 @@ export function SalaryPage() {
               {advanced ? 'Enkel visning' : 'Vis detaljer'}
             </button>
           )}
-          {storageKB > 4500 && (
-            <div className="flex items-center gap-1.5 text-xs text-yellow-400">
-              <AlertTriangle className="h-3 w-3" />
-              Lagringsplass nærmer seg grensen ({storageKB} KB)
-            </div>
-          )}
+          <Button size="sm" onClick={() => setShowImporter(true)} className="gap-1.5">
+            <Upload className="h-3.5 w-3.5" />
+            Importer lønnsslipp
+          </Button>
         </div>
-        <Button size="sm" onClick={() => setShowImporter(true)} className="gap-1.5">
-          <Upload className="h-3.5 w-3.5" />
-          Importer lønnsslipp
-        </Button>
       </div>
 
       <div className="px-6 py-5 space-y-5">
 
+        {tab === 'oversikt' && (<>
         {/* ── KPI-RAD ── */}
         {profile && (() => {
-          const grunnlonn = latestSlipRecord?.slipData?.maanedslonn ?? profile.baseMonthly
-          const brutto = latestSlipRecord?.slipData?.bruttoSum
-            ?? (grunnlonn + profile.fixedAdditions.reduce((s, a) => s + Math.max(0, a.amount), 0))
-          const netto = latestSlipRecord?.slipData?.nettoUtbetalt ?? latestSlipRecord?.nettoUtbetalt
+          const fastBruttoMnd = profile.baseMonthly + fasteTilleggMnd
           return (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="rounded-lg border border-border bg-card px-4 py-3 group relative">
-                <p className="text-[11px] text-muted-foreground mb-0.5">Brutto grunnlønn/år</p>
-                <p className="text-lg font-semibold font-mono tabular-nums">{Math.round(grunnlonn * 12).toLocaleString('no-NO')} kr</p>
-                <p className="text-[11px] text-muted-foreground">{Math.round(grunnlonn).toLocaleString('no-NO')} kr/mnd</p>
+                <p className="text-[11px] text-muted-foreground mb-0.5">Grunnlønn/år</p>
+                <p className="text-lg font-semibold font-mono tabular-nums">{Math.round(profile.baseMonthly * 12).toLocaleString('no-NO')} kr</p>
+                <p className="text-[11px] text-muted-foreground">{Math.round(profile.baseMonthly).toLocaleString('no-NO')} kr/mnd</p>
                 <button
                   onClick={() => setEditingProfile(true)}
                   className="absolute top-2 right-3 text-[10px] text-muted-foreground hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
                 >Rediger</button>
               </div>
               <div className="rounded-lg border border-border bg-card px-4 py-3">
-                <p className="text-[11px] text-muted-foreground mb-0.5">Brutto årslønn</p>
-                <p className="text-lg font-semibold font-mono tabular-nums">{Math.round(brutto * 12).toLocaleString('no-NO')} kr</p>
-                <p className="text-[11px] text-muted-foreground">{Math.round(brutto).toLocaleString('no-NO')} kr/mnd</p>
+                <p className="text-[11px] text-muted-foreground mb-0.5">Fast bruttolønn/år</p>
+                <p className="text-lg font-semibold font-mono tabular-nums">{Math.round(fastBruttoMnd * 12).toLocaleString('no-NO')} kr</p>
+                <p className="text-[11px] text-muted-foreground">grunnlønn + {Math.round(fasteTilleggMnd).toLocaleString('no-NO')} kr/mnd faste tillegg</p>
               </div>
-              {netto != null && netto > 0 && (
+              <div className="rounded-lg border border-border bg-card px-4 py-3">
+                <p className="text-[11px] text-muted-foreground mb-0.5">Variable tillegg i {nowYear}</p>
+                <p className="text-lg font-semibold font-mono tabular-nums text-sky-400">{Math.round(variableYTD).toLocaleString('no-NO')} kr</p>
+                <p className="text-[11px] text-muted-foreground">ATF + fungering hittil i år</p>
+              </div>
+              {normalNettoMedian != null && (
                 <div className="rounded-lg border border-border bg-card px-4 py-3">
-                  <p className="text-[11px] text-muted-foreground mb-0.5">Netto/mnd</p>
-                  <p className="text-lg font-semibold font-mono tabular-nums text-green-400">{Math.round(netto).toLocaleString('no-NO')} kr</p>
-                  <p className="text-[11px] text-muted-foreground">{Math.round(netto * 12).toLocaleString('no-NO')} kr/år</p>
-                </div>
-              )}
-              {latestSlipRecord?.slipData?.skattetrekk != null && (
-                <div className="rounded-lg border border-border bg-card px-4 py-3">
-                  <p className="text-[11px] text-muted-foreground mb-0.5">Skattetrekk/mnd</p>
-                  <p className="text-lg font-semibold font-mono tabular-nums text-red-400">{Math.round(latestSlipRecord.slipData.skattetrekk).toLocaleString('no-NO')} kr</p>
-                  <p className="text-[11px] text-muted-foreground">{currentTaxRate != null ? `${currentTaxRate.toFixed(1)} % effektiv sats` : ''}</p>
+                  <p className="text-[11px] text-muted-foreground mb-0.5">Netto normalmåned</p>
+                  <p className="text-lg font-semibold font-mono tabular-nums text-green-400">{Math.round(normalNettoMedian).toLocaleString('no-NO')} kr</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    median siste {normalNettos.length} mnd{ytdRate != null ? ` · ${ytdRate.toFixed(1)} % skatt i år` : ''}
+                  </p>
                 </div>
               )}
             </div>
@@ -281,8 +357,34 @@ export function SalaryPage() {
           advanced={advanced}
         />
 
-        {/* ── KORTGRID (4 kolonner) ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Netto per måned */}
+          {importedSlips.length >= 2 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Netto per måned</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0 pb-3">
+                <div className="h-[200px] overflow-hidden">
+                  <MonthlyNettoChart slips={importedSlips} />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Lønnssimulator */}
+          {profile && (
+            <LønnssimulatorCard
+              profile={profile}
+              effectiveTaxRate={normalTaxRate}
+              latestNetto={normalNettoMedian ?? 0}
+            />
+          )}
+        </div>
+        </>)}
+
+        {tab === 'profil' && (<>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
           {/* Lønnsprofil */}
           <Card>
@@ -310,14 +412,24 @@ export function SalaryPage() {
                 <div className="space-y-1.5 text-sm">
                   {profileMismatch && oppgjorBase && (
                     <div className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300 flex items-center justify-between gap-2 mb-2">
-                      <span>Profil-grunnlønn avviker fra siste oppgjør ({oppgjorBase.toLocaleString('no-NO')} kr)</span>
+                      <span>Profil-grunnlønn avviker fra siste gjennomførte oppgjør ({Math.round(oppgjorBase).toLocaleString('no-NO')} kr/mnd)</span>
                       <button className="underline underline-offset-2 shrink-0" onClick={() => setProfile({ ...profile, baseMonthly: oppgjorBase })}>Oppdater</button>
                     </div>
                   )}
+                  {pendingOppgjor && (
+                    <div className="rounded border border-sky-500/40 bg-sky-500/10 px-2 py-1.5 text-xs text-sky-300 mb-2">
+                      Forventet oppgjør fra {pendingOppgjor.effectiveDate}: {Math.round(pendingOppgjor.maanedslonn).toLocaleString('no-NO')} kr/mnd
+                      — ikke registrert på slipp ennå. Profilen oppdateres når slippen kommer.
+                    </div>
+                  )}
                   <InfoRow label="Arbeidsgiver" value={profile.employer === 'forsvaret' ? 'Forsvaret' : 'Annen'} />
+                  {hireDateInfo && <InfoRow label="Ansatt siden" value={hireDateInfo.label} sub={hireDateInfo.tenure} />}
+                  {latestSlipRecord?.slipData?.loennstrinn ? (
+                    <InfoRow label="Lønnstrinn (LTR)" value={String(latestSlipRecord.slipData.loennstrinn)} />
+                  ) : null}
                   <InfoRow label="Grunnlønn/mnd" value={fmtNOK(profile.baseMonthly)} sub={`${fmtNOK(profile.baseMonthly * 12)}/år`} />
                   {profile.fixedAdditions.filter((a) => a.amount > 0).map((a) => (
-                    <InfoRow key={a.kode} label={`${a.label}`} value={`${fmtNOK(a.amount)}/mnd`} />
+                    <InfoRow key={a.kode} label={cleanTilleggLabel(a.kode, a.label)} value={`${fmtNOK(a.amount)}/mnd`} />
                   ))}
                   <InfoRow label="Skattetrekk/mnd" value={fmtNOK(profile.lastKnownTaxWithholding)} />
                   {profile.tabellnummer && <InfoRow label="Trekktabell" value={String(profile.tabellnummer)} />}
@@ -330,71 +442,49 @@ export function SalaryPage() {
             </CardContent>
           </Card>
 
-          {/* Trekktabell */}
+          {/* Trekktabell — faktisk trekk fra siste NORMALE slipp (juni/des gir misvisende tall) */}
           {profile?.tabellnummer ? (
             <TrekktabellKort
               tabellnummer={profile.tabellnummer}
-              grunnlag={profile.baseMonthly + profile.fixedAdditions.reduce((s, a) => s + Math.max(0, a.amount), 0)}
-              faktiskTrekk={profile.lastKnownTaxWithholding}
+              grunnlag={profile.baseMonthly + fasteTilleggMnd}
+              faktiskTrekk={latestNormalSlip?.slipData?.skattetrekk ?? profile.lastKnownTaxWithholding}
+              kilde={latestNormalSlip ? `${MONTH_NAMES[latestNormalSlip.month].toLowerCase()} ${latestNormalSlip.year}` : 'siste slipp'}
             />
           ) : <div />}
 
-          {/* Netto per måned — kompakt, fast høyde */}
-          {importedSlips.length >= 2 ? (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Netto per måned</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0 pb-3">
-                <div className="h-[160px] overflow-hidden">
-                  <MonthlyNettoChart slips={importedSlips} />
-                </div>
-              </CardContent>
-            </Card>
-          ) : <div />}
-
-          {/* Lønnsoppgjør */}
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                <CardTitle className="text-sm">Lønnsoppgjør</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <LonnsoppgjorSection
-                records={lonnsoppgjor}
-                monthHistory={monthHistory}
-                hasSlips={monthHistory.some((m) => m.source === 'imported_slip')}
-                onAdd={addLonnsoppgjor}
-                onUpdate={updateLonnsoppgjor}
-                onRemove={removeLonnsoppgjor}
-                onDerive={deriveLonnsoppgjorFromSlips}
-                onBookEtterbetaling={bookEtterbetaling}
-                onRemoveEtterbetalingBooking={removeEtterbetalingBooking}
-                currentBaseMonthly={profile?.baseMonthly ?? 0}
-                onUpdateBaseMonthly={(base) => profile && setProfile({ ...profile, baseMonthly: base })}
-              />
-            </CardContent>
-          </Card>
         </div>
 
-        {/* ── FUNGERING — synlig seksjon ── */}
+        {/* Tidsbegrensede tillegg + lønningsdato hører til profilen */}
+        <TidsbegrensetTilleggCard />
+        <LønningsdatoCard />
+        </>)}
+
+        {tab === 'oppgjor' && (<>
+        {/* ── LØNNSOPPGJØR — full bredde ── */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Midlertidig lønn (fungering)</CardTitle>
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm">Lønnsoppgjør</CardTitle>
+            </div>
           </CardHeader>
           <CardContent>
-            <FungeringPanel
-              entries={temporaryPayEntries}
-              baseMonthly={profile?.baseMonthly ?? 0}
-              onAdd={addTemporaryPay}
-              onRemove={removeTemporaryPay}
+            <LonnsoppgjorSection
+              records={lonnsoppgjor}
+              monthHistory={monthHistory}
+              hasSlips={monthHistory.some((m) => m.source === 'imported_slip')}
+              onAdd={addLonnsoppgjor}
+              onUpdate={updateLonnsoppgjor}
+              onRemove={removeLonnsoppgjor}
+              onDerive={deriveLonnsoppgjorFromSlips}
+              onBookEtterbetaling={bookEtterbetaling}
+              onRemoveEtterbetalingBooking={removeEtterbetalingBooking}
+              currentBaseMonthly={profile?.baseMonthly ?? 0}
+              onUpdateBaseMonthly={(base) => profile && setProfile({ ...profile, baseMonthly: base })}
             />
           </CardContent>
         </Card>
 
-        {/* ── GRAFER — to kolonner, begrensede høyder ── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Lønnsutvikling */}
           <Card>
@@ -408,40 +498,45 @@ export function SalaryPage() {
             </CardContent>
           </Card>
 
-          {/* Effektiv skattesats */}
-          {taxHistory.length >= 2 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Effektiv skattesats</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0 pb-3">
-                <div className="h-[200px] overflow-hidden">
-                  <TaxRateChart data={taxHistory} currentRate={currentTaxRate} />
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* Fungering */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Midlertidig lønn (fungering)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FungeringPanel
+                entries={temporaryPayEntries}
+                baseMonthly={profile?.baseMonthly ?? 0}
+                onAdd={addTemporaryPay}
+                onRemove={removeTemporaryPay}
+              />
+            </CardContent>
+          </Card>
         </div>
+        </>)}
 
-        {/* ── LØNNSSIMULATOR ── */}
-        {profile && (
-          <LønnssimulatorCard
-            profile={profile}
-            effectiveTaxRate={currentTaxRate}
-            latestNetto={latestSlipRecord?.slipData?.nettoUtbetalt ?? latestSlipRecord?.nettoUtbetalt ?? 0}
-          />
-        )}
-
+        {tab === 'historikk' && (<>
         {/* ── LØNNSHISTORIKK ── */}
-        {importedSlips.length > 0 && (
+        {importedSlips.length > 0 ? (
           <LønnshistorikkTabell slips={importedSlips} />
+        ) : (
+          <p className="text-sm text-muted-foreground">Ingen importerte slipper ennå.</p>
         )}
 
-        {/* ── TIDSBEGRENSEDE TILLEGG ── */}
-        <TidsbegrensetTilleggCard />
-
-        {/* ── LØNNINGSDATO ── */}
-        <LønningsdatoCard />
+        {/* Effektiv skattesats */}
+        {taxHistory.length >= 2 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Effektiv skattesats</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 pb-3">
+              <div className="h-[200px] overflow-hidden">
+                <TaxRateChart data={taxHistory} currentRate={ytdRate} />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        </>)}
 
       </div>
     </div>
@@ -883,9 +978,10 @@ function LonnsoppgjorSection({
       source: form.source,
     })
     setAdding(false)
-    const newBase = form.maanedslonn - (form.htaTillegg ?? 0)
-    if (newBase > 0 && newBase !== currentBaseMonthly) {
-      setPendingBase(newBase)
+    // maanedslonn ER grunnlønn (samme semantikk som slipp-avledede records).
+    // Forventede oppgjør skal ikke endre profilen før de er utbetalt.
+    if (form.source !== 'forventet' && form.maanedslonn > 0 && form.maanedslonn !== currentBaseMonthly) {
+      setPendingBase(form.maanedslonn)
     }
     setForm({ year: currentYear, effectiveDate: `${currentYear}-05-01`, maanedslonn: 0, htaTillegg: 0, notes: '', source: 'forventet', pct: '' })
   }
@@ -993,9 +1089,7 @@ function LonnsoppgjorSection({
                   const pct = e.target.value
                   const prev = sorted.filter((r) => r.effectiveDate < form.effectiveDate).at(-1)
                   if (pct && prev && prev.maanedslonn > 0) {
-                    const prevBase = prev.maanedslonn - (prev.htaTillegg ?? 0)
-                    const newBase = Math.round(prevBase * (1 + parseFloat(pct) / 100))
-                    setForm((f) => ({ ...f, pct, maanedslonn: newBase + (f.htaTillegg ?? 0) }))
+                    setForm((f) => ({ ...f, pct, maanedslonn: Math.round(prev.maanedslonn * (1 + parseFloat(pct) / 100)) }))
                   } else {
                     setForm((f) => ({ ...f, pct }))
                   }
@@ -1003,7 +1097,7 @@ function LonnsoppgjorSection({
               />
             </div>
             <div className="space-y-0.5">
-              <Label className="text-xs">Ny totallønn/mnd (kr)</Label>
+              <Label className="text-xs">Ny grunnlønn/mnd (kr)</Label>
               <Input
                 type="number"
                 className="h-7 text-xs w-36"
@@ -1013,7 +1107,7 @@ function LonnsoppgjorSection({
               />
             </div>
             <div className="space-y-0.5">
-              <Label className="text-xs">HTA-tillegg inkl. (kr/mnd)</Label>
+              <Label className="text-xs">HTA-tillegg (kr/mnd)</Label>
               <Input
                 type="number"
                 className="h-7 text-xs w-36"
@@ -1106,13 +1200,13 @@ function LonnsoppgjorSection({
                           onChange={(e) => setEditForm((f) => ({ ...f, maanedslonn: parseInt(e.target.value) || 0 }))}
                         />
                       ) : (
-                        <>{r.maanedslonn.toLocaleString('no-NO')} kr</>
+                        <>{Math.round(r.maanedslonn).toLocaleString('no-NO')} kr</>
                       )}
                     </td>
                     <td className="py-1.5 pr-3 text-right">
                       {oekningKr !== null ? (
                         <span className={oekningKr >= 0 ? 'text-green-500' : 'text-red-400'}>
-                          {oekningKr >= 0 ? '+' : ''}{oekningKr.toLocaleString('no-NO')} kr
+                          {oekningKr >= 0 ? '+' : ''}{Math.round(oekningKr).toLocaleString('no-NO')} kr
                         </span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
@@ -1714,7 +1808,7 @@ function TidsbegrensetTilleggCard() {
               <div className="flex items-center gap-3 text-xs">
                 <label className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer select-none">
                   <input type="checkbox" checked={!!addition.isTemporary} onChange={() => toggleAddition(addition.kode)} className="h-3.5 w-3.5 accent-amber-400 shrink-0" />
-                  <span className="flex-1 min-w-0 truncate">{addition.label}</span>
+                  <span className="flex-1 min-w-0 truncate" title={addition.label}>{cleanTilleggLabel(addition.kode, addition.label)}</span>
                 </label>
                 <span className="font-mono text-muted-foreground shrink-0">{addition.kode}</span>
                 <span className="tabular-nums text-muted-foreground shrink-0 text-right w-20">+{Math.round(addition.amount).toLocaleString('no-NO')} kr</span>
@@ -1738,7 +1832,7 @@ function TidsbegrensetTilleggCard() {
               <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Fast lønn (skjult herfra)</p>
               {permanentOnes.map((a) => (
                 <div key={a.kode} className="flex items-center gap-3 text-xs text-muted-foreground">
-                  <span className="flex-1 min-w-0 truncate">{a.label}</span>
+                  <span className="flex-1 min-w-0 truncate" title={a.label}>{cleanTilleggLabel(a.kode, a.label)}</span>
                   <span className="font-mono">{a.kode}</span>
                   <span className="tabular-nums w-20 text-right">+{Math.round(a.amount).toLocaleString('no-NO')} kr</span>
                   <button onClick={() => setProfile({ ...profile, fixedAdditions: profile.fixedAdditions.map(x => x.kode === a.kode ? { ...x, isPermanent: false } : x) })} className="text-[10px] hover:text-foreground underline underline-offset-2 shrink-0">tilbake</button>
@@ -1769,7 +1863,13 @@ function LønningsdatoCard() {
   function save() {
     const day = Math.min(28, Math.max(1, parseInt(value) || 12))
     setValue(String(day))
-    setUserPreferences({ onboardingCompleted: userPreferences?.onboardingCompleted ?? true, enabledTabs: userPreferences?.enabledTabs ?? [], payDay: day })
+    // Bevar alle øvrige preferanser (fødselsår, boligstatus osv.)
+    setUserPreferences({
+      ...userPreferences,
+      onboardingCompleted: userPreferences?.onboardingCompleted ?? true,
+      enabledTabs: userPreferences?.enabledTabs ?? [],
+      payDay: day,
+    })
   }
 
   return (
@@ -1779,8 +1879,9 @@ function LønningsdatoCard() {
         <p className="text-xs text-muted-foreground">Dag i måneden lønn normalt utbetales. Brukes i dashbord-nedtellingen.</p>
       </CardHeader>
       <CardContent>
-        <div className="flex items-center gap-3">
-          <Input type="number" min={1} max={28} value={value} onChange={(e) => setValue(e.target.value)} onBlur={save} className="w-20 h-8 text-sm" />
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Utbetales den</span>
+          <Input type="number" min={1} max={28} value={value} onChange={(e) => setValue(e.target.value)} onBlur={save} className="w-16 h-8 text-sm text-center" />
           <span className="text-sm text-muted-foreground">. i måneden</span>
         </div>
       </CardContent>

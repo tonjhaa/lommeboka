@@ -171,21 +171,32 @@ export function SalaryGrowthChart({ records, cagr }: Props) {
         ))}
 
         {/* X-axis labels — spread based on actual date positions */}
-        {pts.map((p, i) => {
-          const show = sorted.length <= 5 || i === 0 || i === sorted.length - 1 || i % Math.ceil(sorted.length / 4) === 0
-          const month = Number(p.r.effectiveDate?.slice(5, 7) ?? 1)
-          const label = `${MONTH_SHORT[month] ?? ''} ${p.r.year}`
-          return show ? (
-            <text key={i} x={p.x} y={H - pad.bottom + 10} textAnchor="middle" fontSize="6" fill="hsl(215 20.2% 50%)">
-              {label}
-            </text>
-          ) : null
-        })}
-
-        {/* Today label on X-axis */}
-        <text x={todayX} y={H - pad.bottom + 10} textAnchor="middle" fontSize="5.5" fill="hsl(215 20.2% 45%)">
-          {new Date().toLocaleDateString('no-NO', { month: 'short', year: '2-digit' })}
-        </text>
+        {(() => {
+          const shownXs: number[] = []
+          const labels = pts.map((p, i) => {
+            const show = sorted.length <= 5 || i === 0 || i === sorted.length - 1 || i % Math.ceil(sorted.length / 4) === 0
+            if (!show) return null
+            shownXs.push(p.x)
+            const month = Number(p.r.effectiveDate?.slice(5, 7) ?? 1)
+            return (
+              <text key={i} x={p.x} y={H - pad.bottom + 10} textAnchor="middle" fontSize="6" fill="hsl(215 20.2% 50%)">
+                {`${MONTH_SHORT[month] ?? ''} ${p.r.year}`}
+              </text>
+            )
+          })
+          // I dag-etiketten droppes når den overlapper en oppgjørs-etikett
+          const todayLabelFits = shownXs.every((x) => Math.abs(x - todayX) > 30)
+          return (
+            <>
+              {labels}
+              {todayLabelFits && (
+                <text x={todayX} y={H - pad.bottom + 10} textAnchor="middle" fontSize="5.5" fill="hsl(215 20.2% 45%)">
+                  {new Date().toLocaleDateString('no-NO', { month: 'short', year: '2-digit' })}
+                </text>
+              )}
+            </>
+          )
+        })()}
 
         {/* Salary labels: first, today, last */}
         {pts.length > 0 && (
