@@ -82,7 +82,7 @@ export function calculateScenario(
     config.lendingRules
   )
 
-  // 4. Betjeningsevne
+  // 4. Betjeningsevne — inkl. betjening av eksisterende gjeld ved stressrente
   const affordabilityAnalysis = analyzeAffordability(
     loanAmount,
     loanParameters.interestRate,
@@ -91,10 +91,11 @@ export function calculateScenario(
     property.monthlyFee,
     property.propertyTax,
     loanParameters.extraMonthlyExpenses,
-    config
+    config,
+    existingDebt
   )
 
-  // 5. Maks kjopsbeloep
+  // 5. Maks kjopsbeloep — samme forutsetninger som scenarioet (rente, lopetid, eierform)
   const maxPurchaseAnalysis = analyzeMaxPurchase(
     equity,
     property.sharedDebt ?? 0,
@@ -103,7 +104,11 @@ export function calculateScenario(
     property.monthlyFee ?? 0,
     property.propertyTax ?? 0,
     loanParameters.extraMonthlyExpenses ?? 0,
-    config
+    config,
+    loanParameters.interestRate,
+    loanParameters.loanTermYears,
+    property.ownershipType,
+    financeEstFee
   )
 
   // 6. Regelstatus

@@ -1,6 +1,6 @@
-import type { MaxPurchaseAnalysis, AppConfig, HouseholdInput } from '@/types'
+import type { MaxPurchaseAnalysis, AppConfig, HouseholdInput, PropertyInput } from '@/types'
 import { calcAcquisitionFees, calcEffectiveEquity } from './property'
-import { calcStressTestRate } from './affordability'
+import { calcStressTestRate, calcExistingDebtServicing } from './affordability'
 import { calcSIFOExpenses } from './sifo'
 import { calcHouseholdMonthlyNetIncome, calcTotalAnnualIncome } from './tax'
 import { maxLoanFromPayment } from './loan'
@@ -18,13 +18,19 @@ import { maxLoanFromPayment } from './loan'
  *     pris = max lån (invers annuitet) + effektiv EK
  *
  * Den bindende grensen (minste tall) er det reelle makstaket.
+ * Alle tre bruker scenarioets eierform og gebyrvalg, og betjeningsevnen
+ * bruker scenarioets rente/løpetid — samme forutsetninger som stresstest-kortet.
  */
+
+type OwnershipType = PropertyInput['ownershipType']
 
 /** Løser max pris ved egenkapitalkravet med binærsøk */
 function maxPriceByEquity(
   equity: number,
   sharedDebt: number,
-  config: AppConfig
+  config: AppConfig,
+  ownershipType: OwnershipType,
+  financeAllFees: boolean
 ): number {
   const minEqPct = config.lendingRules.minEquityPercent / 100
   const fees = config.fees
@@ -35,7 +41,7 @@ function maxPriceByEquity(
 
   for (let i = 0; i < 100; i++) {
     const mid = (lo + hi) / 2
-    const feeBreakdown = calcAcquisitionFees(mid, fees)
+    const feeBreakdown = calcAcquisitionFees(mid, fees, ownershipType, financeAllFees)
     const effEq = calcEffectiveEquity(equity, feeBreakdown.totalFees)
     const required = (mid + sharedDebt) * minEqPct
 
@@ -57,7 +63,9 @@ function maxPriceByDebtRatio(
   sharedDebt: number,
   existingDebt: number,
   totalAnnualIncome: number,
-  config: AppConfig
+  config: AppConfig,
+  ownershipType: OwnershipType,
+  financeAllFees: boolean
 ): number {
   const maxTotalDebt = totalAnnualIncome * config.lendingRules.maxDebtRatio
   const maxNewLoan = Math.max(0, maxTotalDebt - existingDebt)
@@ -65,49 +73,53 @@ function maxPriceByDebtRatio(
 
   // Lag estimat på gebyrer (avhenger av pris, men er liten andel)
   const estimatedPrice = maxNewLoan + equity
-  const feeBreakdown = calcAcquisitionFees(estimatedPrice, fees)
+  const feeBreakdown = calcAcquisitionFees(estimatedPrice, fees, ownershipType, financeAllFees)
   const effEq = calcEffectiveEquity(equity, feeBreakdown.totalFees)
 
-  // pris = lån + effEq - sharedDebt
-  const maxPrice = maxNewLoan + effEq - sharedDebt
+  // lån = pris + fellesgjeld − effEq + finansierte gebyrer  →  løs for pris
+  const maxPrice = maxNewLoan + effEq - sharedDebt - feeBreakdown.financedFees
   return Math.max(0, Math.round(maxPrice))
 }
 
-/** Max pris ved betjeningsevne (stresstest) */
+/** Max pris ved betjeningsevne (stresstest) — samme modell som analyzeAffordability */
 function maxPriceByAffordability(
   equity: number,
   sharedDebt: number,
+  existingDebt: number,
   household: HouseholdInput,
   monthlyFee: number,
   propertyTaxAnnual: number,
   extraMonthlyExpenses: number,
-  config: AppConfig
+  config: AppConfig,
+  interestRate: number,
+  loanTermYears: number,
+  ownershipType: OwnershipType,
+  financeAllFees: boolean
 ): number {
   const primaryGross = household.primaryApplicant.grossIncome
   const coGross = household.coApplicant?.grossIncome
   const monthlyNetIncome = calcHouseholdMonthlyNetIncome(primaryGross, coGross, config.tax)
 
-  const stressRate = calcStressTestRate(
-    config.loanDefaults.defaultInterestRate,
-    config.lendingRules
-  )
+  const stressRate = calcStressTestRate(interestRate, config.lendingRules)
 
   const sifo = calcSIFOExpenses(household, config.sifo)
+  // Samme utgiftsmodell som analyzeAffordability: fellesutgifter er allerede månedlige
   const otherExpenses =
-    monthlyFee / 12 + // fellesutgifter legges ved som månedlig allerede
+    monthlyFee +
     propertyTaxAnnual / 12 +
     extraMonthlyExpenses +
     config.fees.termFee
+  const debtServicing = calcExistingDebtServicing(existingDebt, stressRate)
 
-  const maxPayment = monthlyNetIncome - sifo - otherExpenses - monthlyFee
-  const maxLoan = maxLoanFromPayment(Math.max(0, maxPayment), stressRate, config.loanDefaults.defaultLoanTermYears)
+  const maxPayment = monthlyNetIncome - sifo - otherExpenses - debtServicing
+  const maxLoan = maxLoanFromPayment(Math.max(0, maxPayment), stressRate, loanTermYears)
 
   const fees = config.fees
   const estimatedPrice = maxLoan + equity
-  const feeBreakdown = calcAcquisitionFees(estimatedPrice, fees)
+  const feeBreakdown = calcAcquisitionFees(estimatedPrice, fees, ownershipType, financeAllFees)
   const effEq = calcEffectiveEquity(equity, feeBreakdown.totalFees)
 
-  const maxPrice = maxLoan + effEq - sharedDebt
+  const maxPrice = maxLoan + effEq - sharedDebt - feeBreakdown.financedFees
   return Math.max(0, Math.round(maxPrice))
 }
 
@@ -122,7 +134,11 @@ export function analyzeMaxPurchase(
   monthlyFee: number,
   propertyTaxAnnual: number,
   extraMonthlyExpenses: number,
-  config: AppConfig
+  config: AppConfig,
+  interestRate: number = config.loanDefaults.defaultInterestRate,
+  loanTermYears: number = config.loanDefaults.defaultLoanTermYears,
+  ownershipType: OwnershipType = 'selveier',
+  financeAllFees = false
 ): MaxPurchaseAnalysis {
   const totalAnnualIncome = calcTotalAnnualIncome(
     household.primaryApplicant.grossIncome,
@@ -131,22 +147,29 @@ export function analyzeMaxPurchase(
     household.coApplicant?.otherIncome
   )
 
-  const maxByEquity = maxPriceByEquity(equity, sharedDebt, config)
+  const maxByEquity = maxPriceByEquity(equity, sharedDebt, config, ownershipType, financeAllFees)
   const maxByDebtRatio = maxPriceByDebtRatio(
     equity,
     sharedDebt,
     existingDebt,
     totalAnnualIncome,
-    config
+    config,
+    ownershipType,
+    financeAllFees
   )
   const maxByAffordability = maxPriceByAffordability(
     equity,
     sharedDebt,
+    existingDebt,
     household,
     monthlyFee,
     propertyTaxAnnual,
     extraMonthlyExpenses,
-    config
+    config,
+    interestRate,
+    loanTermYears,
+    ownershipType,
+    financeAllFees
   )
 
   const maxPurchasePrice = Math.min(maxByEquity, maxByDebtRatio, maxByAffordability)
@@ -160,9 +183,9 @@ export function analyzeMaxPurchase(
     limitingFactor = 'affordability'
   }
 
-  const feeBreakdown = calcAcquisitionFees(maxPurchasePrice, config.fees)
+  const feeBreakdown = calcAcquisitionFees(maxPurchasePrice, config.fees, ownershipType, financeAllFees)
   const effEq = calcEffectiveEquity(equity, feeBreakdown.totalFees)
-  const maxLoanAmount = Math.max(0, maxPurchasePrice + sharedDebt - effEq)
+  const maxLoanAmount = Math.max(0, maxPurchasePrice + sharedDebt - effEq + feeBreakdown.financedFees)
 
   return {
     maxByEquity,

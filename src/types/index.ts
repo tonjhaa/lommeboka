@@ -199,6 +199,8 @@ export interface AffordabilityAnalysis {
   sifoExpenses: number
   /** Andre månedlige utgifter (boligkostnader, fellesutgifter, etc.) */
   otherMonthlyExpenses: number
+  /** Beregnet månedlig betjening av eksisterende gjeld ved stressrente (annuitet) */
+  existingDebtServicing: number
   /** Beregnet disponibelt beløp etter alle kostnader (stresstest) */
   disposableAmount: number
   /** Godkjent: positiv betjeningsevne ved stresstest */
@@ -271,6 +273,8 @@ export interface ScenarioStatus {
   equityApproved: boolean
   debtRatioApproved: boolean
   affordabilityApproved: boolean
+  /** Belåningsgrad innenfor maksgrensen */
+  ltvApproved: boolean
   /** Alle regelmeldinger */
   messages: RuleMessage[]
   /** Antall feil */

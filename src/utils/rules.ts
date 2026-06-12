@@ -212,13 +212,16 @@ export function buildScenarioStatus(
 
   const errorCount = messages.filter((m) => m.severity === 'error').length
   const warningCount = messages.filter((m) => m.severity === 'warning').length
-  const approved = equity.approved && debtRatio.approved && affordability.approved
+  // LTV-brudd (f.eks. ved finansierte gebyrer) skal også velte godkjenningen
+  const ltvApproved = property.ltvRatio <= property.maxLtvRatio
+  const approved = equity.approved && debtRatio.approved && affordability.approved && ltvApproved
 
   return {
     approved,
     equityApproved: equity.approved,
     debtRatioApproved: debtRatio.approved,
     affordabilityApproved: affordability.approved,
+    ltvApproved,
     messages,
     errorCount,
     warningCount,

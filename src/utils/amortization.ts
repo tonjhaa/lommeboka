@@ -14,7 +14,9 @@ import { annuityPayment } from './loan'
 
 interface SimulatorOptions {
   rateChange?: { fromMonth: number; newRate: number }
-  extraPayment?: { fromMonth: number; amount: number; strategy: 'shorten' | 'reduce' }
+  extraPayment?: { fromMonth: number; amount: number; strategy: 'shorten' | 'reduce'; recurring?: boolean }
+  /** Avdragsfrihet fra start: kun renter betales i N år, deretter amortiseres restsaldo over gjenværende løpetid */
+  interestOnlyYears?: number
 }
 
 function buildPlanObject(
@@ -77,18 +79,20 @@ function buildRows(
   opts: SimulatorOptions = {}
 ): { rows: AmortizationRow[]; simMeta: object } {
   const n = termYears * 12
-  const { rateChange, extraPayment } = opts
+  const { rateChange, extraPayment, interestOnlyYears } = opts
+  const interestOnlyMonths = Math.min(Math.max(0, Math.round((interestOnlyYears ?? 0) * 12)), n - 1)
 
   // Beregn baseline terminbeloep
-  let r = annualRate / 100 / 12
-  let fixedPayment = loanType === 'annuitet' ? annuityPayment(principal, annualRate, termYears) : 0
-  const fixedPrincipalSeries = loanType === 'serie' ? principal / n : 0
+  const r = annualRate / 100 / 12
+  const fixedPayment = loanType === 'annuitet' ? annuityPayment(principal, annualRate, termYears) : 0
+  let fixedPrincipalSeries = loanType === 'serie' ? principal / n : 0
 
   const rows: AmortizationRow[] = []
   let balance = principal
   let cumulativeInterest = 0
   let cumulativePrincipal = 0
   let currentRate = r
+  let currentAnnualRate = annualRate
   let currentFixedPayment = fixedPayment
 
   // For 'reduce' ekstra innbetaling: ny betaling beregnes etter forste ekstra innbetaling
@@ -100,21 +104,36 @@ function buildRows(
     // Renteendring
     if (rateChange && m === rateChange.fromMonth) {
       currentRate = rateChange.newRate / 100 / 12
+      currentAnnualRate = rateChange.newRate
       const remainingMonths = n - m + 1
       if (loanType === 'annuitet') {
         // Ny fast betaling for resterende lopetid
-        const newAnnualRate = rateChange.newRate
-        currentFixedPayment = annuityPayment(balance, newAnnualRate, remainingMonths / 12)
+        currentFixedPayment = annuityPayment(balance, currentAnnualRate, remainingMonths / 12)
       }
     }
 
-    // Ekstra innbetaling
-    if (extraPayment && m === extraPayment.fromMonth && !extraPaymentApplied) {
+    // Avdragsfrihet over: amortiser restsaldoen over gjenvaerende lopetid
+    if (interestOnlyMonths > 0 && m === interestOnlyMonths + 1) {
+      const remainingMonths = n - interestOnlyMonths
+      if (loanType === 'annuitet') {
+        currentFixedPayment = annuityPayment(balance, currentAnnualRate, remainingMonths / 12)
+      } else {
+        fixedPrincipalSeries = balance / remainingMonths
+      }
+    }
+
+    // Ekstra innbetaling — engangs eller fast hver maaned fra gitt termin
+    const applyExtra = extraPayment && (
+      extraPayment.recurring
+        ? m >= extraPayment.fromMonth
+        : m === extraPayment.fromMonth && !extraPaymentApplied
+    )
+    if (applyExtra && extraPayment) {
       const extra = Math.min(extraPayment.amount, balance)
       balance = Math.max(0, balance - extra)
       cumulativePrincipal += extra
 
-      if (extraPayment.strategy === 'reduce' && loanType === 'annuitet') {
+      if (extraPayment.strategy === 'reduce' && loanType === 'annuitet' && !extraPayment.recurring) {
         const remainingMonths = n - m + 1
         // Beregn ny lavere betaling basert paa ny saldo
         const monthlyRate = currentRate
@@ -133,7 +152,9 @@ function buildRows(
     const interest = balance * currentRate
 
     let principalPart: number
-    if (loanType === 'serie') {
+    if (m <= interestOnlyMonths) {
+      principalPart = 0 // avdragsfrihet: kun renter
+    } else if (loanType === 'serie') {
       principalPart = Math.min(fixedPrincipalSeries, balance)
     } else {
       principalPart = Math.min(currentFixedPayment - interest, balance)
@@ -173,14 +194,15 @@ export function buildAmortizationPlanWithSimulator(
   termYears: number,
   loanType: 'annuitet' | 'serie',
   rateChange?: { fromMonth: number; newRate: number },
-  extraPayment?: { fromMonth: number; amount: number; strategy: 'shorten' | 'reduce' }
+  extraPayment?: { fromMonth: number; amount: number; strategy: 'shorten' | 'reduce'; recurring?: boolean },
+  interestOnlyYears?: number
 ): AmortizationPlan {
   if (principal <= 0) {
     return buildPlanObject(scenarioId, 0, annualRate, loanType, [])
   }
 
-  const hasSimulator = rateChange || extraPayment
-  const opts: SimulatorOptions = hasSimulator ? { rateChange, extraPayment } : {}
+  const hasSimulator = rateChange || extraPayment || (interestOnlyYears ?? 0) > 0
+  const opts: SimulatorOptions = hasSimulator ? { rateChange, extraPayment, interestOnlyYears } : {}
 
   const { rows } = buildRows(principal, annualRate, termYears, loanType, opts)
 

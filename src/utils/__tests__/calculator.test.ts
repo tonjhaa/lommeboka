@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { calculateScenario, calculateAmortization } from '../calculator'
+import { buildAmortizationPlanWithSimulator } from '../amortization'
 import { defaultConfig } from '@/config/default.config'
 import type { ScenarioInput } from '@/types'
 
@@ -143,5 +144,81 @@ describe('calculateAmortization', () => {
     const r3 = plan.rows[119].cumulativeInterest
     expect(r2).toBeGreaterThan(r1)
     expect(r3).toBeGreaterThan(r2)
+  })
+})
+
+// ------------------------------------------------------------
+// Regresjon: maks kjøpesum bruker scenarioets forutsetninger
+// ------------------------------------------------------------
+
+describe('analyzeMaxPurchase via calculateScenario — scenarioforutsetninger', () => {
+  it('lavere rente gir høyere maks (betjeningsevne)', () => {
+    const lowRate = calculateScenario(
+      { ...baseScenario, loanParameters: { ...baseScenario.loanParameters, interestRate: 3.0 } },
+      defaultConfig
+    )
+    const highRate = calculateScenario(
+      { ...baseScenario, loanParameters: { ...baseScenario.loanParameters, interestRate: 6.5 } },
+      defaultConfig
+    )
+    expect(lowRate.maxPurchase.maxByAffordability).toBeGreaterThan(
+      highRate.maxPurchase.maxByAffordability
+    )
+  })
+
+  it('andel (uten dokumentavgift) gir høyere maks (egenkapital) enn selveier', () => {
+    const selveier = calculateScenario(
+      { ...baseScenario, property: { ...baseScenario.property, ownershipType: 'selveier' } },
+      defaultConfig
+    )
+    const andel = calculateScenario(
+      { ...baseScenario, property: { ...baseScenario.property, ownershipType: 'andel' } },
+      defaultConfig
+    )
+    expect(andel.maxPurchase.maxByEquity).toBeGreaterThan(selveier.maxPurchase.maxByEquity)
+  })
+})
+
+describe('betjeningsevne — eksisterende gjeld stresstestes', () => {
+  it('eksisterende gjeld reduserer disponibelt med beregnet betjening', () => {
+    const withDebt = calculateScenario(
+      {
+        ...baseScenario,
+        household: {
+          ...baseScenario.household,
+          primaryApplicant: { ...baseScenario.household.primaryApplicant, existingDebt: 500_000 },
+        },
+      },
+      defaultConfig
+    )
+    expect(withDebt.affordability.existingDebtServicing).toBeGreaterThan(0)
+    const noDebt = calculateScenario(baseScenario, defaultConfig)
+    expect(withDebt.affordability.disposableAmount).toBeLessThan(
+      noDebt.affordability.disposableAmount
+    )
+    expect(noDebt.affordability.existingDebtServicing).toBe(0)
+  })
+})
+
+describe('amortisering — nye simulatorer', () => {
+  it('avdragsfrihet gir null avdrag i perioden og samme totale løpetid', () => {
+    const plan = buildAmortizationPlanWithSimulator(
+      's', 3_000_000, 5.0, 25, 'annuitet', undefined, undefined, 2
+    )
+    const base = buildAmortizationPlanWithSimulator('s', 3_000_000, 5.0, 25, 'annuitet')
+    expect(plan.rows.slice(0, 24).every((r) => r.principal === 0)).toBe(true)
+    expect(plan.rows[24].principal).toBeGreaterThan(0)
+    expect(plan.termMonths).toBe(base.termMonths)
+    expect(plan.totalInterestPaid).toBeGreaterThan(base.totalInterestPaid)
+  })
+
+  it('fast månedlig ekstra innbetaling forkorter løpetiden', () => {
+    const plan = buildAmortizationPlanWithSimulator(
+      's', 3_000_000, 5.0, 25, 'annuitet', undefined,
+      { fromMonth: 1, amount: 2_000, strategy: 'shorten', recurring: true }
+    )
+    const base = buildAmortizationPlanWithSimulator('s', 3_000_000, 5.0, 25, 'annuitet')
+    expect(plan.termMonths).toBeLessThan(base.termMonths)
+    expect(plan.totalInterestPaid).toBeLessThan(base.totalInterestPaid)
   })
 })

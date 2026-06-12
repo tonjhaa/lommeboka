@@ -26,6 +26,20 @@ import { calcHouseholdMonthlyNetIncome } from './tax'
 /** Minimumsgrense for disponibelt beløp — banken krever positiv betjeningsevne */
 const MINIMUM_DISPOSABLE = 0
 
+/** Antatt gjenværende nedbetalingstid for eksisterende gjeld i stresstesten (år).
+ *  Bankene stresstester ALL gjeld — eksisterende gjeld modelleres som
+ *  annuitet ved stressrente over denne perioden. */
+export const EXISTING_DEBT_TERM_YEARS = 15
+
+/** Månedlig betjening av eksisterende gjeld ved stressrente. */
+export function calcExistingDebtServicing(
+  existingDebt: number,
+  stressTestRate: number
+): number {
+  if (existingDebt <= 0) return 0
+  return annuityPayment(existingDebt, stressTestRate, EXISTING_DEBT_TERM_YEARS)
+}
+
 /**
  * Beregner stresstestrenten som er bindende.
  */
@@ -65,7 +79,8 @@ export function analyzeAffordability(
   monthlyFee: number | undefined,
   propertyTaxAnnual: number | undefined,
   extraMonthlyExpenses: number | undefined,
-  config: AppConfig
+  config: AppConfig,
+  existingDebt = 0
 ): AffordabilityAnalysis {
   const stressTestRate = calcStressTestRate(nominalRate, config.lendingRules)
 
@@ -85,8 +100,10 @@ export function analyzeAffordability(
     config.fees.termFee
   )
 
+  const existingDebtServicing = calcExistingDebtServicing(existingDebt, stressTestRate)
+
   const disposableAmount =
-    monthlyNetIncome - monthlyPaymentStress - sifoExpenses - otherMonthlyExpenses
+    monthlyNetIncome - monthlyPaymentStress - sifoExpenses - otherMonthlyExpenses - existingDebtServicing
 
   const approved = disposableAmount >= MINIMUM_DISPOSABLE
 
@@ -97,6 +114,7 @@ export function analyzeAffordability(
     stressTestRate,
     sifoExpenses: Math.round(sifoExpenses),
     otherMonthlyExpenses: Math.round(otherMonthlyExpenses),
+    existingDebtServicing: Math.round(existingDebtServicing),
     disposableAmount: Math.round(disposableAmount),
     approved,
     minimumDisposable: MINIMUM_DISPOSABLE,
