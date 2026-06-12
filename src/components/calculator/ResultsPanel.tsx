@@ -25,6 +25,7 @@ import { BarChart2, Table2, ChevronDown, ChevronUp, Zap } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
 import { buildAmortizationPlanWithSimulator } from '@/utils/amortization'
 import { calcAcquisitionFees, calcEffectiveEquity, calcTotalPropertyValue } from '@/utils/property'
+import { effectiveRate } from '@/utils/loan'
 
 const AmortizationChart = lazyWithRetry(() =>
   import('@/components/charts/AmortizationChart').then((m) => ({ default: m.AmortizationChart }))
@@ -64,6 +65,11 @@ export function ResultsPanel({ scenarioId }: Props) {
   const [extraPayMonth, setExtraPayMonth]       = useState(12)
   const [extraPayAmount, setExtraPayAmount]     = useState(100_000)
   const [extraPayStrategy, setExtraPayStrategy] = useState<'shorten' | 'reduce'>('shorten')
+  const [extraPayRecurring, setExtraPayRecurring] = useState(false)
+
+  // Avdragsfrihet-simulator (lokal state)
+  const [interestOnlyEnabled, setInterestOnlyEnabled] = useState(false)
+  const [interestOnlyYears, setInterestOnlyYears]     = useState(2)
 
   if (!analysis) {
     return (
@@ -80,8 +86,9 @@ export function ResultsPanel({ scenarioId }: Props) {
   ).length > 0
 
   // Bygg simulert amortiseringsplan lokalt (påvirker ikke Zustand)
+  const simActive = rateChangeEnabled || extraPayEnabled || interestOnlyEnabled
   let simAmortization = amortization
-  if (amortization && (rateChangeEnabled || extraPayEnabled)) {
+  if (amortization && simActive) {
     const { property, loanParameters } = scenario ?? {}
     if (property && loanParameters) {
       const totalPropertyValue = calcTotalPropertyValue(property)
@@ -104,7 +111,15 @@ export function ResultsPanel({ scenarioId }: Props) {
         loanParameters.loanTermYears,
         loanParameters.loanType,
         rateChangeEnabled ? { fromMonth: rateChangeMonth, newRate } : undefined,
-        extraPayEnabled ? { fromMonth: extraPayMonth, amount: extraPayAmount, strategy: extraPayStrategy } : undefined
+        extraPayEnabled
+          ? {
+              fromMonth: extraPayMonth,
+              amount: extraPayAmount,
+              strategy: extraPayRecurring ? 'shorten' : extraPayStrategy,
+              recurring: extraPayRecurring,
+            }
+          : undefined,
+        interestOnlyEnabled ? interestOnlyYears : undefined
       )
     }
   }
@@ -201,6 +216,30 @@ export function ResultsPanel({ scenarioId }: Props) {
 
           {showAmortization && (
             <>
+              {/* Nøkkeltall for lånet */}
+              {(() => {
+                const plan = simAmortization ?? amortization
+                if (!plan || plan.loanAmount <= 0 || plan.rows.length === 0) return null
+                const effRate = effectiveRate(
+                  plan.loanAmount,
+                  plan.rows[0].payment,
+                  plan.termMonths / 12,
+                  config.fees.loanEstablishmentFee,
+                  config.fees.termFee
+                )
+                return (
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                    <span>Lånebeløp <span className="font-medium text-foreground">{formatCurrency(plan.loanAmount)}</span></span>
+                    <span>Total rentekostnad <span className="font-medium text-red-400/80">{formatCurrency(plan.totalInterestPaid)}</span></span>
+                    <span>Totalt betalt <span className="font-medium text-foreground">{formatCurrency(plan.totalPaid)}</span></span>
+                    <span className="flex items-center">
+                      Effektiv rente <span className="font-medium text-foreground ml-1">{effRate.toFixed(2)} %</span>
+                      <HelpTooltip content="Effektiv årlig rente inkl. etableringsgebyr og termingebyr (ÅOP)." side="top" />
+                    </span>
+                  </div>
+                )
+              })()}
+
               {/* Simulator-toggle */}
               <div>
                 <button
@@ -269,7 +308,7 @@ export function ResultsPanel({ scenarioId }: Props) {
                       <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1">
-                            <Label className="text-xs text-muted-foreground">Fra termin</Label>
+                            <Label className="text-xs text-muted-foreground">{extraPayRecurring ? 'Hver måned fra termin' : 'I termin'}</Label>
                             <NumberInput
                               value={extraPayMonth}
                               onChange={(v) => setExtraPayMonth(Math.round(v))}
@@ -285,37 +324,93 @@ export function ResultsPanel({ scenarioId }: Props) {
                               value={extraPayAmount}
                               onChange={setExtraPayAmount}
                               suffix="kr"
-                              min={10_000}
-                              step={50_000}
+                              min={500}
+                              step={extraPayRecurring ? 500 : 50_000}
                             />
                           </div>
                         </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs text-muted-foreground">Strategi</Label>
-                          <Select
-                            value={extraPayStrategy}
-                            onValueChange={(v) => setExtraPayStrategy(v as 'shorten' | 'reduce')}
-                          >
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="shorten">Forkort løpetid (samme terminbeløp)</SelectItem>
-                              <SelectItem value="reduce">Reduser terminbeløp (samme løpetid)</SelectItem>
-                            </SelectContent>
-                          </Select>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <Label className="text-xs text-muted-foreground">Hyppighet</Label>
+                            <Select
+                              value={extraPayRecurring ? 'monthly' : 'once'}
+                              onValueChange={(v) => {
+                                const recurring = v === 'monthly'
+                                setExtraPayRecurring(recurring)
+                                setExtraPayAmount(recurring ? 2_000 : 100_000)
+                              }}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="once">Engangsbeløp</SelectItem>
+                                <SelectItem value="monthly">Fast hver måned</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          {!extraPayRecurring && (
+                            <div className="space-y-1">
+                              <Label className="text-xs text-muted-foreground">Strategi</Label>
+                              <Select
+                                value={extraPayStrategy}
+                                onValueChange={(v) => setExtraPayStrategy(v as 'shorten' | 'reduce')}
+                              >
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="shorten">Forkort løpetid (samme terminbeløp)</SelectItem>
+                                  <SelectItem value="reduce">Reduser terminbeløp (samme løpetid)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
                         </div>
+                        {extraPayRecurring && (
+                          <p className="text-[11px] text-muted-foreground">
+                            Fast ekstra innbetaling forkorter løpetiden (samme terminbeløp).
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <Separator />
+
+                  {/* Avdragsfrihet */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold flex items-center">
+                        Avdragsfrihet
+                        <HelpTooltip content="Simuler avdragsfrihet fra start: du betaler kun renter i perioden, og restsaldoen nedbetales over gjenværende løpetid etterpå. Gir lavere betaling nå, men høyere total rentekostnad." />
+                      </Label>
+                      <Switch checked={interestOnlyEnabled} onCheckedChange={setInterestOnlyEnabled} />
+                    </div>
+                    {interestOnlyEnabled && (
+                      <div className="space-y-1 w-40">
+                        <Label className="text-xs text-muted-foreground">Antall år</Label>
+                        <NumberInput
+                          value={interestOnlyYears}
+                          onChange={(v) => setInterestOnlyYears(Math.round(v))}
+                          suffix="år"
+                          min={1}
+                          max={10}
+                          step={1}
+                        />
                       </div>
                     )}
                   </div>
 
                   {/* Simulator-resultat */}
-                  {(rateChangeEnabled || extraPayEnabled) && simAmortization && (
+                  {simActive && simAmortization && (
                     <div className="rounded-md bg-muted/50 px-3 py-2 space-y-1 text-xs">
                       {simAmortization.interestSavedByExtraPayment !== undefined &&
                         simAmortization.interestSavedByExtraPayment !== 0 && (
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Spart rente</span>
+                          <span className="text-muted-foreground">
+                            {extraPayEnabled && !rateChangeEnabled && !interestOnlyEnabled ? 'Spart rente' : 'Endring i rentekostnad'}
+                          </span>
                           <span className={simAmortization.interestSavedByExtraPayment > 0 ? 'text-green-400 font-medium' : 'text-red-400 font-medium'}>
                             {simAmortization.interestSavedByExtraPayment > 0 ? '−' : '+'}
                             {formatCurrency(Math.abs(simAmortization.interestSavedByExtraPayment))}

@@ -56,7 +56,8 @@ function ApplicantFields({
           step={10_000}
         />
         <p className="text-xs text-muted-foreground">
-          Billån, studielån, kredittkort, etc.
+          Billån, studielån, kredittkort, etc. Telles i gjeldsgraden og
+          betjenes automatisk i stresstesten.
         </p>
       </div>
     </div>
@@ -101,8 +102,9 @@ export function HouseholdForm({ scenario }: Props) {
           ...partial.household.primaryApplicant,
         },
       },
+      // Kun EK hentes fra profilen — rente, løpetid og lånetype er brukerens egne valg
       loanParameters: partial.loanParameters
-        ? { ...scenario.loanParameters, ...partial.loanParameters }
+        ? { ...scenario.loanParameters, equity: partial.loanParameters.equity }
         : scenario.loanParameters,
     })
     setBridgeSummary(getProfileBridgeSummary())

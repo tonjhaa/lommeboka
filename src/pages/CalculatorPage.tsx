@@ -52,6 +52,7 @@ function CalcSubNav({ tab, setTab }: { tab: CalcTab; setTab: (t: CalcTab) => voi
 
 function EmptyState() {
   const { createScenario } = useNewScenario()
+  const rules = useAppStore((s) => s.config.lendingRules)
   return (
     <div className="flex flex-col items-center justify-center h-full gap-6 text-center px-6">
       <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20">
@@ -60,7 +61,7 @@ function EmptyState() {
       <div className="space-y-2">
         <h2 className="text-xl font-semibold text-foreground">Kom i gang</h2>
         <p className="text-sm text-muted-foreground max-w-xs">
-          Start et nytt scenario for å analysere boliglånet ditt mot gjeldende norske regler (2025).
+          Start et nytt scenario for å analysere boliglånet ditt mot gjeldende utlånsregler.
         </p>
       </div>
       <Button onClick={createScenario} className="gap-2">
@@ -69,16 +70,16 @@ function EmptyState() {
       </Button>
       <div className="grid grid-cols-3 gap-4 text-center text-xs text-muted-foreground max-w-sm">
         <div className="space-y-1">
-          <p className="font-semibold text-foreground">15% EK-krav</p>
-          <p>Boliglånsforskriften 2025</p>
+          <p className="font-semibold text-foreground">{rules.minEquityPercent}% EK-krav</p>
+          <p>Utlånsforskriften</p>
         </div>
         <div className="space-y-1">
-          <p className="font-semibold text-foreground">5× gjeldsgrad</p>
+          <p className="font-semibold text-foreground">{rules.maxDebtRatio}× gjeldsgrad</p>
           <p>Maks gjeld / inntekt</p>
         </div>
         <div className="space-y-1">
-          <p className="font-semibold text-foreground">+3% stresstest</p>
-          <p>Min 7% stressrente</p>
+          <p className="font-semibold text-foreground">+{rules.stressTestAddition}% stresstest</p>
+          <p>Min {rules.minStressTestRate}% stressrente</p>
         </div>
       </div>
     </div>
@@ -125,7 +126,7 @@ function MobileLayout({ scenarioId }: { scenarioId: string }) {
 
       <div className="flex-1 overflow-hidden">
         {tab === 'input' ? (
-          <ScenarioFormPanel scenario={scenario} />
+          <ScenarioFormPanel key={scenario.id} scenario={scenario} />
         ) : (
           <ResultsPanel scenarioId={scenarioId} />
         )}
@@ -183,7 +184,7 @@ export function CalculatorPage() {
             ) : (
               <div className="flex h-full overflow-hidden">
                 <div className="w-[380px] shrink-0 border-r border-border overflow-hidden flex flex-col">
-                  <ScenarioFormPanel scenario={activeScenario} />
+                  <ScenarioFormPanel key={activeScenario.id} scenario={activeScenario} />
                 </div>
                 <div className="flex-1 overflow-hidden">
                   <ResultsPanel scenarioId={activeScenario.id} />

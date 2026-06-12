@@ -190,7 +190,7 @@ export function LoanForm({ scenario }: Props) {
           <span>
             −{formatCurrency(effectiveEquity)}
             {' '}
-            <span className={equityPercent >= 15 ? 'text-green-400' : 'text-red-400'}>
+            <span className={equityPercent >= config.lendingRules.minEquityPercent ? 'text-green-400' : 'text-red-400'}>
               ({equityPercent.toFixed(1)}%)
             </span>
           </span>
@@ -262,7 +262,7 @@ export function LoanForm({ scenario }: Props) {
       <div className="space-y-1.5">
         <Label htmlFor="extraExpenses" className="flex items-center">
           Ekstra månedlige utgifter
-          <HelpTooltip content="Utgifter som ikke er fanget opp av SIFO-budsjettet: barnehage, billån, kredittkort, studentlån mv. Påvirker betjeningsevnen." />
+          <HelpTooltip content="Utgifter som ikke fanges av SIFO-budsjettet: barnehage/SFO, bilhold, dyre hobbyer mv. IKKE lån — eksisterende gjeld legges inn under Husholdning og stresstestes automatisk." />
         </Label>
         <NumberInput
           id="extraExpenses"

@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { Plus, Trash2, Copy, Home } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 import { useNewScenario } from '@/hooks/useNewScenario'
 import { useCalculator } from '@/hooks/useCalculator'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import type { ScenarioInput } from '@/types'
 
@@ -12,6 +14,7 @@ function ScenarioItem({ scenario }: { scenario: ScenarioInput }) {
   const removeScenario = useAppStore((s) => s.removeScenario)
   const { createFromExisting } = useNewScenario()
   const { analysis } = useCalculator(scenario.id)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const isActive = activeId === scenario.id
   const approved = analysis?.status.approved
@@ -63,12 +66,32 @@ function ScenarioItem({ scenario }: { scenario: ScenarioInput }) {
           variant="ghost"
           size="icon"
           className="h-7 w-7 text-destructive hover:text-destructive"
-          onClick={(e) => { e.stopPropagation(); removeScenario(scenario.id) }}
+          onClick={(e) => { e.stopPropagation(); setConfirmingDelete(true) }}
           title="Slett"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
       </div>
+
+      {confirmingDelete && (
+        <Dialog open onOpenChange={(open) => { if (!open) setConfirmingDelete(false) }}>
+          <DialogContent className="max-w-xs" onClick={(e) => e.stopPropagation()}>
+            <DialogHeader>
+              <DialogTitle>Slett scenario</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Er du sikker på at du vil slette <span className="font-medium text-foreground">«{scenario.label}»</span>?
+              Dette kan ikke angres.
+            </p>
+            <div className="flex gap-2 justify-end pt-1">
+              <Button variant="outline" size="sm" onClick={() => setConfirmingDelete(false)}>Avbryt</Button>
+              <Button variant="destructive" size="sm" onClick={() => { removeScenario(scenario.id); setConfirmingDelete(false) }}>
+                Slett
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 }

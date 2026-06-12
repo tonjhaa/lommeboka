@@ -7,6 +7,28 @@ import { NumberInput } from '@/components/ui/number-input'
 import { Label } from '@/components/ui/label'
 import { HelpTooltip } from '@/components/ui/help-tooltip'
 import { cn } from '@/lib/utils'
+import { useEconomyStore } from '@/application/useEconomyStore'
+import { getBaseContribForPeriod } from '@/domain/economy/savingsCalculator'
+
+/** Samlet planlagt månedssparing fra Lommeboka (kontoer + fond) for inneværende måned */
+function currentMonthlySavingsPlan(): number {
+  const { savingsAccounts, fondPortfolio } = useEconomyStore.getState()
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = now.getMonth() + 1
+  const accSum = savingsAccounts.reduce((s, a) => s + getBaseContribForPeriod(a, y, m), 0)
+  let fond = 0
+  if (fondPortfolio) {
+    const ym = `${y}-${String(m).padStart(2, '0')}`
+    const period = fondPortfolio.contributionPeriods?.find(p => {
+      const from = p.fromDate ? p.fromDate.slice(0, 7) : '0000-00'
+      const to = p.toDate ? p.toDate.slice(0, 7) : '9999-99'
+      return ym >= from && ym <= to
+    })
+    fond = period ? Math.round(period.amount) : Math.round(fondPortfolio.monthlyDeposit)
+  }
+  return Math.round(accSum + fond)
+}
 
 interface CardProps {
   analysis: LoanAnalysis
@@ -42,7 +64,7 @@ export function EquityCard({ analysis }: CardProps) {
         <Building2 className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm font-medium text-foreground flex items-center">
           Egenkapital
-          <HelpTooltip content="Kravet er 15% av (kjøpspris + fellesgjeld) etter fratrekk av gebyrer. Effektiv EK = din EK minus dokumentavgift og tinglysingsgebyrer." />
+          <HelpTooltip content={`Kravet er ${equity.requiredEquityPercent}% av (kjøpspris + fellesgjeld) etter fratrekk av gebyrer. Effektiv EK = din EK minus dokumentavgift og tinglysingsgebyrer.`} />
         </span>
         <span
           className={cn(
@@ -194,9 +216,21 @@ export function AffordabilityCard({ analysis }: CardProps) {
           <span>−{formatCurrency(aff.sifoExpenses)}</span>
         </div>
         <div className="flex justify-between text-muted-foreground">
-          <span>Andre boutgifter</span>
+          <span className="flex items-center">
+            Andre boutgifter
+            <HelpTooltip content="Fellesutgifter + eiendomsskatt/12 + termingebyr + ekstra månedlige utgifter du har lagt inn." side="right" />
+          </span>
           <span>−{formatCurrency(aff.otherMonthlyExpenses)}</span>
         </div>
+        {(aff.existingDebtServicing ?? 0) > 0 && (
+          <div className="flex justify-between text-muted-foreground">
+            <span className="flex items-center">
+              Eksisterende gjeld (stresset)
+              <HelpTooltip content="Beregnet betjening av eksisterende gjeld som annuitet ved stressrenten over 15 år. Bankene stresstester all gjeld, ikke bare boliglånet." side="right" />
+            </span>
+            <span>−{formatCurrency(aff.existingDebtServicing)}</span>
+          </div>
+        )}
         <div
           className={cn(
             'flex justify-between border-t border-border pt-1.5 font-bold text-sm',
@@ -231,7 +265,7 @@ export function MaxPurchaseCard({ analysis }: CardProps) {
         <Target className="h-4 w-4 text-primary" />
         <span className="text-sm font-medium text-foreground flex items-center">
           Maksimalt kjøpsbeløp
-          <HelpTooltip content="Det laveste av: maks pris etter EK-kravet, maks pris etter gjeldsgradsregelen, og maks pris etter betjeningsevne (stresstest). Dette er reelt makstak." />
+          <HelpTooltip content="Det laveste av: maks pris etter EK-kravet, gjeldsgradsregelen og betjeningsevnen (stresstest). Bruker scenarioets rente, løpetid, eierform og denne boligens fellesutgifter som forutsetninger." />
         </span>
       </div>
 
@@ -275,7 +309,9 @@ export function MaxPurchaseCard({ analysis }: CardProps) {
 /** Sparemål-kort: vises når EK er utilstrekkelig */
 export function SavingsGoalCard({ analysis }: CardProps) {
   const { equity } = analysis
-  const [monthlySavings, setMonthlySavings] = useState(5_000)
+  // Forhåndsutfyll med faktisk spareplan fra Lommeboka når den finnes
+  const [planFromLommeboka] = useState(() => currentMonthlySavingsPlan())
+  const [monthlySavings, setMonthlySavings] = useState(() => planFromLommeboka > 0 ? planFromLommeboka : 5_000)
 
   // Vises kun når EK-kravet ikke er oppfylt
   if (equity.approved) return null
@@ -309,6 +345,11 @@ export function SavingsGoalCard({ analysis }: CardProps) {
           min={500}
           step={500}
         />
+        {planFromLommeboka > 0 && monthlySavings === planFromLommeboka && (
+          <p className="text-[11px] text-muted-foreground">
+            Forhåndsutfylt fra spareplanen din i Lommeboka ({formatCurrency(planFromLommeboka)}/mnd)
+          </p>
+        )}
       </div>
 
       {isFinite(monthsToGoal) ? (
