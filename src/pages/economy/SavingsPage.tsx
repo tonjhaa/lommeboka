@@ -4,7 +4,7 @@ import { usePartnerStore } from '@/application/usePartnerStore'
 import { usePartnershipStore } from '@/store/usePartnershipStore'
 import { buildPartnerVeikartPatch } from '@/domain/economy/syncPartnerToVeikart'
 import { useEconomyStore } from '@/application/useEconomyStore'
-import { Plus, Trash2, Upload, ChevronDown, ChevronUp, Repeat2, Pencil, Check, X, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, Upload, ChevronDown, ChevronUp, ChevronRight, Repeat2, Pencil, Check, X, AlertTriangle } from 'lucide-react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -341,6 +341,7 @@ export function SavingsPage() {
           profile={profile}
           partnerVeikart={partnerVeikart}
           now={now}
+          savingsPlanTarget={savingsPlanTarget}
         />
       )}
 
@@ -676,7 +677,7 @@ function getFondContribForMonth(portfolio: import('@/types/economy').FondPortfol
 }
 
 function MånedsoversiktTable({
-  accounts, fondCurrentValue, fondPortfolio, debts, profile, partnerVeikart, now,
+  accounts, fondCurrentValue, fondPortfolio, debts, profile, partnerVeikart, now, savingsPlanTarget,
 }: {
   accounts: SavingsAccount[]
   fondCurrentValue: number
@@ -685,11 +686,13 @@ function MånedsoversiktTable({
   profile: EmploymentProfile | null
   partnerVeikart: PartnerVeikart
   now: Date
+  savingsPlanTarget: number
 }) {
-  const HORIZON = 72
   const { setSavingsTab } = useAppStore()
   const { savingsOverrides: contribOverrides, setSavingsOverride, clearAllSavingsOverrides } = useActiveEconomyStore()
   const [editingRateId, setEditingRateId] = useState<string | null>(null)
+  const [horizonMonths, setHorizonMonths] = useState(72)
+  const [collapsedYears, setCollapsedYears] = useState<Set<number>>(new Set())
 
   const setCurrentView = useAppStore((s) => s.setCurrentView)
   const partnerStatus = usePartnershipStore((s) => s.status)
@@ -765,7 +768,7 @@ function MånedsoversiktTable({
   const partnerFondMonthly = hasPartner ? (partnerVeikart.fondMonthlyContribution ?? 0) : 0
 
   // Fallback: utled grunnlønn fra siste slip i monthHistory hvis profile.baseMonthly er 0
-  const { monthHistory } = useActiveEconomyStore()
+  const { monthHistory, lonnsoppgjor } = useActiveEconomyStore()
   const derivedBaseMonthly = (() => {
     const base = profile?.baseMonthly ?? 0
     if (base > 0) return base
@@ -779,7 +782,17 @@ function MånedsoversiktTable({
   const salaryNeedsUpdate = !profile || profile.baseMonthly === 0
   const partnerOnlyAnnualIncome = hasPartner ? partnerVeikart.annualIncome : 0
   const annualIncome = myAnnualIncome + partnerOnlyAnnualIncome
-  const salaryGrowthPct = 3
+  // Lønnsvekst fra faktisk oppgjørshistorikk (CAGR), avgrenset til 0–8 %. Fallback 3 %.
+  const salaryGrowthPct = (() => {
+    const sorted = [...lonnsoppgjor]
+      .filter((r) => r.maanedslonn > 0)
+      .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
+    if (sorted.length < 2) return 3
+    const yearSpan = sorted[sorted.length - 1].year - sorted[0].year
+    if (yearSpan < 1) return 3
+    const cagr = (Math.pow(sorted[sorted.length - 1].maanedslonn / sorted[0].maanedslonn, 1 / yearSpan) - 1) * 100
+    return Math.min(8, Math.max(0, Math.round(cagr * 10) / 10))
+  })()
 
   const { accMeta, partnerAccMeta, monthRows } = useMemo(() => {
     const nowISO = now.toISOString().split('T')[0]
@@ -791,6 +804,8 @@ function MånedsoversiktTable({
       rate: contribOverrides[`rate-${acc.id}`] ?? ([...acc.rateHistory].filter(r => r.fromDate <= nowISO).sort((a, b) => b.fromDate.localeCompare(a.fromDate))[0]?.rate ?? 0),
       tieredRates: acc.tieredRates,
       getBase: (year: number, month: number) => getBaseContribForMonth(acc, year, month, nowISO),
+      // BSU: innskudd hittil i inneværende år — teller mot årskvoten på 27 500
+      ytdContrib: acc.type === 'BSU' ? computeYTDContributions(acc, now.getFullYear()) : 0,
     }))
 
     // Partner accounts meta — startBalance from overrides
@@ -807,12 +822,18 @@ function MånedsoversiktTable({
     // Påløpte renter per konto — krediteres i januar neste år
     const accruedInterest = accMeta.map(() => 0)
     const partnerAccruedInterest = partnerAccMeta.map(() => 0)
+    // BSU-årskvote (27 500): innskudd i år så langt per konto
+    const bsuYearlyContrib = accMeta.map(a => a.ytdContrib)
+    // Partner-BSU: estimat for innskudd hittil i år (samme fallback som checkBSULimits)
+    let partnerBsuYearlyContrib = hasPartner ? Math.round((partnerVeikart.bsuMonthlyContribution ?? 0) * now.getMonth()) : 0
+    let partnerBsuAccrued = 0
     let fondBal = contribOverrides['start-fond'] ?? fondCurrentValue
+    const fondExpectedRate = contribOverrides['rate-fond'] ?? 0
     let partnerBsuBal = hasPartner ? (contribOverrides['start-p-bsu'] ?? partnerVeikart.bsu ?? 0) : 0
     let partnerFondBal = hasPartnerFond ? (contribOverrides['start-p-fond'] ?? partnerVeikart.fondCurrentValue ?? 0) : 0
     const currentYear = now.getFullYear()
 
-    const monthRows = Array.from({ length: HORIZON }, (_, i) => {
+    const monthRows = Array.from({ length: horizonMonths }, (_, i) => {
       const date = new Date(now.getFullYear(), now.getMonth() + i, 1)
       const year = date.getFullYear()
       const month = date.getMonth() + 1
@@ -827,8 +848,12 @@ function MånedsoversiktTable({
         let interest: number
         {
           if (acc.type === 'BSU') {
+            // Nullstill årskvoten ved nyttår (inneværende år starter med faktisk YTD)
+            if (month === 1 && year !== currentYear) bsuYearlyContrib[j] = 0
             const room = Math.max(0, BSU_MAX_TOTAL - bal0)
-            contrib = Math.min(contrib, room)
+            const yearRoom = Math.max(0, BSU_MAX_YEARLY - bsuYearlyContrib[j])
+            contrib = Math.min(contrib, room, yearRoom)
+            bsuYearlyContrib[j] += Math.max(0, contrib)
           }
           // Trinnvis rente: beregn effektiv rente mot løpende saldo inkl. påløpte renter
           const effectiveBal = bal0 + accruedInterest[j]
@@ -869,8 +894,10 @@ function MånedsoversiktTable({
         fondBal = snapshotThisMonth.totalValue
         fondInterest = fondBal - prevFondBal - effectiveFondMnd  // derivert avkastning
       } else {
-        fondBal = prevFondBal + effectiveFondMnd  // ingen automatisk avkastning
-        fondInterest = 0
+        // Valgfri forventet årlig avkastning (klikkbar % i Fond-headeren). 0 = av.
+        const fondGrowth = includeInterest ? prevFondBal * fondExpectedRate / 100 / 12 : 0
+        fondBal = prevFondBal + fondGrowth + effectiveFondMnd
+        fondInterest = Math.round(fondGrowth)
       }
 
       // Partner accounts — per-month overrides + desember-rentekreditt (norsk standard)
@@ -919,11 +946,26 @@ function MånedsoversiktTable({
         return { id: acc.id, balance: bal, contribution: contrib, overrideKey, interest: monthlyInterest }
       })
 
-      // Partner BSU — simple deposit, capped at BSU_MAX_TOTAL
+      // Partner BSU — samme regler som egne kontoer: årskvote, totaltak og renter
+      // kreditert 31. desember
       const rawPartnerBsuMnd = hasPartner ? Math.round(partnerVeikart.bsuMonthlyContribution ?? 0) : 0
+      if (month === 1 && year !== currentYear) partnerBsuYearlyContrib = 0
       const partnerBsuRoom = Math.max(0, BSU_MAX_TOTAL - partnerBsuBal)
-      const partnerBsuMnd = Math.min(rawPartnerBsuMnd, partnerBsuRoom)
-      if (hasPartner) partnerBsuBal = partnerBsuBal + partnerBsuMnd
+      const partnerBsuYearRoom = Math.max(0, BSU_MAX_YEARLY - partnerBsuYearlyContrib)
+      const partnerBsuMnd = Math.min(rawPartnerBsuMnd, partnerBsuRoom, partnerBsuYearRoom)
+      let partnerBsuInterest = 0
+      if (hasPartner) {
+        partnerBsuYearlyContrib += Math.max(0, partnerBsuMnd)
+        const partnerBsuRate = contribOverrides['rate-p-bsu-rente'] ?? SAVINGS_RATE_TABLE
+        partnerBsuInterest = partnerBsuBal * partnerBsuRate / 100 / 12
+        partnerBsuAccrued += partnerBsuInterest
+        if (month === 12) {
+          partnerBsuBal = partnerBsuBal + (includeInterest ? partnerBsuAccrued : 0) + partnerBsuMnd
+          partnerBsuAccrued = 0
+        } else {
+          partnerBsuBal = partnerBsuBal + partnerBsuMnd
+        }
+      }
 
       // Partner fond — vokser med månedlig innskudd (ingen automatisk avkastning)
       if (hasPartnerFond) partnerFondBal = partnerFondBal + partnerFondMonthly
@@ -974,6 +1016,7 @@ function MånedsoversiktTable({
         partnerAccBalances,
         partnerBsuBalance: partnerBsuBal,
         partnerBsuContrib: partnerBsuMnd,
+        partnerBsuInterest: Math.round(partnerBsuInterest),
         partnerFondBalance: Math.round(partnerFondBal),
         partnerFondContrib: Math.round(partnerFondMonthly),
         totalEK,
@@ -987,20 +1030,22 @@ function MånedsoversiktTable({
     })
 
     return { accMeta, partnerAccMeta: partnerAccMeta as PartnerAccount[], monthRows }
-  }, [accounts, fondCurrentValue, fondPortfolio, fondMonthlyDeposit, debts, annualIncome, myAnnualIncome, partnerOnlyAnnualIncome, salaryGrowthPct, hasFond, hasPartner, hasPartnerFond, partnerFondMonthly, partnerVeikart, now, contribOverrides, includeInterest])
+  }, [accounts, fondCurrentValue, fondPortfolio, fondMonthlyDeposit, debts, annualIncome, myAnnualIncome, partnerOnlyAnnualIncome, salaryGrowthPct, hasFond, hasPartner, hasPartnerFond, partnerFondMonthly, partnerVeikart, now, contribOverrides, includeInterest, horizonMonths])
 
   const years = [...new Set(monthRows.map(r => r.year))]
 
-  // Column spans for group headers
-  const userCols = accMeta.length * 2 + (hasFond ? 2 : 0)
+  // Første måned der sparemålet nås (🎯-markør i Total EK-kolonnen)
+  const goalRow = savingsPlanTarget > 0 ? monthRows.find(r => r.totalEK >= savingsPlanTarget) : undefined
+
+  // Column spans for group headers (+1 = Sum innskudd-kolonnen)
+  const userCols = accMeta.length * 2 + (hasFond ? 2 : 0) + 1
   const hasBsu = hasPartner && (partnerVeikart.bsu > 0 || partnerVeikart.bsuMonthlyContribution > 0)
   const partnerCols = hasPartner ? (hasBsu ? 2 : 0) + (hasPartnerFond ? 2 : 0) + partnerAccMeta.length * 2 : 0
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Action toolbar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border bg-muted/20 shrink-0 text-xs">
-        <span className="text-muted-foreground">Legg til data:</span>
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border bg-muted/20 shrink-0 text-xs flex-wrap">
         <button
           onClick={() => setSavingsTab('kontoer')}
           className="flex items-center gap-1 px-2 py-1 rounded border border-border hover:bg-muted/40 transition-colors text-foreground"
@@ -1030,6 +1075,21 @@ function MånedsoversiktTable({
         {!partnerVeikart.enabled && (
           <span className="text-muted-foreground italic ml-1">Partner ikke aktivert — aktiver i Innstillinger</span>
         )}
+        <div className="ml-2 flex items-center gap-0.5 bg-muted/40 rounded-md p-0.5" title="Hvor langt frem prognosen vises">
+          {([12, 24, 36, 72] as const).map((h) => (
+            <button
+              key={h}
+              onClick={() => setHorizonMonths(h)}
+              className={`px-2 py-0.5 rounded transition-colors ${
+                horizonMonths === h
+                  ? 'bg-background text-foreground shadow-sm font-medium'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {h / 12} år
+            </button>
+          ))}
+        </div>
         <button
           onClick={() => setIncludeInterest(v => !v)}
           className={`flex items-center gap-1 px-2 py-1 rounded border text-xs transition-colors ${
@@ -1037,32 +1097,10 @@ function MånedsoversiktTable({
               ? 'border-green-500/40 text-green-400 bg-green-500/5 hover:bg-green-500/15'
               : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted/40'
           }`}
-          title={includeInterest ? 'Klikk for å se saldo uten krediterte renter' : 'Klikk for å inkludere renter i saldo'}
+          title={includeInterest ? 'Saldoene inkluderer rente/avkastning — klikk for å se uten' : 'Saldoene vises uten rente/avkastning — klikk for å inkludere'}
         >
-          {includeInterest ? '% Renter på' : '% Renter av'}
+          {includeInterest ? 'Renter: på' : 'Renter: av'}
         </button>
-        {/* TEMP DEBUG — fjernes etterpå */}
-        {hasPartner && (
-          <button
-            onClick={() => {
-              const ps = usePartnerStore.getState()
-              const overrideKeys = Object.keys(ps.savingsOverrides ?? {})
-              const acc0 = partnerVeikart.accounts?.[0]
-              console.log('=== PARTNER DEBUG ===')
-              console.log('usePartnerStore.savingsOverrides keys:', overrideKeys.slice(0, 20))
-              console.log('partnerVeikart.accounts[0].id:', acc0?.id)
-              console.log('partnerVeikart.accounts[0].monthlyOverrides:', acc0?.monthlyOverrides)
-              console.log('partnerVeikart.accounts[0].fromDate:', acc0?.fromDate)
-              console.log('partnerVeikart.accounts[0].monthlyContribution:', acc0?.monthlyContribution)
-              const matchingKeys = overrideKeys.filter(k => acc0?.id && k.startsWith(acc0.id + '-'))
-              console.log('Matching savingsOverrides keys for acc0:', matchingKeys)
-              alert(`acc0.id: ${acc0?.id?.slice(0,8)}...\nOverride keys (total ${overrideKeys.length}): ${overrideKeys.slice(0,5).join(', ')}\nMatching: ${matchingKeys.join(', ')}\nmonthlyOverrides: ${JSON.stringify(acc0?.monthlyOverrides)}`)
-            }}
-            className="px-2 py-1 rounded border border-purple-500/40 text-purple-400 text-[10px] hover:bg-purple-500/10"
-          >
-            🔍 Debug
-          </button>
-        )}
         <span className="ml-auto flex items-center gap-2 text-muted-foreground">
           {myAnnualIncome > 0 && (
             <span className="flex items-center gap-1">
@@ -1090,6 +1128,11 @@ function MånedsoversiktTable({
               <AlertTriangle className="h-3 w-3" /> Sett opp lønnsprofil i Lønn-fanen
             </span>
           )}
+          {annualIncome > 0 && (
+            <span className="text-[10px]" title="Årlig lønnsvekst brukt i kjøpekraft-prognosen — hentet fra lønnsoppgjørshistorikken din (CAGR)">
+              · vekst {salaryGrowthPct.toLocaleString('no-NO')} %/år
+            </span>
+          )}
         </span>
         {Object.keys(contribOverrides).length > 0 && (
           <button
@@ -1099,6 +1142,15 @@ function MånedsoversiktTable({
             ↺ Tilbakestill ({Object.keys(contribOverrides).length})
           </button>
         )}
+      </div>
+      {/* Legend */}
+      <div className="flex items-center gap-3 px-3 py-1 border-b border-border/40 bg-muted/10 shrink-0 text-[10px] text-muted-foreground flex-wrap">
+        <span><span className="rounded px-1 py-0.5 bg-teal-900/40 text-teal-400 font-medium">P</span> spareperiode</span>
+        <span><span className="text-amber-400">gult tall</span> = manuelt overstyrt</span>
+        <span><span className="text-green-400/80">(+x)</span> = rente/avkastning, krediteres 31. des</span>
+        {savingsPlanTarget > 0 && <span>🎯 = sparemål ({fmtNOK(savingsPlanTarget)}) nås</span>}
+        <span>Klikk på årstall for å skjule/vise månedene</span>
+        {salaryNeedsUpdate && myAnnualIncome > 0 && <span className="text-amber-400">* = grunnlønn mangler i profil, utledet fra siste slipp</span>}
       </div>
       {hasFond && (() => {
         const d = now.getDate()
@@ -1129,9 +1181,9 @@ function MånedsoversiktTable({
                 {partnerVeikart.partnerName ?? 'Partner'}
               </th>
             )}
-            <th className="bg-background px-2 py-1 text-center border-b-2 border-b-blue-400/30 text-xs font-bold tracking-wide text-blue-400/40 uppercase">EK</th>
             <th colSpan={hasPartner ? 3 : 2} className="bg-background px-2 py-1 text-center border-r-2 border-r-red-400/30 border-b-2 border-b-red-400/40 text-xs font-bold tracking-wide text-red-400/60 uppercase">Gjeld</th>
             <th colSpan={1 + (myAnnualIncome > 0 ? 1 : 0) + (hasPartner && partnerOnlyAnnualIncome > 0 ? 1 : 0)} className="bg-background px-2 py-1 text-center border-b-2 border-b-green-400/40 text-xs font-bold tracking-wide text-green-400/60 uppercase">Kjøpekraft</th>
+            <th className="sticky right-0 z-20 bg-background px-2 py-1 text-center border-l-2 border-l-blue-400/30 border-b-2 border-b-blue-400/30 text-xs font-bold tracking-wide text-blue-400/60 uppercase">EK</th>
           </tr>
           {/* Row 2: Account names */}
           <tr className="border-b border-border">
@@ -1172,8 +1224,39 @@ function MånedsoversiktTable({
             {hasFond && (
               <th colSpan={2} className="px-3 py-1.5 text-center border-r border-border text-teal-400 font-semibold whitespace-nowrap">
                 Fond
+                {editingRateId === 'fond' ? (
+                  <input
+                    autoFocus
+                    type="number"
+                    step="0.5"
+                    min={0}
+                    max={15}
+                    defaultValue={contribOverrides['rate-fond'] ?? 0}
+                    className="ml-1 w-12 text-[10px] font-normal rounded border border-border bg-background px-1 outline-none focus:border-primary text-center"
+                    onBlur={(e) => {
+                      const v = parseFloat(e.target.value)
+                      setSavingsOverride('rate-fond', isNaN(v) || v === 0 ? null : v)
+                      setEditingRateId(null)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                      if (e.key === 'Escape') setEditingRateId(null)
+                    }}
+                  />
+                ) : (
+                  <button
+                    className="ml-1 text-[10px] text-muted-foreground font-normal hover:text-primary transition-colors"
+                    onClick={() => setEditingRateId('fond')}
+                    title="Forventet årlig avkastning brukt i prognosen (0 = ingen vekst). Faktiske snapshots overstyrer alltid."
+                  >
+                    {(contribOverrides['rate-fond'] ?? 0).toFixed(1)}%
+                  </button>
+                )}
               </th>
             )}
+            <th className="px-3 py-1.5 text-center border-r-2 border-r-primary/30 font-semibold whitespace-nowrap text-primary/70" title="Egne innskudd denne måneden, alle kontoer + fond">
+              Sum innskudd
+            </th>
             {hasPartner && hasBsu && (
               <th colSpan={2} className="px-3 py-1.5 text-center border-r border-border text-violet-300 font-semibold whitespace-nowrap">BSU</th>
             )}
@@ -1191,13 +1274,13 @@ function MånedsoversiktTable({
                 )}
               </th>
             ))}
-            <th className="bg-background px-3 py-1.5 text-right border-l-2 border-l-red-400/30 border-r border-border text-blue-400 font-semibold whitespace-nowrap">Total EK</th>
-            <th className="bg-background px-2 py-1.5 text-right border-r border-border text-red-400/50 font-semibold whitespace-nowrap">Meg</th>
+            <th className="bg-background px-2 py-1.5 text-right border-l-2 border-l-red-400/30 border-r border-border text-red-400/50 font-semibold whitespace-nowrap">Meg</th>
             {hasPartner && <th className="bg-background px-2 py-1.5 text-right border-r border-border text-red-400/50 font-semibold whitespace-nowrap">{partnerVeikart.partnerName ?? 'Partner'}</th>}
             <th className="bg-background px-2 py-1.5 text-right border-r-2 border-r-red-400/30 text-red-400/70 font-semibold whitespace-nowrap">∑</th>
             <th className="bg-background px-3 py-1.5 text-right border-l-2 border-l-green-400/30 border-r border-border text-green-400 font-semibold whitespace-nowrap">Samlet</th>
             {myAnnualIncome > 0 && <th className="bg-background px-3 py-1.5 text-right border-r border-border text-green-400/70 font-semibold whitespace-nowrap">Meg</th>}
             {hasPartner && partnerOnlyAnnualIncome > 0 && <th className="bg-background px-3 py-1.5 text-right text-violet-400/70 font-semibold whitespace-nowrap">{partnerVeikart.partnerName ?? 'Partner'}</th>}
+            <th className="sticky right-0 z-20 bg-background px-3 py-1.5 text-right border-l-2 border-l-blue-400/30 text-blue-400 font-semibold whitespace-nowrap">Total EK</th>
           </tr>
           {/* Row 3: Innskudd / Saldo sub-headers */}
           <tr className="border-b-2 border-border">
@@ -1218,6 +1301,7 @@ function MånedsoversiktTable({
                 </div>
               </th>
             )}
+            <th className="border-r-2 border-r-primary/30 px-3 py-1 text-right text-muted-foreground font-normal">kr/mnd</th>
             {hasPartner && hasBsu && (
               <th colSpan={2} className="border-r border-border p-0">
                 <div className="flex">
@@ -1243,12 +1327,12 @@ function MånedsoversiktTable({
               </th>
             ))}
             <th className="bg-background px-3 py-1 border-l-2 border-l-red-400/30 border-r border-border" />
-            <th className="bg-background px-3 py-1 border-r border-border" />
             {hasPartner && <th className="bg-background px-3 py-1 border-r border-border" />}
             <th className="bg-background px-3 py-1 border-r-2 border-r-red-400/30" />
             <th className="bg-background px-3 py-1 border-l-2 border-l-green-400/30 border-r border-border" />
             {myAnnualIncome > 0 && <th className="bg-background px-3 py-1 border-r border-border" />}
             {hasPartner && partnerOnlyAnnualIncome > 0 && <th className="bg-background px-3 py-1" />}
+            <th className="sticky right-0 z-20 bg-background px-3 py-1 border-l-2 border-l-blue-400/30" />
           </tr>
         </thead>
         <tbody>
@@ -1261,7 +1345,23 @@ function MånedsoversiktTable({
               <Fragment key={year}>
                 {/* Year row: første år = startsaldo (redigerbar); påfølgende år = forrige år summary */}
                 <tr className="bg-muted border-y-2 border-border">
-                  <td className="sticky left-0 bg-muted px-3 py-2 font-bold text-sm border-r border-border">{year}</td>
+                  <td
+                    className="sticky left-0 bg-muted px-3 py-2 font-bold text-sm border-r border-border whitespace-nowrap cursor-pointer select-none hover:text-primary transition-colors"
+                    title={collapsedYears.has(year) ? 'Vis månedene' : 'Skjul månedene'}
+                    onClick={() => setCollapsedYears(prev => {
+                      const next = new Set(prev)
+                      if (next.has(year)) next.delete(year)
+                      else next.add(year)
+                      return next
+                    })}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {collapsedYears.has(year)
+                        ? <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                        : <ChevronDown className="h-3.5 w-3.5 shrink-0" />}
+                      {year}
+                    </span>
+                  </td>
                   {accMeta.map(acc => {
                     if (isFirstYear) {
                       return (
@@ -1334,6 +1434,17 @@ function MånedsoversiktTable({
                       </td>
                     )
                   })()}
+                  {(() => {
+                    // Sum innskudd (egne kontoer + fond) — forrige års totaler
+                    if (isFirstYear) return <td className="border-r-2 border-r-primary/30 px-3 py-2" />
+                    const prevSum = Math.round(prevYearRows.reduce((s, r) =>
+                      s + r.accountBalances.reduce((x, a) => x + a.contribution, 0) + (hasFond ? r.fondContrib : 0), 0))
+                    return (
+                      <td className="border-r-2 border-r-primary/30 px-3 py-2 text-right tabular-nums font-semibold whitespace-nowrap">
+                        {prevSum !== 0 ? prevSum.toLocaleString('no-NO') : '—'}
+                      </td>
+                    )
+                  })()}
                   {hasPartner && hasBsu && (() => {
                     if (isFirstYear) {
                       return (
@@ -1353,13 +1464,19 @@ function MånedsoversiktTable({
                     }
                     const bsuOpening = prevYearLast?.partnerBsuBalance ?? 0
                     const prevBsuInnskudd = Math.round(prevYearRows.reduce((s, r) => s + r.partnerBsuContrib, 0))
+                    const prevBsuRente = Math.round(prevYearRows.reduce((s, r) => s + (r.partnerBsuInterest ?? 0), 0))
                     return (
                       <td colSpan={2} className="border-r border-border p-0">
                         <div className="flex items-baseline">
                           <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
                             {prevBsuInnskudd > 0 ? prevBsuInnskudd.toLocaleString('no-NO') : '—'}
                           </span>
-                          <span className="flex-1 px-3 py-2 text-right text-violet-300 font-semibold whitespace-nowrap">{fmtNOK(bsuOpening)}</span>
+                          <span className="flex-1 px-3 py-2 text-right text-violet-300 font-semibold whitespace-nowrap flex items-baseline justify-end">
+                            <span>{fmtNOK(bsuOpening)}</span>
+                            <span className="text-[10px] text-green-400/80 ml-1 min-w-[3.5rem] text-right shrink-0">
+                              {prevBsuRente > 0 ? `(+${prevBsuRente.toLocaleString('no-NO')})` : ''}
+                            </span>
+                          </span>
                         </div>
                       </td>
                     )
@@ -1431,16 +1548,19 @@ function MånedsoversiktTable({
                     )
                   })}
                   {/* Summary columns: show previous year-end values (= this year's opening EK/debt/kjøpekraft) */}
-                  <td className="px-3 py-2 text-right font-mono text-blue-400 font-semibold border-l-2 border-l-red-400/20 border-r border-border whitespace-nowrap">{prevYearLast ? fmtNOK(prevYearLast.totalEK) : '—'}</td>
-                  <td className="px-2 py-2 text-right font-mono text-red-400/50 font-semibold border-r border-border whitespace-nowrap">{prevYearLast?.myDebtBalance ? '-' + fmtNOK(prevYearLast.myDebtBalance) : '—'}</td>
+                  <td className="px-2 py-2 text-right font-mono text-red-400/50 font-semibold border-l-2 border-l-red-400/20 border-r border-border whitespace-nowrap">{prevYearLast?.myDebtBalance ? '-' + fmtNOK(prevYearLast.myDebtBalance) : '—'}</td>
                   {hasPartner && <td className="px-2 py-2 text-right font-mono text-red-400/50 font-semibold border-r border-border whitespace-nowrap">{prevYearLast?.partnerDebtBalance ? '-' + fmtNOK(prevYearLast.partnerDebtBalance) : '—'}</td>}
                   <td className="px-2 py-2 text-right font-mono text-red-400/70 font-semibold border-r-2 border-r-red-400/30 whitespace-nowrap">{prevYearLast?.debtBalance ? '-' + fmtNOK(prevYearLast.debtBalance) : '—'}</td>
                   <td className="px-3 py-2 text-right font-mono text-green-400 font-semibold border-l-2 border-l-green-400/20 border-r border-border whitespace-nowrap">{prevYearLast?.maxKjøpesum ? fmtNOK(prevYearLast.maxKjøpesum) : '—'}</td>
                   {myAnnualIncome > 0 && <td className="px-3 py-2 text-right font-mono text-green-400/70 font-semibold border-r border-border whitespace-nowrap">{prevYearLast?.maxKjøpesumMeg ? fmtNOK(prevYearLast.maxKjøpesumMeg) : '—'}</td>}
                   {hasPartner && partnerOnlyAnnualIncome > 0 && <td className="px-3 py-2 text-right font-mono text-violet-400/70 font-semibold whitespace-nowrap">{prevYearLast?.maxKjøpesumPartner ? fmtNOK(prevYearLast.maxKjøpesumPartner) : '—'}</td>}
+                  <td className="sticky right-0 z-10 bg-muted px-3 py-2 text-right font-mono text-blue-400 font-semibold border-l-2 border-l-blue-400/30 whitespace-nowrap">
+                    {prevYearLast ? fmtNOK(prevYearLast.totalEK) : '—'}
+                    <span className="block text-[9px] font-sans font-normal text-muted-foreground">inngående</span>
+                  </td>
                 </tr>
-                {/* Monthly rows */}
-                {yearData.map(row => (
+                {/* Monthly rows — skjules når året er kollapset */}
+                {!collapsedYears.has(year) && yearData.map(row => (
                   <tr key={`${row.year}-${row.month}`} className="border-b border-border/20 hover:bg-muted/10">
                     <td className="sticky left-0 bg-background px-3 py-1 text-muted-foreground border-r border-border whitespace-nowrap">
                       {FULL_MONTH_NAMES[row.month - 1]}
@@ -1503,11 +1623,24 @@ function MånedsoversiktTable({
                         </div>
                       </td>
                     )}
+                    {(() => {
+                      const sum = Math.round(row.accountBalances.reduce((s, a) => s + a.contribution, 0) + (hasFond ? row.fondContrib : 0))
+                      return (
+                        <td className="border-r-2 border-r-primary/30 px-3 py-1 text-right tabular-nums font-medium whitespace-nowrap">
+                          {sum !== 0 ? sum.toLocaleString('no-NO') : '—'}
+                        </td>
+                      )
+                    })()}
                     {hasPartner && hasBsu && (
                       <td colSpan={2} className="border-r border-border p-0">
                         <div className="flex items-center">
                           <span className="flex-1 px-3 py-1 text-right text-muted-foreground whitespace-nowrap">{Math.round(row.partnerBsuContrib).toLocaleString('no-NO')}</span>
-                          <span className="flex-1 px-3 py-1 text-right font-mono text-violet-300 whitespace-nowrap">{fmtNOK(row.partnerBsuBalance)}</span>
+                          <span className="flex-1 px-3 py-1 flex items-baseline justify-end font-mono text-violet-300 whitespace-nowrap">
+                            <span>{fmtNOK(row.partnerBsuBalance)}</span>
+                            <span className="text-[10px] text-green-400/60 ml-1 inline-block min-w-[3.5rem] text-right shrink-0">
+                              {row.partnerBsuInterest > 0 ? `(+${row.partnerBsuInterest.toLocaleString('no-NO')})` : ''}
+                            </span>
+                          </span>
                         </div>
                       </td>
                     )}
@@ -1541,13 +1674,21 @@ function MånedsoversiktTable({
                           </div>
                         </td>
                     ))}
-                    <td className="px-3 py-1 text-right font-mono text-blue-300 border-l-2 border-l-red-400/20 border-r border-border whitespace-nowrap">{fmtNOK(row.totalEK)}</td>
-                    <td className="px-2 py-1 text-right font-mono text-red-400/40 border-r border-border whitespace-nowrap">{row.myDebtBalance > 0 ? '-' + fmtNOK(row.myDebtBalance) : '—'}</td>
+                    <td className="px-2 py-1 text-right font-mono text-red-400/40 border-l-2 border-l-red-400/20 border-r border-border whitespace-nowrap">{row.myDebtBalance > 0 ? '-' + fmtNOK(row.myDebtBalance) : '—'}</td>
                     {hasPartner && <td className="px-2 py-1 text-right font-mono text-red-400/40 border-r border-border whitespace-nowrap">{row.partnerDebtBalance > 0 ? '-' + fmtNOK(row.partnerDebtBalance) : '—'}</td>}
                     <td className="px-2 py-1 text-right font-mono text-red-400/50 border-r-2 border-r-red-400/30 whitespace-nowrap">{row.debtBalance > 0 ? '-' + fmtNOK(row.debtBalance) : '—'}</td>
                     <td className="px-3 py-1 text-right font-mono text-green-300/60 border-l-2 border-l-green-400/20 border-r border-border whitespace-nowrap">{row.maxKjøpesum > 0 ? fmtNOK(row.maxKjøpesum) : '—'}</td>
                     {myAnnualIncome > 0 && <td className="px-3 py-1 text-right font-mono text-green-300/40 border-r border-border whitespace-nowrap">{row.maxKjøpesumMeg > 0 ? fmtNOK(row.maxKjøpesumMeg) : '—'}</td>}
                     {hasPartner && partnerOnlyAnnualIncome > 0 && <td className="px-3 py-1 text-right font-mono text-violet-300/40 whitespace-nowrap">{row.maxKjøpesumPartner > 0 ? fmtNOK(row.maxKjøpesumPartner) : '—'}</td>}
+                    <td className={cn(
+                      'sticky right-0 z-10 bg-background px-3 py-1 text-right font-mono text-blue-300 border-l-2 border-l-blue-400/30 whitespace-nowrap',
+                      goalRow && goalRow.year === row.year && goalRow.month === row.month && 'bg-green-500/15 text-green-300 font-semibold',
+                    )}>
+                      {goalRow && goalRow.year === row.year && goalRow.month === row.month && (
+                        <span className="mr-1" title={`Sparemålet (${fmtNOK(savingsPlanTarget)}) nås denne måneden`}>🎯</span>
+                      )}
+                      {fmtNOK(row.totalEK)}
+                    </td>
                   </tr>
                 ))}
               </Fragment>
