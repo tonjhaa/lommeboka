@@ -143,6 +143,13 @@ export interface ScenarioInput {
   createdAt: number
   /** Om dette er basisscenario */
   isBase?: boolean
+  /** Øyeblikksbilde fra «Bruk min profil» — grunnlag for ferskhets-indikatoren */
+  bridgeSnapshot?: {
+    syncedAt: number
+    equity: number
+    grossIncome: number
+    existingDebt: number
+  }
 }
 
 // ------------------------------------------------------------

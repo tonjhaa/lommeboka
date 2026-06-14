@@ -1,24 +1,26 @@
 import { useMemo } from 'react'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { computeEffectiveBalance, projectBalanceMonthly } from '@/domain/economy/savingsCalculator'
+import { calcMaxPurchaseSimple } from '@/utils/maxPurchase'
+import { defaultConfig } from '@/config/default.config'
 
-// ── Norsk boliglånsforskrift 2025 ────────────────────────────
-const EK_KRAV = 0.10           // 10% egenkapital
-const MAX_GJELDSGRAD = 5       // maks gjeld / bruttoinntekt
+// ── Norsk boliglånsforskrift — satser fra boligkalkulatorens konfig ──
+const EK_KRAV = defaultConfig.lendingRules.minEquityPercent / 100
+const MAX_GJELDSGRAD = defaultConfig.lendingRules.maxDebtRatio
 const BSU_MAX_YEARLY = 27500
 const BSU_MAX_TOTAL = 300000
 const BSU_MAX_AGE = 33         // siste år man KAN spare (fyller 34)
 const BSU_TAX_BENEFIT = 0.10   // 10% av innskudd
-const STRESSTEST_MIN = 0.07    // 7% minimumrente
-const STRESSTEST_PP = 0.03     // +3 pp
+const STRESSTEST_MIN = defaultConfig.lendingRules.minStressTestRate / 100
+const STRESSTEST_PP = defaultConfig.lendingRules.stressTestAddition / 100
 const CURRENT_RATE = 0.0425    // 4.25% (norges bank 2026)
 const DEFAULT_SAVINGS_RATE = 3.5  // % per år, sparekonto
 const DEFAULT_FOND_RATE = 7.0     // % per år, indeksfond (historisk snitt)
 
+/** Delegerer til boligkalkulatorens motor (EK-grense med kjøpsgebyrer + gjeldsgrad)
+ *  slik at «maks kjøpesum» betyr det samme i Veikart, Sparing og kalkulatoren. */
 function calcMaxPurchase(equity: number, annualIncome: number, existingDebt: number): number {
-  const maxByEK = equity / EK_KRAV
-  const maxByIncome = (annualIncome * MAX_GJELDSGRAD - existingDebt) + equity
-  return Math.min(maxByEK, maxByIncome)
+  return calcMaxPurchaseSimple(equity, annualIncome, existingDebt, defaultConfig)
 }
 
 function calcStressRate(currentRate: number): number {

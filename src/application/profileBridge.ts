@@ -98,3 +98,52 @@ export function getProfileBridgeSummary(): string[] {
   lines.push('Rente, løpetid og lånetype beholdes som du har satt dem.')
   return lines
 }
+
+/** Gjeldende Lommeboka-verdier — brukes av ferskhets-indikatoren i kalkulatoren. */
+export function getCurrentBridgeValues(): { grossIncome: number; equity: number; existingDebt: number } | null {
+  const { profile, debts } = useEconomyStore.getState()
+  if (!profile) return null
+  return {
+    grossIncome: calcBridgeIncome(profile),
+    equity: calcBridgeEquity().total,
+    existingDebt: debts.filter(d => d.status !== 'nedbetalt').reduce((s, d) => s + d.currentBalance, 0),
+  }
+}
+
+/**
+ * Henter medsøker-tall fra Partner-dataene (partnerVeikart — samme kilde som
+ * Sparing-månedsoversikten og Veikart bruker).
+ */
+export function extractCoApplicantFromPartner(): {
+  grossIncome: number
+  existingDebt: number
+  label: string
+  equityContribution: number
+  summary: string[]
+} | null {
+  const { partnerVeikart } = useEconomyStore.getState()
+  if (!partnerVeikart?.enabled) return null
+
+  const grossIncome = Math.round(partnerVeikart.annualIncome ?? 0)
+  const existingDebt = Math.round(
+    (partnerVeikart.debts?.length ?? 0) > 0
+      ? partnerVeikart.debts!.reduce((s, d) => s + d.currentBalance, 0)
+      : partnerVeikart.debt ?? 0
+  )
+  const equityContribution = Math.round(
+    (partnerVeikart.accounts ?? []).reduce((s, a) => s + a.balance, 0) +
+    (partnerVeikart.bsu ?? 0) +
+    (partnerVeikart.fondCurrentValue ?? 0)
+  )
+  const label = partnerVeikart.partnerName || 'Partner'
+
+  const summary = [
+    `${label}: bruttoårslønn ${grossIncome.toLocaleString('no-NO')} kr (fra Partner-fanen)`,
+    `${label}: egenkapital ${equityContribution.toLocaleString('no-NO')} kr (kontoer + BSU + fond)`,
+  ]
+  if (existingDebt > 0) {
+    summary.push(`${label}: eksisterende gjeld ${existingDebt.toLocaleString('no-NO')} kr`)
+  }
+
+  return { grossIncome, existingDebt, label, equityContribution, summary }
+}

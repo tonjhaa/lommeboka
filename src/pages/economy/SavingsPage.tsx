@@ -4,7 +4,7 @@ import { usePartnerStore } from '@/application/usePartnerStore'
 import { usePartnershipStore } from '@/store/usePartnershipStore'
 import { buildPartnerVeikartPatch } from '@/domain/economy/syncPartnerToVeikart'
 import { useEconomyStore } from '@/application/useEconomyStore'
-import { Plus, Trash2, Upload, ChevronDown, ChevronUp, ChevronRight, Repeat2, Pencil, Check, X, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, Upload, ChevronDown, ChevronUp, ChevronRight, Repeat2, Pencil, Check, X, AlertTriangle, Home } from 'lucide-react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,8 @@ import {
   getEffectiveRateFromTiers,
 } from '@/domain/economy/savingsCalculator'
 import { calcMaxPurchase, BSU_MAX_TOTAL } from '@/hooks/useVeikart'
+import { defaultConfig } from '@/config/default.config'
+import type { ScenarioInput } from '@/types'
 import type {
   SavingsAccount,
   SavingsGoal,
@@ -1020,6 +1022,8 @@ function MånedsoversiktTable({
         partnerFondBalance: Math.round(partnerFondBal),
         partnerFondContrib: Math.round(partnerFondMonthly),
         totalEK,
+        myEK: Math.round(myEK),
+        partnerEK: Math.round(partnerEK),
         maxKjøpesum,
         maxKjøpesumMeg,
         maxKjøpesumPartner,
@@ -1036,6 +1040,50 @@ function MånedsoversiktTable({
 
   // Første måned der sparemålet nås (🎯-markør i Total EK-kolonnen)
   const goalRow = savingsPlanTarget > 0 ? monthRows.find(r => r.totalEK >= savingsPlanTarget) : undefined
+
+  // Åpne en fremtidsmåned som ferdig utfylt scenario i boligkalkulatoren
+  const addScenario = useAppStore((s) => s.addScenario)
+  function openAsScenario(row: (typeof monthRows)[number]) {
+    const growthFactor = Math.pow(1 + salaryGrowthPct / 100, row.year - now.getFullYear())
+    const myIncome = Math.round(myAnnualIncome * growthFactor)
+    const partnerIncome = hasPartner ? Math.round(partnerOnlyAnnualIncome * growthFactor) : 0
+    const withPartner = hasPartner && partnerIncome > 0
+
+    const scenario: ScenarioInput = {
+      id: crypto.randomUUID(),
+      label: `Boligkjøp ${FULL_MONTH_NAMES[row.month - 1].toLowerCase()} ${row.year}`,
+      createdAt: Date.now(),
+      property: {
+        // Maks kjøpesum som utgangspris — rundet til nærmeste 50k
+        price: Math.max(500_000, Math.round(row.maxKjøpesum / 50_000) * 50_000),
+        type: 'leilighet',
+        ownershipType: 'selveier',
+        sharedDebt: 0,
+        monthlyFee: 4_000,
+        propertyTax: 0,
+      },
+      household: {
+        primaryApplicant: { grossIncome: myIncome, existingDebt: row.myDebtBalance, label: 'Meg' },
+        ...(withPartner
+          ? { coApplicant: { grossIncome: partnerIncome, existingDebt: row.partnerDebtBalance, label: partnerVeikart.partnerName ?? 'Partner' } }
+          : {}),
+        adults: withPartner ? 2 : 1,
+        children: 0,
+      },
+      loanParameters: {
+        equity: Math.round(row.totalEK),
+        interestRate: defaultConfig.loanDefaults.defaultInterestRate,
+        loanTermYears: defaultConfig.loanDefaults.defaultLoanTermYears,
+        loanType: 'annuitet',
+        extraMonthlyExpenses: 0,
+      },
+      ...(withPartner
+        ? { distribution: { primaryShare: 50, primaryEquityContribution: row.myEK, coApplicantEquityContribution: row.partnerEK } }
+        : {}),
+    }
+    addScenario(scenario) // setter også aktivt scenario
+    setCurrentView('calculator')
+  }
 
   // Column spans for group headers (+1 = Sum innskudd-kolonnen)
   const userCols = accMeta.length * 2 + (hasFond ? 2 : 0) + 1
@@ -1561,9 +1609,20 @@ function MånedsoversiktTable({
                 </tr>
                 {/* Monthly rows — skjules når året er kollapset */}
                 {!collapsedYears.has(year) && yearData.map(row => (
-                  <tr key={`${row.year}-${row.month}`} className="border-b border-border/20 hover:bg-muted/10">
+                  <tr key={`${row.year}-${row.month}`} className="border-b border-border/20 hover:bg-muted/10 group/mrow">
                     <td className="sticky left-0 bg-background px-3 py-1 text-muted-foreground border-r border-border whitespace-nowrap">
-                      {FULL_MONTH_NAMES[row.month - 1]}
+                      <span className="flex items-center justify-between gap-1.5">
+                        {FULL_MONTH_NAMES[row.month - 1]}
+                        {row.maxKjøpesum > 0 && (
+                          <button
+                            onClick={() => openAsScenario(row)}
+                            title={`Åpne ${FULL_MONTH_NAMES[row.month - 1].toLowerCase()} ${row.year} som scenario i boligkalkulatoren (EK ${fmtNOK(row.totalEK)}, maks kjøpesum ${fmtNOK(row.maxKjøpesum)})`}
+                            className="opacity-0 group-hover/mrow:opacity-60 hover:!opacity-100 text-muted-foreground hover:text-primary transition-opacity shrink-0"
+                          >
+                            <Home className="h-3 w-3" />
+                          </button>
+                        )}
+                      </span>
                     </td>
                     {accMeta.map(acc => {
                       const ab = row.accountBalances.find(a => a.id === acc.id)!

@@ -6,7 +6,13 @@ import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
-import { extractLoanInputFromEconomy, getProfileBridgeSummary } from '@/application/profileBridge'
+import {
+  extractLoanInputFromEconomy,
+  getProfileBridgeSummary,
+  getCurrentBridgeValues,
+  extractCoApplicantFromPartner,
+} from '@/application/profileBridge'
+import { formatCurrency } from '@/lib/utils'
 import type { ScenarioInput, ApplicantInput } from '@/types'
 
 interface Props {
@@ -106,23 +112,108 @@ export function HouseholdForm({ scenario }: Props) {
       loanParameters: partial.loanParameters
         ? { ...scenario.loanParameters, equity: partial.loanParameters.equity }
         : scenario.loanParameters,
+      // Øyeblikksbilde for ferskhets-indikatoren
+      bridgeSnapshot: {
+        syncedAt: Date.now(),
+        equity: partial.loanParameters?.equity ?? scenario.loanParameters.equity,
+        grossIncome: partial.household.primaryApplicant.grossIncome,
+        existingDebt: partial.household.primaryApplicant.existingDebt ?? 0,
+      },
     })
     setBridgeSummary(getProfileBridgeSummary())
   }
 
+  function handleUsePartner() {
+    const partner = extractCoApplicantFromPartner()
+    if (!partner) {
+      setBridgeSummary(['Partner er ikke aktivert — koble til eller legg inn partnerdata i Partner-fanen.'])
+      return
+    }
+    // Behold Søker 1s EK-bidrag; partnerens EK legges til totalen
+    const p1EK = scenario.distribution?.primaryEquityContribution
+      ?? (household.coApplicant ? Math.round(scenario.loanParameters.equity * 0.5) : scenario.loanParameters.equity)
+    update(scenario.id, {
+      household: {
+        ...household,
+        adults: Math.max(household.adults, 2),
+        coApplicant: {
+          ...household.coApplicant,
+          grossIncome: partner.grossIncome,
+          existingDebt: partner.existingDebt,
+          label: partner.label,
+        },
+      },
+      distribution: {
+        primaryShare: scenario.distribution?.primaryShare ?? 50,
+        ...scenario.distribution,
+        primaryEquityContribution: p1EK,
+        coApplicantEquityContribution: partner.equityContribution,
+      },
+      loanParameters: { ...scenario.loanParameters, equity: p1EK + partner.equityContribution },
+    })
+    setHasCoApplicant(true)
+    setBridgeSummary(partner.summary)
+  }
+
+  // Ferskhets-indikator: har Lommeboka-tallene endret seg siden forrige synk?
+  const freshness = (() => {
+    const snap = scenario.bridgeSnapshot
+    if (!snap) return null
+    const current = getCurrentBridgeValues()
+    if (!current) return null
+    const diffs: string[] = []
+    if (Math.abs(current.equity - snap.equity) > 1_000) {
+      const d = current.equity - snap.equity
+      diffs.push(`EK ${d > 0 ? '+' : '−'}${formatCurrency(Math.abs(d))}`)
+    }
+    if (Math.abs(current.grossIncome - snap.grossIncome) > 1_000) {
+      const d = current.grossIncome - snap.grossIncome
+      diffs.push(`inntekt ${d > 0 ? '+' : '−'}${formatCurrency(Math.abs(d))}`)
+    }
+    if (Math.abs(current.existingDebt - snap.existingDebt) > 1_000) {
+      const d = current.existingDebt - snap.existingDebt
+      diffs.push(`gjeld ${d > 0 ? '+' : '−'}${formatCurrency(Math.abs(d))}`)
+    }
+    return {
+      date: new Date(snap.syncedAt).toLocaleDateString('no-NO', { day: 'numeric', month: 'short' }),
+      diffs,
+    }
+  })()
+
   return (
     <div className="space-y-5">
-      {/* Bruk min profil-knapp */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-muted-foreground">
-            Hent tall fra Lommeboka automatisk
-          </p>
+      {/* Bruk min profil / Hent partner */}
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          Hent tall fra Lommeboka automatisk
+        </p>
+        <div className="flex gap-2 shrink-0">
+          <Button variant="outline" size="sm" className="text-xs" onClick={handleUseProfile}>
+            Bruk min profil
+          </Button>
+          <Button variant="outline" size="sm" className="text-xs text-violet-400 border-violet-500/40 hover:bg-violet-500/10" onClick={handleUsePartner}>
+            Hent medsøker fra Partner
+          </Button>
         </div>
-        <Button variant="outline" size="sm" className="text-xs" onClick={handleUseProfile}>
-          Bruk min profil
-        </Button>
       </div>
+
+      {/* Ferskhets-indikator */}
+      {freshness && (
+        freshness.diffs.length > 0 ? (
+          <div className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300 flex items-center justify-between gap-2">
+            <span>
+              Hentet fra Lommeboka {freshness.date} — siden da: {freshness.diffs.join(', ')}
+            </span>
+            <button className="underline underline-offset-2 shrink-0" onClick={handleUseProfile}>
+              Oppdater
+            </button>
+          </div>
+        ) : (
+          <p className="text-[11px] text-muted-foreground">
+            ✓ Synket med Lommeboka {freshness.date} — ingen endringer siden.
+          </p>
+        )
+      )}
 
       {bridgeSummary && (
         <div className="rounded-md bg-muted/50 p-2 space-y-0.5">

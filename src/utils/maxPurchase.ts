@@ -124,6 +124,24 @@ function maxPriceByAffordability(
 }
 
 /**
+ * Lettvektsvariant for Veikart og Sparing-månedsoversikten: EK-grensen
+ * (med kjøpsgebyrer, antatt selveier) og gjeldsgradsgrensen — uten
+ * betjeningsevne (krever husstandsdata). Gir samme tall som kalkulatorens
+ * to første grenser, slik at «kjøpekraft» betyr det samme overalt.
+ */
+export function calcMaxPurchaseSimple(
+  equity: number,
+  annualIncome: number,
+  existingDebt: number,
+  config: AppConfig
+): number {
+  if (equity <= 0) return 0
+  const byEquity = maxPriceByEquity(equity, 0, config, 'selveier', false)
+  const byDebtRatio = maxPriceByDebtRatio(equity, 0, existingDebt, annualIncome, config, 'selveier', false)
+  return Math.max(0, Math.min(byEquity, byDebtRatio))
+}
+
+/**
  * Beregner maksimalt kjøpsbeløp fra alle tre regelperspektiver.
  */
 export function analyzeMaxPurchase(
