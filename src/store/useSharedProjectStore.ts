@@ -65,18 +65,25 @@ export const useSharedProjectStore = create<SharedProjectState>((set, get) => ({
   addTransaction: async (tx) => {
     const { partnershipId } = get()
     if (!partnershipId) return
-    await addSharedTransaction(partnershipId, tx)
-    // realtime INSERT vil oppdatere state automatisk
+    const inserted = await addSharedTransaction(partnershipId, tx)
+    // Oppdater lokal state umiddelbart — ikke stol på at realtime-hendelsen kommer fram
+    // (kan være forsinket eller utilgjengelig). onInsert-handleren er idempotent på id,
+    // så vi får ikke dobbeltføring om realtime også leverer samme rad.
+    set((s) => s.transactions.find((t) => t.id === inserted.id)
+      ? s
+      : { transactions: [...s.transactions, inserted] })
   },
 
   updateTransaction: async (id, updates) => {
     await updateSharedTransaction(id, updates)
-    // realtime UPDATE vil oppdatere state automatisk
+    // Oppdater lokalt umiddelbart; realtime UPDATE overskriver med serverversjon når den kommer
+    set((s) => ({ transactions: s.transactions.map((t) => t.id === id ? { ...t, ...updates } : t) }))
   },
 
   removeTransaction: async (id) => {
     await removeSharedTransaction(id)
-    // realtime DELETE vil oppdatere state automatisk
+    // Fjern lokalt umiddelbart; realtime DELETE er idempotent om den også kommer
+    set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) }))
   },
 
   migrateFrom: async (personalTxs) => {
