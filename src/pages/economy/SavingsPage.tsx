@@ -899,8 +899,9 @@ function MånedsoversiktTable({
         const to = p.toDate ? p.toDate.slice(0, 7) : '9999-99'
         return ym >= from && ym <= to
       }) ?? null
-      const nowISO = now.toISOString().slice(0, 10)
-      const baseFondMnd = fondPortfolio ? getFondContribForMonth(fondPortfolio, year, month, nowISO) : fondMonthlyDeposit
+      // Samme skillelinje som brukerkontoer: engangsinnskudd i inneværende måned
+      // (også de alt gjennomførte) vises i kolonnen, ikke skjules før neste snapshot
+      const baseFondMnd = fondPortfolio ? getFondContribForMonth(fondPortfolio, year, month, prevMonthEndISO) : fondMonthlyDeposit
       const effectiveFondMnd = fondKey in contribOverrides ? contribOverrides[fondKey] : baseFondMnd
       // Bruk faktisk snapshot for denne måneden hvis det finnes
       const snapshotThisMonth = fondPortfolio?.snapshots?.find(s => s.date.slice(0, 7) === ym)
