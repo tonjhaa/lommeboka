@@ -86,19 +86,16 @@ function StatsCard() {
 
   function calcStats(txs: typeof ivfTransactions) {
     const sumSpart = txs.filter((t) => t.type === 'SPARING').reduce((s, t) => s + t.amount, 0)
-    const medisin = txs
-      .filter((t) => t.type === 'KJØP' && t.label.toLowerCase().includes('medisin'))
-      .reduce((s, t) => s + Math.abs(t.amount), 0)
-    const andreKjop = txs
-      .filter((t) => t.type === 'KJØP' && !t.label.toLowerCase().includes('medisin'))
-      .reduce((s, t) => s + Math.abs(t.amount), 0)
+    // Kategorisering styres av transaksjonstypen, ikke av tekst i beskrivelsen.
+    // KJØP vises som «Medisin» i UI-en og telles derfor som medisinutgift.
+    const medisin = txs.filter((t) => t.type === 'KJØP').reduce((s, t) => s + Math.abs(t.amount), 0)
     const svea = txs.filter((t) => t.type === 'SVEA').reduce((s, t) => s + Math.abs(t.amount), 0)
     const sveaCount = txs.filter((t) => t.type === 'SVEA').length
     const donorFaktura = txs.filter((t) => t.type === 'FAKTURA_DONOR').reduce((s, t) => s + Math.abs(t.amount), 0)
     const andreFakturaer = txs.filter((t) => t.type === 'FAKTURA').reduce((s, t) => s + Math.abs(t.amount), 0)
     const annet = txs.filter((t) => t.type === 'ANNET').reduce((s, t) => s + Math.abs(t.amount), 0)
-    const sumUtgifter = medisin + andreKjop + svea + donorFaktura + andreFakturaer + annet
-    return { sumSpart, medisin, andreKjop, svea, sveaCount, donorFaktura, andreFakturaer, annet, sumUtgifter }
+    const sumUtgifter = medisin + svea + donorFaktura + andreFakturaer + annet
+    return { sumSpart, medisin, svea, sveaCount, donorFaktura, andreFakturaer, annet, sumUtgifter }
   }
 
   const past = calcStats(ivfTransactions.filter((t) => t.date <= today))
@@ -136,12 +133,6 @@ function StatsCard() {
             <div className="flex justify-between items-baseline pl-3">
               <span className="text-xs text-muted-foreground">Medisin</span>
               <span className="text-xs tabular-nums text-orange-400">{fmt(stats.medisin, 2)} kr</span>
-            </div>
-          )}
-          {stats.andreKjop > 0 && (
-            <div className="flex justify-between items-baseline pl-3">
-              <span className="text-xs text-muted-foreground">Andre kjøp</span>
-              <span className="text-xs tabular-nums text-orange-400">{fmt(stats.andreKjop, 2)} kr</span>
             </div>
           )}
           {stats.donorFaktura > 0 && (
