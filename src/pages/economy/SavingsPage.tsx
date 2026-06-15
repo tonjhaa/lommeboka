@@ -798,16 +798,30 @@ function MånedsoversiktTable({
 
   const { accMeta, partnerAccMeta, monthRows } = useMemo(() => {
     const nowISO = now.toISOString().split('T')[0]
+    // Skillelinje mellom "ligger i startsaldoen" og "vises i månedskolonnene":
+    // siste dag i forrige måned. Innskudd i inneværende måned (også de som alt er
+    // gjennomført) skal vises i månedsoversikten, ikke skjules i startsaldoen.
+    // Bruk lokale getters til ISO-strengen for å unngå tidssone-forskyvning.
+    const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 12)
+    const prevMonthEndISO = `${prevMonthEnd.getFullYear()}-${String(prevMonthEnd.getMonth() + 1).padStart(2, '0')}-${String(prevMonthEnd.getDate()).padStart(2, '0')}`
     const accMeta = accounts.map(acc => ({
       id: acc.id,
       label: acc.label,
       type: acc.type,
-      startBalance: contribOverrides[`start-${acc.id}`] ?? computeEffectiveBalance(acc, now),
+      // Startsaldo = saldo ved inngangen til inneværende måned (t.o.m. forrige måned)
+      startBalance: contribOverrides[`start-${acc.id}`] ?? computeEffectiveBalance(acc, prevMonthEnd),
       rate: contribOverrides[`rate-${acc.id}`] ?? ([...acc.rateHistory].filter(r => r.fromDate <= nowISO).sort((a, b) => b.fromDate.localeCompare(a.fromDate))[0]?.rate ?? 0),
       tieredRates: acc.tieredRates,
-      getBase: (year: number, month: number) => getBaseContribForMonth(acc, year, month, nowISO),
-      // BSU: innskudd hittil i inneværende år — teller mot årskvoten på 27 500
-      ytdContrib: acc.type === 'BSU' ? computeYTDContributions(acc, now.getFullYear()) : 0,
+      // Innskudd t.o.m. forrige måned ligger i startsaldoen; inneværende måned og
+      // senere vises i kolonnene (inkl. innskudd som alt er gjennomført denne måneden)
+      getBase: (year: number, month: number) => getBaseContribForMonth(acc, year, month, prevMonthEndISO),
+      // BSU-årskvote (27 500): kun innskudd t.o.m. forrige måned er "brukt opp" i
+      // startsaldoen — inneværende måned legges til i simuleringen (unngår dobbelttelling)
+      ytdContrib: acc.type === 'BSU'
+        ? (acc.contributions ?? [])
+            .filter(c => new Date(c.date).getFullYear() === now.getFullYear() && c.date <= prevMonthEndISO)
+            .reduce((s, c) => s + c.amount, 0)
+        : 0,
     }))
 
     // Partner accounts meta — startBalance from overrides
