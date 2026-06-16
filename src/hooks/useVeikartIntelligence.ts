@@ -224,7 +224,9 @@ export function useVeikartIntelligence() {
 
     // ── 3. Fremtidige lønnsoppgjør ────────────────────────────
     for (const opp of lonnsoppgjor) {
-      if (opp.source !== 'forventet') continue
+      // Kun forventede oppgjør som er aktivert i prognosen skal vises som
+      // fremtidig lønnsøkning (samme gating som budsjettprognosen).
+      if (opp.source !== 'forventet' || opp.activeInProjection !== true) continue
       const ym = opp.effectiveDate.slice(0, 7)
       if (!ymInRange(ym)) continue
       const delta = opp.maanedslonn - (opp.forrigeMaanedslonn || grossMonthly)
