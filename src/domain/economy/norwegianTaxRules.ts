@@ -114,7 +114,7 @@ export interface TaxDeductions {
   renteinntekter?: number
   /**
    * Brutto reiseutgifter hjem–jobb.
-   * Fradraget er kun beløpet som overstiger bunnfradraget (14 400 kr for 2025/2026).
+   * Fradraget er kun beløpet som overstiger bunnfradraget (14 400 kr i 2025, 12 000 kr i 2026).
    */
   reisefradragBrutto?: number
   /** Overskudd av utgiftsgodtgjørelse (legges til personinntekt) */

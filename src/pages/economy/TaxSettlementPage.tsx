@@ -11,7 +11,7 @@ import {
 } from 'recharts'
 import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
 import { analyzeTaxSettlements, settlementBalance, projectFullYearWithholding } from '@/domain/economy/taxSettlementCalc'
-import { calcNorwegianTax } from '@/domain/economy/norwegianTaxRules'
+import { calcNorwegianTax, getTaxRules } from '@/domain/economy/norwegianTaxRules'
 import type { NorwegianTaxBreakdown } from '@/domain/economy/norwegianTaxRules'
 import { parseTaxSettlementFromPDF } from '@/features/taxSettlement/taxSettlementParser'
 import { computeBudgetTable } from '@/domain/economy/budgetTableComputer'
@@ -917,7 +917,7 @@ function TaxForecastSection({
             <div className="space-y-1">
               <Label className="text-xs">
                 Arbeidsreiser hjem–jobb (brutto)
-                <span className="text-muted-foreground font-normal ml-1">– 14 400 kr trekkes fra</span>
+                <span className="text-muted-foreground font-normal ml-1">– {getTaxRules(currentYear).reisefradragBunnfradrag.toLocaleString('no-NO')} kr trekkes fra</span>
               </Label>
               <NumberInput value={reisefradrag} onChange={setReisefradrag} suffix="kr" step={500} min={0} />
             </div>
@@ -1150,7 +1150,7 @@ function SkattemeldingSjekkliste({
       id: 'fagforening',
       text: 'Fagforeningsfradrag',
       detail: autoFill.fagforeningskontingent > 0
-        ? `Maks fradrag 8 000 kr/år — du har betalt ca. ${Math.round(autoFill.fagforeningskontingent).toLocaleString('no-NO')} kr`
+        ? `Maks fradrag ${getTaxRules(currentYear).fagforeningsfradragMaks.toLocaleString('no-NO')} kr/år — du har betalt ca. ${Math.round(autoFill.fagforeningskontingent).toLocaleString('no-NO')} kr`
         : 'Ingen fagforeningskontingent registrert',
       warn: autoFill.fagforeningskontingent === 0,
     },
