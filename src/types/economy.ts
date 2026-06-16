@@ -431,6 +431,9 @@ export interface LonnsoppgjorRecord {
   htaTillegg: number            // HTA-tillegg inkludert i økningen (0 = ukjent)
   notes: string
   source: 'slip' | 'manual' | 'forventet'
+  /** Kun relevant for source:'forventet'. Absent/false = ekskludert fra
+   *  budsjettprognosen, true = inkludert. slip/manual brukes alltid. */
+  activeInProjection?: boolean
   /** Forventet utbetalingsdato for etterbetaling (ISO "YYYY-MM-DD") */
   etterbetalingDate?: string
   /** ID til BudgetLine i budgetTemplate hvis etterbetalingen er bokført */

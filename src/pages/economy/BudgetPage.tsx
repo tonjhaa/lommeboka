@@ -87,6 +87,7 @@ export function BudgetPage() {
     removeWithdrawal,
     absenceHireDate,
     lonnsoppgjor,
+    updateLonnsoppgjor,
   } = useActiveEconomyStore()
 
   const now = new Date()
@@ -277,6 +278,17 @@ export function BudgetPage() {
 
   const years = [activeYear - 1, activeYear, activeYear + 1].filter((y) => y >= minYear)
 
+  // Forventet oppgjør som påvirker prognosen for det viste budsjettåret
+  const forventetForYear = useMemo(() =>
+    [...lonnsoppgjor]
+      .filter((r) => r.source === 'forventet' && r.maanedslonn > 0 && Number(r.effectiveDate.slice(0, 4)) === activeYear)
+      .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
+      .at(-1) ?? null,
+    [lonnsoppgjor, activeYear])
+  const forventetAktiv = forventetForYear?.activeInProjection === true
+  const forventetOkning = forventetForYear ? Math.round(forventetForYear.maanedslonn - (forventetForYear.forrigeMaanedslonn || 0)) : 0
+  const forventetMnd = forventetForYear ? MONTH_SHORT[Number(forventetForYear.effectiveDate.slice(5, 7))] : ''
+
   // Total cols = 1 (label) + 12 × 2 (months) + 1 (årssum) = 26
   const TOTAL_COLS = 26
 
@@ -407,6 +419,29 @@ export function BudgetPage() {
           <Upload className="h-3 w-3" /> Last opp slipp
         </Button>
       </div>
+
+      {/* ---- Forventet lønnsoppgjør-indikator ---- */}
+      {forventetForYear && (
+        <div className={`flex items-center gap-2 px-4 py-1.5 border-b text-xs shrink-0 ${
+          forventetAktiv ? 'border-green-500/30 bg-green-500/5 text-green-300' : 'border-amber-500/30 bg-amber-500/5 text-amber-300'
+        }`}>
+          <span>
+            {forventetAktiv
+              ? `Forventet lønnsoppgjør PÅ i prognosen${forventetOkning > 0 ? ` (+${forventetOkning.toLocaleString('no-NO')} kr/mnd fra ${forventetMnd.toLowerCase()})` : ''}`
+              : 'Forventet lønnsoppgjør AV — månedslønn projiseres uten oppgjøret'}
+          </span>
+          <button
+            onClick={() => updateLonnsoppgjor(forventetForYear.id, { activeInProjection: !forventetAktiv })}
+            className={`ml-auto px-2 py-0.5 rounded border transition-colors ${
+              forventetAktiv
+                ? 'border-green-500/40 hover:bg-green-500/20'
+                : 'border-amber-500/40 hover:bg-amber-500/20'
+            }`}
+          >
+            {forventetAktiv ? 'Slå av' : 'Slå på'}
+          </button>
+        </div>
+      )}
 
       {/* ---- Oversikt view ---- */}
       {selectedView === 'oversikt' && (

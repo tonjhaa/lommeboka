@@ -149,7 +149,7 @@ describe('computeBudgetTable — manuelle trekk- og gjeldslinjer', () => {
 describe('computeBudgetTable — lønnsoppgjør som prognosekilde', () => {
   const oppgjor = [
     mkOppgjor({ effectiveDate: '2025-11-01', maanedslonn: 55_844 }),
-    mkOppgjor({ effectiveDate: '2026-05-01', maanedslonn: 57_352, source: 'forventet' }),
+    mkOppgjor({ effectiveDate: '2026-05-01', maanedslonn: 57_352, source: 'forventet', activeInProjection: true }),
   ]
 
   it('bruker gjeldende oppgjør per måned, inkl. forventet oppgjør fremover', () => {
@@ -193,5 +193,31 @@ describe('computeBudgetTable — delsummer', () => {
     expect(fasteSum.isBold).toBe(true)
     expect(fasteSum.cells[0].budget).toBe(-9_000)
     expect(varSum.cells[0].budget).toBe(-4_000)
+  })
+})
+
+describe('computeBudgetTable — forventet lønnsoppgjør toggle', () => {
+  it('forventet med activeInProjection=true brukes i prognosen', () => {
+    const data = compute({ lonnsoppgjor: [mkOppgjor({ effectiveDate: '2026-05-01', maanedslonn: 55_000, source: 'forventet', activeInProjection: true })] })
+    const lonn = data.sections.find((s) => s.key === 'INNTEKTER')!.rows.find((r) => r.id === 'lonn')!
+    expect(lonn.cells[5].budget).toBe(55_000) // juni
+  })
+
+  it('forventet med activeInProjection=false ekskluderes (faller til grunnlønn)', () => {
+    const data = compute({ lonnsoppgjor: [mkOppgjor({ effectiveDate: '2026-05-01', maanedslonn: 55_000, source: 'forventet', activeInProjection: false })] })
+    const lonn = data.sections.find((s) => s.key === 'INNTEKTER')!.rows.find((r) => r.id === 'lonn')!
+    expect(lonn.cells[5].budget).toBe(50_000) // profile.baseMonthly
+  })
+
+  it('forventet uten activeInProjection (undefined) ekskluderes', () => {
+    const data = compute({ lonnsoppgjor: [mkOppgjor({ effectiveDate: '2026-05-01', maanedslonn: 55_000, source: 'forventet' })] })
+    const lonn = data.sections.find((s) => s.key === 'INNTEKTER')!.rows.find((r) => r.id === 'lonn')!
+    expect(lonn.cells[5].budget).toBe(50_000)
+  })
+
+  it('slip/manual brukes alltid uavhengig av flagget', () => {
+    const data = compute({ lonnsoppgjor: [mkOppgjor({ effectiveDate: '2026-05-01', maanedslonn: 55_000, source: 'manual' })] })
+    const lonn = data.sections.find((s) => s.key === 'INNTEKTER')!.rows.find((r) => r.id === 'lonn')!
+    expect(lonn.cells[5].budget).toBe(55_000)
   })
 })
