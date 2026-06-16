@@ -1232,7 +1232,7 @@ function MånedsoversiktTable({
       })()}
       <div className="overflow-auto flex-1 text-xs">
       <table className="border-collapse w-full min-w-max">
-        <thead className="sticky top-0 z-10 bg-background backdrop-blur-none [&_th]:bg-background">
+        <thead className="sticky top-0 z-30 bg-background backdrop-blur-none [&_th]:bg-background">
           {/* Row 1: Person groups */}
           <tr>
             <th className="sticky left-0 bg-background z-20 px-3 py-1 border-r border-border border-b border-border/40" />
@@ -1350,7 +1350,7 @@ function MånedsoversiktTable({
             <th className="sticky left-0 bg-background z-20 px-3 py-1 text-left text-muted-foreground border-r border-border">Måned</th>
             {accMeta.map(acc => (
               <th key={acc.id} colSpan={2} className="border-r border-border p-0">
-                <div className="flex">
+                <div className="grid grid-cols-[6rem_1fr]">
                   <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal" title="Innskudd per måned / Renteopptjening per år">Innskudd</span>
                   <span className="flex-1 px-3 py-1 flex items-center justify-end font-medium"><span className="flex-1 text-right">Saldo</span><span className="shrink-0 min-w-[3.5rem]" /></span>
                 </div>
@@ -1358,7 +1358,7 @@ function MånedsoversiktTable({
             ))}
             {hasFond && (
               <th colSpan={2} className="border-r border-border p-0">
-                <div className="flex">
+                <div className="grid grid-cols-[6rem_1fr]">
                   <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal" title="Innskudd per måned / Renteopptjening per år">Innskudd</span>
                   <span className="flex-1 px-3 py-1 flex items-center justify-end text-teal-400 font-medium"><span className="flex-1 text-right">Saldo</span><span className="shrink-0 min-w-[3.5rem]" /></span>
                 </div>
@@ -1367,7 +1367,7 @@ function MånedsoversiktTable({
             <th className="border-r-2 border-r-primary/30 px-3 py-1 text-right text-muted-foreground font-normal">kr/mnd</th>
             {hasPartner && hasBsu && (
               <th colSpan={2} className="border-r border-border p-0">
-                <div className="flex">
+                <div className="grid grid-cols-[6rem_1fr]">
                   <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal">Innskudd</span>
                   <span className="flex-1 px-3 py-1 flex items-center justify-end text-violet-300 font-medium"><span className="flex-1 text-right">Saldo</span><span className="shrink-0 min-w-[3.5rem]" /></span>
                 </div>
@@ -1375,7 +1375,7 @@ function MånedsoversiktTable({
             )}
             {hasPartnerFond && (
               <th colSpan={2} className="border-r border-border p-0">
-                <div className="flex">
+                <div className="grid grid-cols-[6rem_1fr]">
                   <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal">Innskudd</span>
                   <span className="flex-1 px-3 py-1 flex items-center justify-end text-violet-300 font-medium"><span className="flex-1 text-right">Saldo</span><span className="shrink-0 min-w-[3.5rem]" /></span>
                 </div>
@@ -1383,7 +1383,7 @@ function MånedsoversiktTable({
             )}
             {partnerAccMeta.map(acc => (
               <th key={acc.id} colSpan={2} className="border-r border-border p-0">
-                <div className="flex">
+                <div className="grid grid-cols-[6rem_1fr]">
                   <span className="flex-1 px-3 py-1 text-right text-muted-foreground font-normal" title="Innskudd per måned / Renteopptjening per år">Innskudd</span>
                   <span className="flex-1 px-3 py-1 flex items-center justify-end text-violet-300 font-medium"><span className="flex-1 text-right">Saldo</span><span className="shrink-0 min-w-[3.5rem]" /></span>
                 </div>
@@ -1429,7 +1429,7 @@ function MånedsoversiktTable({
                     if (isFirstYear) {
                       return (
                         <td key={acc.id} colSpan={2} className="border-r border-border p-0">
-                          <div className="flex items-center">
+                          <div className="grid grid-cols-[6rem_1fr] items-center">
                             <span className="flex-1" />
                             <span className="flex-1 px-3 py-2 text-right font-semibold">
                               <InnskuddCell
@@ -1447,7 +1447,7 @@ function MånedsoversiktTable({
                     const prevInnskudd = Math.round(prevYearRows.reduce((s, r) => s + (r.accountBalances.find(a => a.id === acc.id)?.contribution ?? 0), 0))
                     return (
                       <td key={acc.id} colSpan={2} className="border-r border-border p-0">
-                        <div className="flex items-baseline">
+                        <div className="grid grid-cols-[6rem_1fr] items-baseline">
                           <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
                             {prevInnskudd > 0 ? prevInnskudd.toLocaleString('no-NO') : '—'}
                           </span>
@@ -1465,7 +1465,7 @@ function MånedsoversiktTable({
                     if (isFirstYear) {
                       return (
                         <td colSpan={2} className="border-r border-border p-0">
-                          <div className="flex items-center">
+                          <div className="grid grid-cols-[6rem_1fr] items-center">
                             <span className="flex-1" />
                             <span className="flex-1 px-3 py-2 text-right font-semibold text-teal-400">
                               <InnskuddCell
@@ -1483,7 +1483,7 @@ function MånedsoversiktTable({
                     const prevFondInnskudd = Math.round(prevYearRows.reduce((s, r) => s + r.fondContrib, 0))
                     return (
                       <td colSpan={2} className="border-r border-border p-0">
-                        <div className="flex items-baseline">
+                        <div className="grid grid-cols-[6rem_1fr] items-baseline">
                           <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
                             {prevFondInnskudd > 0 ? prevFondInnskudd.toLocaleString('no-NO') : '—'}
                           </span>
@@ -1512,7 +1512,7 @@ function MånedsoversiktTable({
                     if (isFirstYear) {
                       return (
                         <td colSpan={2} className="border-r border-border p-0">
-                          <div className="flex items-center">
+                          <div className="grid grid-cols-[6rem_1fr] items-center">
                             <span className="flex-1" />
                             <span className="flex-1 px-3 py-2 text-right font-semibold text-violet-300">
                               <InnskuddCell
@@ -1530,7 +1530,7 @@ function MånedsoversiktTable({
                     const prevBsuRente = Math.round(prevYearRows.reduce((s, r) => s + (r.partnerBsuInterest ?? 0), 0))
                     return (
                       <td colSpan={2} className="border-r border-border p-0">
-                        <div className="flex items-baseline">
+                        <div className="grid grid-cols-[6rem_1fr] items-baseline">
                           <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
                             {prevBsuInnskudd > 0 ? prevBsuInnskudd.toLocaleString('no-NO') : '—'}
                           </span>
@@ -1548,7 +1548,7 @@ function MånedsoversiktTable({
                     if (isFirstYear) {
                       return (
                         <td colSpan={2} className="border-r border-border p-0">
-                          <div className="flex items-center">
+                          <div className="grid grid-cols-[6rem_1fr] items-center">
                             <span className="flex-1" />
                             <span className="flex-1 px-3 py-2 text-right font-semibold text-violet-300">
                               <InnskuddCell
@@ -1565,7 +1565,7 @@ function MånedsoversiktTable({
                     const prevFondInnskudd = Math.round(prevYearRows.reduce((s, r) => s + r.partnerFondContrib, 0))
                     return (
                       <td colSpan={2} className="border-r border-border p-0">
-                        <div className="flex items-baseline">
+                        <div className="grid grid-cols-[6rem_1fr] items-baseline">
                           <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
                             {prevFondInnskudd > 0 ? prevFondInnskudd.toLocaleString('no-NO') : '—'}
                           </span>
@@ -1578,7 +1578,7 @@ function MånedsoversiktTable({
                     if (isFirstYear) {
                       return (
                         <td key={acc.id} colSpan={2} className="border-r border-border p-0">
-                          <div className="flex items-center">
+                          <div className="grid grid-cols-[6rem_1fr] items-center">
                             <span className="flex-1" />
                             <span className="flex-1 px-3 py-2 text-right font-semibold text-violet-300">
                               <InnskuddCell
@@ -1596,7 +1596,7 @@ function MånedsoversiktTable({
                     const prevInnskudd = Math.round(prevYearRows.reduce((s, r) => s + (r.partnerAccBalances.find(a => a.id === acc.id)?.contribution ?? 0), 0))
                     return (
                       <td key={acc.id} colSpan={2} className="border-r border-border p-0">
-                        <div className="flex items-baseline">
+                        <div className="grid grid-cols-[6rem_1fr] items-baseline">
                           <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
                             {prevInnskudd > 0 ? prevInnskudd.toLocaleString('no-NO') : '—'}
                           </span>
@@ -1643,7 +1643,7 @@ function MånedsoversiktTable({
                       const ab = row.accountBalances.find(a => a.id === acc.id)!
                       return (
                         <td key={acc.id} colSpan={2} className="border-r border-border p-0">
-                          <div className="flex items-center">
+                          <div className="grid grid-cols-[6rem_1fr] items-center">
                             <span className="flex-1 px-3 py-1 flex items-center justify-end">
                               <InnskuddCell
                                 value={ab.contribution}
@@ -1664,7 +1664,7 @@ function MånedsoversiktTable({
                     })}
                     {hasFond && (
                       <td colSpan={2} className="border-r border-border p-0">
-                        <div className="flex items-center">
+                        <div className="grid grid-cols-[6rem_1fr] items-center">
                           <span className="flex-1 px-3 py-1 flex items-center justify-end">
                             {row.fondPeriod && !(`fond-${row.year}-${row.month}` in contribOverrides) ? (
                               <span
@@ -1707,7 +1707,7 @@ function MånedsoversiktTable({
                     })()}
                     {hasPartner && hasBsu && (
                       <td colSpan={2} className="border-r border-border p-0">
-                        <div className="flex items-center">
+                        <div className="grid grid-cols-[6rem_1fr] items-center">
                           <span className="flex-1 px-3 py-1 text-right text-muted-foreground whitespace-nowrap">{Math.round(row.partnerBsuContrib).toLocaleString('no-NO')}</span>
                           <span className="flex-1 px-3 py-1 flex items-baseline justify-end font-mono text-violet-300 whitespace-nowrap">
                             <span>{fmtNOK(row.partnerBsuBalance)}</span>
@@ -1720,7 +1720,7 @@ function MånedsoversiktTable({
                     )}
                     {hasPartnerFond && (
                       <td colSpan={2} className="border-r border-border p-0">
-                        <div className="flex items-center">
+                        <div className="grid grid-cols-[6rem_1fr] items-center">
                           <span className="flex-1 px-3 py-1 text-right text-muted-foreground whitespace-nowrap">
                             {row.partnerFondContrib > 0 ? row.partnerFondContrib.toLocaleString('no-NO') : '—'}
                           </span>
@@ -1730,7 +1730,7 @@ function MånedsoversiktTable({
                     )}
                     {row.partnerAccBalances.map(ab => (
                         <td key={ab.id} colSpan={2} className="border-r border-border p-0">
-                          <div className="flex items-center">
+                          <div className="grid grid-cols-[6rem_1fr] items-center">
                             <span className="flex-1 px-3 py-1 flex items-center justify-end">
                               <InnskuddCell
                                 value={ab.contribution}
