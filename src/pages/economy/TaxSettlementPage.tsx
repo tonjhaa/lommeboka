@@ -10,7 +10,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Cell,
 } from 'recharts'
 import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
-import { analyzeTaxSettlements, settlementBalance } from '@/domain/economy/taxSettlementCalc'
+import { analyzeTaxSettlements, settlementBalance, projectFullYearWithholding } from '@/domain/economy/taxSettlementCalc'
 import { calcNorwegianTax } from '@/domain/economy/norwegianTaxRules'
 import type { NorwegianTaxBreakdown } from '@/domain/economy/norwegianTaxRules'
 import { parseTaxSettlementFromPDF } from '@/features/taxSettlement/taxSettlementParser'
@@ -149,34 +149,12 @@ export function TaxSettlementPage() {
   const skattRow = allRows.find((r) => r.id === 'skatt')
   const ekstraRow = allRows.find((r) => r.id === 'ekstra')
   const bruttoRow = allRows.find((r) => r.id === 'brutto')
-  // Projiser skattetrekk for hele året med korrekte spesialmåneder:
-  //   Juni: 0 kr (ingen lønnsutbetaling — bare feriepenger som ikke gir løpende trekk)
-  //   Desember: halvt normaltrekk (halvskatt for tabelltrekk)
-  //   Øvrige måneder uten slip: månedlig snitt fra faktiske slipper
-  const slipsByMonth = new Map(slipsThisYear.map((m) => [m.month, m]))
-  // Snitt basert på normale måneder (ekskl. juni og desember)
-  const normalSlips = slipsThisYear.filter((m) => m.month !== 6 && m.month !== 12)
-  const avgMonthlyWithheld = normalSlips.length > 0
-    ? normalSlips.reduce((sum, m) =>
-        sum + (m.slipData!.skattetrekk ?? 0) + (m.slipData!.ekstraTrekk ?? 0), 0) / normalSlips.length
-    : 0
   const projectedWithheld = slipMonth > 0
-    ? (() => {
-        let total = 0
-        for (let mo = 1; mo <= 12; mo++) {
-          const slip = slipsByMonth.get(mo)
-          if (slip) {
-            total += (slip.slipData!.skattetrekk ?? 0) + (slip.slipData!.ekstraTrekk ?? 0)
-          } else if (mo === 6) {
-            total += 0 // ingen lønn i juni
-          } else if (mo === 12) {
-            total += Math.round(avgMonthlyWithheld * 0.5)
-          } else {
-            total += Math.round(avgMonthlyWithheld)
-          }
-        }
-        return total
-      })()
+    ? projectFullYearWithholding(slipsThisYear.map((m) => ({
+        month: m.month,
+        skattetrekk: m.slipData!.skattetrekk ?? 0,
+        ekstraTrekk: m.slipData!.ekstraTrekk ?? 0,
+      })))
     : skattRow
       ? Math.abs(skattRow.annualActual) + Math.abs(ekstraRow?.annualActual ?? 0)
       : 0

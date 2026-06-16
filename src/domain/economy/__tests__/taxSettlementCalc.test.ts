@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { analyzeTaxSettlements, settlementBalance } from '../taxSettlementCalc'
+import { projectFullYearWithholding } from '../taxSettlementCalc'
 import type { TaxSettlementRecord } from '@/types/economy'
 
 // Konvensjon (se types/economy.ts og taxSettlementParser):
@@ -72,6 +73,23 @@ describe('analyzeTaxSettlements', () => {
     ]
     const result = analyzeTaxSettlements(records, 1_000)
     expect(result.reasoning.length).toBeGreaterThan(10)
+  })
+})
+
+describe('projectFullYearWithholding', () => {
+  const slips = [1, 2, 3, 4, 5].map((month) => ({ month, skattetrekk: 10_000, ekstraTrekk: 1_000 }))
+
+  it('halverer kun skattetrekk i desember, ikke ekstratrekk', () => {
+    const total = projectFullYearWithholding(slips)
+    // jan–mai faktisk: 5 × 11 000 = 55 000
+    // juni: 0
+    // jul–nov (5 mnd): snitt normal 11 000 → 55 000
+    // des: halvt skattetrekk (5 000) + fullt ekstratrekk (1 000) = 6 000
+    expect(total).toBe(55_000 + 0 + 55_000 + 6_000)
+  })
+
+  it('returnerer 0 uten slipper', () => {
+    expect(projectFullYearWithholding([])).toBe(0)
   })
 })
 
