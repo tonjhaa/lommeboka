@@ -10,8 +10,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Cell,
 } from 'recharts'
 import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
-import { analyzeTaxSettlements } from '@/domain/economy/taxSettlementCalc'
-import { calcNorwegianTax } from '@/domain/economy/norwegianTaxRules'
+import { analyzeTaxSettlements, settlementBalance, projectFullYearWithholding } from '@/domain/economy/taxSettlementCalc'
+import { calcNorwegianTax, getTaxRules } from '@/domain/economy/norwegianTaxRules'
 import type { NorwegianTaxBreakdown } from '@/domain/economy/norwegianTaxRules'
 import { parseTaxSettlementFromPDF } from '@/features/taxSettlement/taxSettlementParser'
 import { computeBudgetTable } from '@/domain/economy/budgetTableComputer'
@@ -149,34 +149,12 @@ export function TaxSettlementPage() {
   const skattRow = allRows.find((r) => r.id === 'skatt')
   const ekstraRow = allRows.find((r) => r.id === 'ekstra')
   const bruttoRow = allRows.find((r) => r.id === 'brutto')
-  // Projiser skattetrekk for hele året med korrekte spesialmåneder:
-  //   Juni: 0 kr (ingen lønnsutbetaling — bare feriepenger som ikke gir løpende trekk)
-  //   Desember: halvt normaltrekk (halvskatt for tabelltrekk)
-  //   Øvrige måneder uten slip: månedlig snitt fra faktiske slipper
-  const slipsByMonth = new Map(slipsThisYear.map((m) => [m.month, m]))
-  // Snitt basert på normale måneder (ekskl. juni og desember)
-  const normalSlips = slipsThisYear.filter((m) => m.month !== 6 && m.month !== 12)
-  const avgMonthlyWithheld = normalSlips.length > 0
-    ? normalSlips.reduce((sum, m) =>
-        sum + (m.slipData!.skattetrekk ?? 0) + (m.slipData!.ekstraTrekk ?? 0), 0) / normalSlips.length
-    : 0
   const projectedWithheld = slipMonth > 0
-    ? (() => {
-        let total = 0
-        for (let mo = 1; mo <= 12; mo++) {
-          const slip = slipsByMonth.get(mo)
-          if (slip) {
-            total += (slip.slipData!.skattetrekk ?? 0) + (slip.slipData!.ekstraTrekk ?? 0)
-          } else if (mo === 6) {
-            total += 0 // ingen lønn i juni
-          } else if (mo === 12) {
-            total += Math.round(avgMonthlyWithheld * 0.5)
-          } else {
-            total += Math.round(avgMonthlyWithheld)
-          }
-        }
-        return total
-      })()
+    ? projectFullYearWithholding(slipsThisYear.map((m) => ({
+        month: m.month,
+        skattetrekk: m.slipData!.skattetrekk ?? 0,
+        ekstraTrekk: m.slipData!.ekstraTrekk ?? 0,
+      })))
     : skattRow
       ? Math.abs(skattRow.annualActual) + Math.abs(ekstraRow?.annualActual ?? 0)
       : 0
@@ -247,8 +225,22 @@ export function TaxSettlementPage() {
 
   // KPI-tall for header
   const withheldYTD = skattetrekkYTD + ekstraTrekkYTD
-  const expectedTax = taxForecast?.expectedTax ?? null
-  const projectedGap = expectedTax !== null ? projectedWithheld - expectedTax : null
+  const expectedTax = taxAutoFill.expectedIncome > 0
+    ? calcNorwegianTax(
+        taxForecast?.expectedIncome ?? taxAutoFill.expectedIncome,
+        currentYear,
+        {
+          fagforeningskontingent: taxForecast?.fagforeningskontingent ?? taxAutoFill.fagforeningskontingent,
+          bsuInnskuddThisYear: taxForecast?.bsuInnskuddThisYear ?? taxAutoFill.bsuInnskuddThisYear,
+          pensjonspremie: taxForecast?.pensjonspremie ?? taxAutoFill.pensjonspremie,
+          gjeldsrenter: taxForecast?.gjeldsrenter ?? taxAutoFill.gjeldsrenter,
+          renteinntekter: taxForecast?.renteinntekter ?? taxAutoFill.renteinntekter,
+          reisefradragBrutto: taxForecast?.reisefradragBrutto ?? 0,
+          utgiftsgodtgjoerelseOverskudd: taxForecast?.utgiftsgodtgjoerelseOverskudd ?? 0,
+        },
+      ).skattEtterFradrag
+    : null
+  const projectedGap = expectedTax !== null ? settlementBalance(projectedWithheld, expectedTax) : null
   const avgHistorical = analysis.records.length > 0 ? Math.round(analysis.avgYearlyRefund) : null
 
   return (
@@ -292,7 +284,7 @@ export function TaxSettlementPage() {
           <p className="text-sm font-semibold font-mono tabular-nums">
             {projectedWithheld > 0 ? fmtNOK(projectedWithheld) : '—'}
           </p>
-          {projectedWithheld > 0 && expectedTax === null && (
+          {projectedWithheld > 0 && taxForecast === null && (
             <p className="text-[10px] text-amber-400/80">Ingen prognose lagt inn</p>
           )}
         </div>
@@ -827,12 +819,12 @@ function TaxForecastSection({
     : null
 
   const estimatedTax = liveBreakdown?.skattEtterFradrag ?? 0
-  const deficit = estimatedTax > 0 && projectedWithheld > 0 ? estimatedTax - projectedWithheld : null
+  const saldo = estimatedTax > 0 && projectedWithheld > 0 ? settlementBalance(projectedWithheld, estimatedTax) : null
   const monthsRemaining = 12 - slipMonth
-  const monthlyAdjustment = deficit !== null && monthsRemaining > 0 ? Math.round(deficit / monthsRemaining) : null
-  const onTrack = deficit !== null && Math.abs(deficit) < 2000
-  const overPaying = deficit !== null && deficit < -2000
-  const underPaying = deficit !== null && deficit > 2000
+  const monthlyAdjustment = saldo !== null && monthsRemaining > 0 ? Math.round(-saldo / monthsRemaining) : null
+  const onTrack = saldo !== null && Math.abs(saldo) < 2000
+  const overPaying = saldo !== null && saldo > 2000
+  const underPaying = saldo !== null && saldo < -2000
   const progressPct = estimatedTax > 0 ? Math.min(100, (projectedWithheld / estimatedTax) * 100) : 0
 
   function applyAutoFill() {
@@ -925,7 +917,7 @@ function TaxForecastSection({
             <div className="space-y-1">
               <Label className="text-xs">
                 Arbeidsreiser hjem–jobb (brutto)
-                <span className="text-muted-foreground font-normal ml-1">– 14 400 kr trekkes fra</span>
+                <span className="text-muted-foreground font-normal ml-1">– {getTaxRules(currentYear).reisefradragBunnfradrag.toLocaleString('no-NO')} kr trekkes fra</span>
               </Label>
               <NumberInput value={reisefradrag} onChange={setReisefradrag} suffix="kr" step={500} min={0} />
             </div>
@@ -971,7 +963,7 @@ function TaxForecastSection({
             ) : overPaying ? (
               <div className="flex items-center gap-2 text-xs text-yellow-400 rounded-md bg-yellow-500/10 border border-yellow-500/20 px-3 py-2">
                 <TrendingDown className="h-3.5 w-3.5 shrink-0" />
-                Du betaler for mye. Prognosen tilsier {fmtNOK(Math.abs(deficit!))} til gode ved oppgjør.
+                Du betaler for mye. Prognosen tilsier {fmtNOK(Math.abs(saldo!))} til gode ved oppgjør.
                 {monthlyAdjustment !== null && monthlyAdjustment < 0 && (
                   <span> Du kan redusere trekk med ca. {fmtNOK(Math.abs(monthlyAdjustment))}/mnd.</span>
                 )}
@@ -979,7 +971,7 @@ function TaxForecastSection({
             ) : underPaying ? (
               <div className="flex items-center gap-2 text-xs text-red-400 rounded-md bg-red-500/10 border border-red-500/20 px-3 py-2">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                Du risikerer restskatt på ~{fmtNOK(deficit!)} ved årets slutt.
+                Du risikerer restskatt på ~{fmtNOK(Math.abs(saldo!))} ved årets slutt.
                 {monthlyAdjustment !== null && monthlyAdjustment > 0 && (
                   <span> Øk trekk med ca. {fmtNOK(monthlyAdjustment)}/mnd.</span>
                 )}
@@ -1023,7 +1015,7 @@ function TaxForecastSection({
                       'font-mono',
                       onTrack ? 'text-green-400' : underPaying ? 'text-red-400' : 'text-yellow-400'
                     )}>
-                      {deficit! >= 0 ? '+' : ''}{fmtNOK(deficit!)}
+                      {saldo! >= 0 ? '+' : ''}{fmtNOK(saldo!)}
                     </span>
                   </div>
                 </div>
@@ -1158,7 +1150,7 @@ function SkattemeldingSjekkliste({
       id: 'fagforening',
       text: 'Fagforeningsfradrag',
       detail: autoFill.fagforeningskontingent > 0
-        ? `Maks fradrag 8 000 kr/år — du har betalt ca. ${Math.round(autoFill.fagforeningskontingent).toLocaleString('no-NO')} kr`
+        ? `Maks fradrag ${getTaxRules(currentYear).fagforeningsfradragMaks.toLocaleString('no-NO')} kr/år — du har betalt ca. ${Math.round(autoFill.fagforeningskontingent).toLocaleString('no-NO')} kr`
         : 'Ingen fagforeningskontingent registrert',
       warn: autoFill.fagforeningskontingent === 0,
     },
