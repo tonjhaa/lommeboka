@@ -122,67 +122,6 @@ export const defaultConfig: AppConfig = {
   },
 
   // ----------------------------------------------------------
-  // SKATTEBEREGNING — Statsbudsjettet 2026
-  // Kilde: Prop. 1 LS (2025–2026), Skatteetaten
-  // ----------------------------------------------------------
-  tax: {
-    /**
-     * Skatt paa alminnelig inntekt: 22%
-     * (inkl. kommune- og fylkesskatt, uendret fra 2025)
-     * Kilde: Skatteetaten 2026
-     */
-    incomeTaxRate: 22,
-
-    /**
-     * Trygdeavgift lonnsinntekt: 7.6%
-     * Kilde: Skatteetaten 2026 (Prop. 1 LS (2025–2026) § 2-3)
-     */
-    nationalInsuranceRate: 7.6,
-
-    /**
-     * Minstefradragssats: 46% av lonnsinntekt
-     * Kilde: Skatteloven § 6-30, Statsbudsjettet 2026
-     */
-    minstefradragRate: 0.46,
-
-    /**
-     * Minstefradrag minimum: 33 100 kr
-     * Kilde: Statsbudsjettet 2026
-     */
-    minstefradragMin: 33_100,
-
-    /**
-     * Minstefradrag maksimum: 108 550 kr
-     * Kilde: Statsbudsjettet 2026
-     */
-    minstefradragMax: 108_550,
-
-    /**
-     * Personfradrag: 110 400 kr
-     * Kilde: Statsbudsjettet 2026
-     */
-    personfradrag: 110_400,
-
-    /**
-     * Trinnskatt 2026-satser (paa personinntekt / bruttolenn)
-     * Kilde: Prop. 1 LS (2025–2026) — Statsbudsjettet 2026
-     *
-     * Trinn 1: 1.7%  over NOK 232 500
-     * Trinn 2: 4.0%  over NOK 324 000
-     * Trinn 3: 13.7% over NOK 748 000
-     * Trinn 4: 16.7% over NOK 1 000 000
-     * Trinn 5: 17.7% over NOK 1 500 000
-     */
-    bracketTax: [
-      { threshold: 232_500,   rate: 1.7  },
-      { threshold: 324_000,   rate: 4.0  },
-      { threshold: 748_000,   rate: 13.7 },
-      { threshold: 1_000_000, rate: 16.7 },
-      { threshold: 1_500_000, rate: 17.7 },
-    ],
-  },
-
-  // ----------------------------------------------------------
   // UI-INNSTILLINGER
   // ----------------------------------------------------------
   ui: {
