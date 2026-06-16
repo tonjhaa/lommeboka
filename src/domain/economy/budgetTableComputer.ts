@@ -182,7 +182,7 @@ export function computeBudgetTable(
   // Grunnlønn fra lønnsoppgjør: siste oppgjør (inkl. forventet) som har trådt i kraft
   // innen utgangen av måneden. null = ingen oppgjør registrert så langt tilbake.
   const oppgjorSorted = lonnsoppgjor
-    .filter((r) => r.maanedslonn > 0)
+    .filter((r) => r.maanedslonn > 0 && (r.source !== 'forventet' || r.activeInProjection === true))
     .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
   const salaryFromOppgjor = (m: number): number | null => {
     const monthEnd = `${year}-${String(m).padStart(2, '0')}-31`
