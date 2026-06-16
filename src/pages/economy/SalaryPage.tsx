@@ -186,7 +186,7 @@ export function SalaryPage() {
 
   // Forventet oppgjør som har trådt i kraft, men ennå ikke vises på slipp
   const pendingOppgjor = [...lonnsoppgjor]
-    .filter(r => r.source === 'forventet' && r.maanedslonn > 0 && r.effectiveDate <= todayIso)
+    .filter(r => r.source === 'forventet' && r.activeInProjection === true && r.maanedslonn > 0 && r.effectiveDate <= todayIso)
     .sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate))
     .find(r => profile && r.maanedslonn > profile.baseMonthly + 100) ?? null
 
@@ -976,6 +976,8 @@ function LonnsoppgjorSection({
       htaTillegg: form.htaTillegg,
       notes: form.notes,
       source: form.source,
+      // Forventede oppgjør starter AV i prognosen — brukeren slår dem på selv
+      ...(form.source === 'forventet' ? { activeInProjection: false } : {}),
     })
     setAdding(false)
     // maanedslonn ER grunnlønn (samme semantikk som slipp-avledede records).
@@ -1174,11 +1176,12 @@ function LonnsoppgjorSection({
                 const realloennPst = oekningPst !== null && kpiVekst !== null ? oekningPst - kpiVekst : null
                 const isEditing = editingId === r.id
                 const isForventet = r.source === 'forventet'
+                const isActiveForventet = isForventet && r.activeInProjection === true
 
                 return (
                   <React.Fragment key={r.id}>
                   <tr
-                    className={`${!isForventet ? 'border-b border-border/40' : ''} ${isForventet ? 'opacity-70' : ''}`}
+                    className={`${!isForventet ? 'border-b border-border/40' : ''} ${isForventet && !isActiveForventet ? 'opacity-60' : ''}`}
                   >
                     <td className="py-1.5 pr-3 font-medium">{r.year}{isForventet && ' *'}</td>
                     <td className="py-1.5 pr-3 text-muted-foreground">
@@ -1262,6 +1265,19 @@ function LonnsoppgjorSection({
                         }`}>
                           {r.source === 'slip' ? 'slipp' : r.source === 'forventet' ? 'forventet' : 'manuelt'}
                         </span>
+                        {isForventet && (
+                          <button
+                            onClick={() => onUpdate(r.id, { activeInProjection: !isActiveForventet })}
+                            title={isActiveForventet ? 'Aktivt i budsjettprognosen — klikk for å slå av' : 'Ikke med i prognosen — klikk for å slå på'}
+                            className={`text-xs px-1.5 py-0.5 rounded border transition-colors ${
+                              isActiveForventet
+                                ? 'border-green-500/40 text-green-400 bg-green-500/10 hover:bg-green-500/20'
+                                : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted/40'
+                            }`}
+                          >
+                            {isActiveForventet ? 'Aktiv i prognose' : 'Inaktiv'}
+                          </button>
+                        )}
                         {(() => {
                           const slip = findSlipForRecord(r)
                           if (!slip || (!slip.slipPdfBase64 && !slip.slipStoragePath)) return null
