@@ -23,7 +23,7 @@ interface YearRules {
   fagforeningsfradragMaks: number
   bsuFradragSats: number                 // 10 %
   bsuMaksInnskuddPerAar: number          // 27 500
-  reisefradragBunnfradrag: number        // 14 400
+  reisefradragBunnfradrag: number        // 12 000 (2026)
   /** Trinnskatt-grenser (threshold = nedre grense for trinnet) */
   trinnskattBrackets: { threshold: number; rate: number }[]
 }
@@ -245,7 +245,7 @@ export function calcNorwegianTax(
  * Over grensen: ordinær sats (7.6 % i 2026).
  * Kilde: Skatteberegning.java / Konstanter.java, skatteetaten/trekktabell
  */
-function calcTrygdeavgift(income: number, rules: YearRules): number {
+export function calcTrygdeavgift(income: number, rules: YearRules): number {
   const fri = rules.avgFriTrygdeavgift
   const sats = rules.trygdeavgiftSats / 100
   // Øvre grense for overgangsregelen: fri * 25% / (25% - sats)
@@ -298,7 +298,7 @@ export function calcMonthlyTaxWithholding(monthlyIncome: number, year: number): 
  * Trinnskatt beregnet etter Skatteetatens offisielle metode.
  * Kilde: Skatteberegning.java, skatteetaten/trekktabell
  */
-function calcTrinnskatt(income: number, brackets: { threshold: number; rate: number }[]): number {
+export function calcTrinnskatt(income: number, brackets: { threshold: number; rate: number }[]): number {
   const sorted = [...brackets].sort((a, b) => a.threshold - b.threshold)
   let tax = 0
   for (let i = 0; i < sorted.length; i++) {
