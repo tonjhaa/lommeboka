@@ -14,6 +14,64 @@
 
 ---
 
+### Task 0: Verifiser og oppdater 2026-satser fra Skatteetatens GitHub
+
+**Files:**
+- Modify: `src/domain/economy/norwegianTaxRules.ts` (`TAX_RULES[2026]`, ~linje 73-93)
+
+Kilde: `github.com/skatteetaten/trekktabell` — `Konstanter.java` for inntektsår 2026
+(samme repo som allerede er sitert i `norwegianTaxRules.ts`). Hent rå Java-fil via
+raw.githubusercontent.com.
+
+**VIKTIG distinksjon:** Konstanter.java inneholder trekkrutine-konstanter. For
+skatteoppgjøret (B-motoren) skal `minstefradragSats` være **46 %** (skatteoppgjør),
+IKKE 40,48 % (trekkrutine — den brukes kun i `calcMonthlyTaxWithholding` og skal
+ikke røres). Personfradrag, trinnskatt-grenser/-satser, trygdeavgift-sats og
+frigrense er felles og hentes fra kilden.
+
+- [ ] **Step 1: Hent de offisielle 2026-konstantene**
+
+Hent `Konstanter.java` (2026) fra skatteetaten/trekktabell via raw-URL. Finn de
+offisielle verdiene for inntektsår 2026:
+- personfradrag (klassefradrag)
+- minstefradrag: maks og evt. nedre grense (skatteoppgjør)
+- trinnskatt: alle grenser (threshold) + satser (rate)
+- trygdeavgift på lønn: sats + frigrense (avgiftsfri grense)
+- fagforeningsfradrag maks
+- BSU: maks innskudd per år
+- reisefradrag bunnfradrag
+
+- [ ] **Step 2: Sammenlign mot nåværende `TAX_RULES[2026]`**
+
+Les `src/domain/economy/norwegianTaxRules.ts` `TAX_RULES[2026]` og list opp ALLE
+avvik mellom de hentede offisielle verdiene og koden. Hvis ingen avvik: noter det
+og hopp til Step 5.
+
+- [ ] **Step 3: Oppdater avvikende verdier**
+
+Rett opp hvert avvik i `TAX_RULES[2026]`. Behold `minstefradragSats: 46` (ikke
+trekkrutinens 40,48). Oppdater kommentaren med kilde-URL og dato.
+
+- [ ] **Step 4: Typecheck + full test**
+
+Run: `npm run typecheck && npx vitest run`
+Expected: Ingen typefeil. Eksisterende tester kan endre forventede tallverdier —
+det håndteres i Task 1 (referansetallene settes mot oppdaterte satser der).
+
+- [ ] **Step 5: Commit (kun hvis noe ble endret)**
+
+```bash
+git add src/domain/economy/norwegianTaxRules.ts
+git commit -m "fix(skatt): verifiser 2026-satser mot Skatteetatens trekktabell-repo
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
+```
+
+Rapporter de hentede offisielle verdiene og avvikene eksplisitt tilbake, slik at
+de kan dobbeltsjekkes.
+
+---
+
 ### Task 1: Eksporter delte algoritmer fra den kanoniske motoren (B)
 
 **Files:**
