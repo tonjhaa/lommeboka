@@ -1231,8 +1231,8 @@ function MånedsoversiktTable({
         )
       })()}
       <div className="overflow-auto flex-1 text-xs">
-      <table className="border-collapse w-full min-w-max">
-        <thead className="sticky top-0 z-30 bg-card [&_th]:bg-card [&_th]:[will-change:transform]">
+      <table className="border-separate border-spacing-0 w-full min-w-max">
+        <thead className="sticky top-0 z-30 bg-card [&_th]:bg-card">
           {/* Row 1: Person groups */}
           <tr>
             <th className="sticky left-0 bg-background z-20 px-3 py-1 border-r border-border border-b border-border/40" />
@@ -1249,7 +1249,7 @@ function MånedsoversiktTable({
             <th className="sticky right-0 z-20 bg-background px-2 py-1 text-center border-l-2 border-l-blue-400/30 border-b-2 border-b-blue-400/30 text-xs font-bold tracking-wide text-blue-400/60 uppercase">EK</th>
           </tr>
           {/* Row 2: Account names */}
-          <tr className="border-b border-border">
+          <tr className="[&>th]:border-b [&>th]:border-border">
             <th className="sticky left-0 bg-background z-20 px-3 py-1.5 text-left border-r border-border w-24" />
             {accMeta.map(acc => (
               <th key={acc.id} colSpan={2} className="px-3 py-1.5 text-center border-r border-border font-semibold whitespace-nowrap">
@@ -1346,7 +1346,7 @@ function MånedsoversiktTable({
             <th className="sticky right-0 z-20 bg-background px-3 py-1.5 text-right border-l-2 border-l-blue-400/30 text-blue-400 font-semibold whitespace-nowrap">Total EK</th>
           </tr>
           {/* Row 3: Innskudd / Saldo sub-headers */}
-          <tr className="border-b-2 border-border">
+          <tr className="[&>th]:border-b-2 [&>th]:border-border">
             <th className="sticky left-0 bg-background z-20 px-3 py-1 text-left text-muted-foreground border-r border-border">Måned</th>
             {accMeta.map(acc => (
               <th key={acc.id} colSpan={2} className="border-r border-border p-0">
@@ -1407,7 +1407,7 @@ function MånedsoversiktTable({
             return (
               <Fragment key={year}>
                 {/* Year row: første år = startsaldo (redigerbar); påfølgende år = forrige år summary */}
-                <tr className="bg-muted border-y-2 border-border">
+                <tr className="bg-muted [&>td]:border-y-2 [&>td]:border-border">
                   <td
                     className="sticky left-0 bg-muted px-3 py-2 font-bold text-sm border-r border-border whitespace-nowrap cursor-pointer select-none hover:text-primary transition-colors"
                     title={collapsedYears.has(year) ? 'Vis månedene' : 'Skjul månedene'}
@@ -1624,7 +1624,7 @@ function MånedsoversiktTable({
                 </tr>
                 {/* Monthly rows — skjules når året er kollapset */}
                 {!collapsedYears.has(year) && yearData.map(row => (
-                  <tr key={`${row.year}-${row.month}`} className="border-b border-border/20 hover:bg-muted/10 group/mrow">
+                  <tr key={`${row.year}-${row.month}`} className="[&>td]:border-b [&>td]:border-border/20 hover:bg-muted/10 group/mrow">
                     <td className="sticky left-0 bg-background px-3 py-1 text-muted-foreground border-r border-border whitespace-nowrap">
                       <span className="flex items-center justify-between gap-1.5">
                         {FULL_MONTH_NAMES[row.month - 1]}
