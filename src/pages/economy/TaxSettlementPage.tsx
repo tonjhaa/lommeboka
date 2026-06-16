@@ -247,7 +247,7 @@ export function TaxSettlementPage() {
 
   // KPI-tall for header
   const withheldYTD = skattetrekkYTD + ekstraTrekkYTD
-  const liveExpectedTax = taxAutoFill.expectedIncome > 0
+  const expectedTax = taxAutoFill.expectedIncome > 0
     ? calcNorwegianTax(
         taxForecast?.expectedIncome ?? taxAutoFill.expectedIncome,
         currentYear,
@@ -262,7 +262,6 @@ export function TaxSettlementPage() {
         },
       ).skattEtterFradrag
     : null
-  const expectedTax = liveExpectedTax
   const projectedGap = expectedTax !== null ? settlementBalance(projectedWithheld, expectedTax) : null
   const avgHistorical = analysis.records.length > 0 ? Math.round(analysis.avgYearlyRefund) : null
 
@@ -307,7 +306,7 @@ export function TaxSettlementPage() {
           <p className="text-sm font-semibold font-mono tabular-nums">
             {projectedWithheld > 0 ? fmtNOK(projectedWithheld) : '—'}
           </p>
-          {projectedWithheld > 0 && expectedTax === null && (
+          {projectedWithheld > 0 && taxForecast === null && (
             <p className="text-[10px] text-amber-400/80">Ingen prognose lagt inn</p>
           )}
         </div>
