@@ -144,7 +144,7 @@ export function TaxCalculatorPage() {
       taxForecast: {
         year: currentYear,
         expectedIncome: result.totalInntekt,
-        expectedTax: result.totalSkatt,
+        expectedTax: result.skattInntekt,
       },
     })
     setCurrentView('economy')
