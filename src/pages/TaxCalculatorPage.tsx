@@ -127,7 +127,7 @@ export function TaxCalculatorPage() {
     () => ({ ...input, arbeidsreiseFradrag: pendlerfradrag }),
     [input, pendlerfradrag]
   )
-  const result = useMemo(() => beregnSkatt(effectiveInput, CURRENT_RATES), [effectiveInput])
+  const result = useMemo(() => beregnSkatt(effectiveInput), [effectiveInput])
 
   function set(field: keyof TaxInput, value: number) {
     setInput((prev) => ({ ...prev, [field]: value }))
