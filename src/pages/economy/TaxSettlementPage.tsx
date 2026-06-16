@@ -10,7 +10,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Cell,
 } from 'recharts'
 import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
-import { analyzeTaxSettlements } from '@/domain/economy/taxSettlementCalc'
+import { analyzeTaxSettlements, settlementBalance } from '@/domain/economy/taxSettlementCalc'
 import { calcNorwegianTax } from '@/domain/economy/norwegianTaxRules'
 import type { NorwegianTaxBreakdown } from '@/domain/economy/norwegianTaxRules'
 import { parseTaxSettlementFromPDF } from '@/features/taxSettlement/taxSettlementParser'
@@ -247,8 +247,23 @@ export function TaxSettlementPage() {
 
   // KPI-tall for header
   const withheldYTD = skattetrekkYTD + ekstraTrekkYTD
-  const expectedTax = taxForecast?.expectedTax ?? null
-  const projectedGap = expectedTax !== null ? projectedWithheld - expectedTax : null
+  const liveExpectedTax = taxAutoFill.expectedIncome > 0
+    ? calcNorwegianTax(
+        taxForecast?.expectedIncome ?? taxAutoFill.expectedIncome,
+        currentYear,
+        {
+          fagforeningskontingent: taxForecast?.fagforeningskontingent ?? taxAutoFill.fagforeningskontingent,
+          bsuInnskuddThisYear: taxForecast?.bsuInnskuddThisYear ?? taxAutoFill.bsuInnskuddThisYear,
+          pensjonspremie: taxForecast?.pensjonspremie ?? taxAutoFill.pensjonspremie,
+          gjeldsrenter: taxForecast?.gjeldsrenter ?? taxAutoFill.gjeldsrenter,
+          renteinntekter: taxForecast?.renteinntekter ?? taxAutoFill.renteinntekter,
+          reisefradragBrutto: taxForecast?.reisefradragBrutto ?? 0,
+          utgiftsgodtgjoerelseOverskudd: taxForecast?.utgiftsgodtgjoerelseOverskudd ?? 0,
+        },
+      ).skattEtterFradrag
+    : null
+  const expectedTax = liveExpectedTax
+  const projectedGap = expectedTax !== null ? settlementBalance(projectedWithheld, expectedTax) : null
   const avgHistorical = analysis.records.length > 0 ? Math.round(analysis.avgYearlyRefund) : null
 
   return (
@@ -827,12 +842,12 @@ function TaxForecastSection({
     : null
 
   const estimatedTax = liveBreakdown?.skattEtterFradrag ?? 0
-  const deficit = estimatedTax > 0 && projectedWithheld > 0 ? estimatedTax - projectedWithheld : null
+  const saldo = estimatedTax > 0 && projectedWithheld > 0 ? settlementBalance(projectedWithheld, estimatedTax) : null
   const monthsRemaining = 12 - slipMonth
-  const monthlyAdjustment = deficit !== null && monthsRemaining > 0 ? Math.round(deficit / monthsRemaining) : null
-  const onTrack = deficit !== null && Math.abs(deficit) < 2000
-  const overPaying = deficit !== null && deficit < -2000
-  const underPaying = deficit !== null && deficit > 2000
+  const monthlyAdjustment = saldo !== null && monthsRemaining > 0 ? Math.round(-saldo / monthsRemaining) : null
+  const onTrack = saldo !== null && Math.abs(saldo) < 2000
+  const overPaying = saldo !== null && saldo > 2000
+  const underPaying = saldo !== null && saldo < -2000
   const progressPct = estimatedTax > 0 ? Math.min(100, (projectedWithheld / estimatedTax) * 100) : 0
 
   function applyAutoFill() {
@@ -971,7 +986,7 @@ function TaxForecastSection({
             ) : overPaying ? (
               <div className="flex items-center gap-2 text-xs text-yellow-400 rounded-md bg-yellow-500/10 border border-yellow-500/20 px-3 py-2">
                 <TrendingDown className="h-3.5 w-3.5 shrink-0" />
-                Du betaler for mye. Prognosen tilsier {fmtNOK(Math.abs(deficit!))} til gode ved oppgjør.
+                Du betaler for mye. Prognosen tilsier {fmtNOK(Math.abs(saldo!))} til gode ved oppgjør.
                 {monthlyAdjustment !== null && monthlyAdjustment < 0 && (
                   <span> Du kan redusere trekk med ca. {fmtNOK(Math.abs(monthlyAdjustment))}/mnd.</span>
                 )}
@@ -979,7 +994,7 @@ function TaxForecastSection({
             ) : underPaying ? (
               <div className="flex items-center gap-2 text-xs text-red-400 rounded-md bg-red-500/10 border border-red-500/20 px-3 py-2">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                Du risikerer restskatt på ~{fmtNOK(deficit!)} ved årets slutt.
+                Du risikerer restskatt på ~{fmtNOK(Math.abs(saldo!))} ved årets slutt.
                 {monthlyAdjustment !== null && monthlyAdjustment > 0 && (
                   <span> Øk trekk med ca. {fmtNOK(monthlyAdjustment)}/mnd.</span>
                 )}
@@ -1023,7 +1038,7 @@ function TaxForecastSection({
                       'font-mono',
                       onTrack ? 'text-green-400' : underPaying ? 'text-red-400' : 'text-yellow-400'
                     )}>
-                      {deficit! >= 0 ? '+' : ''}{fmtNOK(deficit!)}
+                      {saldo! >= 0 ? '+' : ''}{fmtNOK(saldo!)}
                     </span>
                   </div>
                 </div>

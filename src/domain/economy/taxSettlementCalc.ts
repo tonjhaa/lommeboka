@@ -66,3 +66,12 @@ export function analyzeTaxSettlements(
     reasoning,
   }
 }
+
+/**
+ * Skatteoppgjørs-saldo. Positivt = til gode (du får penger),
+ * negativt = restskatt (du skylder). Samme konvensjon som
+ * TaxSettlementRecord.skattTilGodeEllerRest.
+ */
+export function settlementBalance(innbetaltTrekk: number, beregnetInntektsskatt: number): number {
+  return Math.round(innbetaltTrekk - beregnetInntektsskatt)
+}

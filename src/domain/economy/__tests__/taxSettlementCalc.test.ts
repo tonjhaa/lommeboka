@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { analyzeTaxSettlements } from '../taxSettlementCalc'
+import { analyzeTaxSettlements, settlementBalance } from '../taxSettlementCalc'
 import type { TaxSettlementRecord } from '@/types/economy'
 
 // Konvensjon (se types/economy.ts og taxSettlementParser):
@@ -72,5 +72,17 @@ describe('analyzeTaxSettlements', () => {
     ]
     const result = analyzeTaxSettlements(records, 1_000)
     expect(result.reasoning.length).toBeGreaterThan(10)
+  })
+})
+
+describe('settlementBalance — fortegn (positivt = til gode)', () => {
+  it('trekk > skatt → positivt (til gode)', () => {
+    expect(settlementBalance(120_000, 100_000)).toBe(20_000)
+  })
+  it('trekk < skatt → negativt (restskatt)', () => {
+    expect(settlementBalance(90_000, 100_000)).toBe(-10_000)
+  })
+  it('likt → 0', () => {
+    expect(settlementBalance(100_000, 100_000)).toBe(0)
   })
 })
