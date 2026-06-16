@@ -89,7 +89,7 @@ export function analyzeAffordability(
 
   const primaryGross = household.primaryApplicant.grossIncome
   const coGross = household.coApplicant?.grossIncome
-  const monthlyNetIncome = calcHouseholdMonthlyNetIncome(primaryGross, coGross, config.tax)
+  const monthlyNetIncome = calcHouseholdMonthlyNetIncome(primaryGross, coGross)
 
   const sifoExpenses = calcSIFOExpenses(household, config.sifo)
 

@@ -98,7 +98,7 @@ function maxPriceByAffordability(
 ): number {
   const primaryGross = household.primaryApplicant.grossIncome
   const coGross = household.coApplicant?.grossIncome
-  const monthlyNetIncome = calcHouseholdMonthlyNetIncome(primaryGross, coGross, config.tax)
+  const monthlyNetIncome = calcHouseholdMonthlyNetIncome(primaryGross, coGross)
 
   const stressRate = calcStressTestRate(interestRate, config.lendingRules)
 
