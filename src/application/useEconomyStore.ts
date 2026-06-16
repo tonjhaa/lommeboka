@@ -1205,9 +1205,16 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 19,
+      version: 20,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
+        // v19 → v20: forventede lønnsoppgjør slås AV i prognosen som standard.
+        // Brukeren slår på de hen stoler på. (LonnsoppgjorRecord er importert i denne fila.)
+        if (fromVersion < 20 && Array.isArray(state.lonnsoppgjor)) {
+          state.lonnsoppgjor = (state.lonnsoppgjor as LonnsoppgjorRecord[]).map((r) =>
+            r.source === 'forventet' ? { ...r, activeInProjection: false } : r,
+          )
+        }
         // v1 → v2: inkluder artskode 1501 (husleiekompensasjon) i fixedAdditions
         if (fromVersion < 2 && state.profile && state.monthHistory) {
           const history = state.monthHistory as Array<{ year: number; month: number; slipData?: { fasteTillegg?: Array<{ artskode: string; navn: string; belop: number }> } }>
