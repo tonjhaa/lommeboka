@@ -151,10 +151,6 @@ export const useAppStore = create<AppState>()(
           state.config = {
             ...defaultConfig,
             ...(state.config as object),
-            tax: {
-              ...defaultConfig.tax,
-              ...((state.config as Record<string, unknown>).tax as object | undefined),
-            },
           }
         }
         return state

@@ -465,27 +465,6 @@ export interface LoanDefaultsConfig {
   defaultLoanType: 'annuitet' | 'serie'
 }
 
-/** Skatteberegning */
-export interface TaxConfig {
-  /** Skattesats på alminnelig inntekt i prosent */
-  incomeTaxRate: number
-  /** Trygdeavgift i prosent */
-  nationalInsuranceRate: number
-  /** Trinnskatt-trinn (årsgrenser og satser) */
-  bracketTax: {
-    threshold: number
-    rate: number
-  }[]
-  /** Minstefradragssats (typisk 0.46) */
-  minstefradragRate: number
-  /** Minstefradrag minimum i NOK */
-  minstefradragMin: number
-  /** Minstefradrag maksimum i NOK */
-  minstefradragMax: number
-  /** Personfradrag i NOK */
-  personfradrag: number
-}
-
 /** UI-konfigurasjon */
 export interface UIConfig {
   /** Standard tema */
@@ -512,8 +491,6 @@ export interface AppConfig {
   lendingRules: LendingRulesConfig
   /** Standardverdier for lån */
   loanDefaults: LoanDefaultsConfig
-  /** Skattekonfigurasjon */
-  tax: TaxConfig
   /** UI-konfigurasjon */
   ui: UIConfig
 }
