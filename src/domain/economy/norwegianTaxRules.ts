@@ -77,12 +77,13 @@ const TAX_RULES: Record<number, YearRules> = {
     personfradrag: 114_540,
     minstefradragSats: 46,
     minstefradragMaks: 95_700,
-    minstefradragMin: 32_000,
+    minstefradragMin: 32_000,   // nedre grense for hjemmehørende lønnsmottakere — ikke publisert i satser-tabellen, uendret fra 2025
     fagforeningsfradragMaks: 8_700,
     bsuFradragSats: 10,
     bsuMaksInnskuddPerAar: 27_500,
-    reisefradragBunnfradrag: 14_400,
-    // Kilde: github.com/skatteetaten/trekktabell – Konstanter.java 2026
+    reisefradragBunnfradrag: 12_000,
+    // Kilde (trekkrutine): https://raw.githubusercontent.com/skatteetaten/trekktabell/master/src/main/java/no/skatteetaten/fastsetting/formueinntekt/forskudd/trekkrutine2026/Konstanter.java (hentet 2026-06-16)
+    // Kilde (skatteoppgjør/satser): https://www.regjeringen.no/no/tema/okonomi-og-budsjett/skatter-og-avgifter/skatte-og-avgiftssatser/skattesatser-2026/id3121978/ (hentet 2026-06-16)
     trinnskattBrackets: [
       { threshold: 226_100, rate: 1.7 },
       { threshold: 318_300, rate: 4.0 },
