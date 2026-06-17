@@ -1,26 +1,6 @@
-import { lazy, Suspense, Component, useEffect } from 'react'
+import { Suspense, Component, useEffect } from 'react'
 import type { ReactNode } from 'react'
-
-/* Auto-reload ved stale cache etter ny deploy (Failed to fetch dynamically imported module).
- * Prøver å laste én ekstra gang, deretter gir opp og viser feilmelding.  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function lazyWithRetry<T extends React.ComponentType<any>>(
-  factory: () => Promise<{ default: T }>
-): React.LazyExoticComponent<T> {
-  return lazy(async () => {
-    try {
-      return await factory()
-    } catch (e) {
-      const key = `lazy-reload-${factory.toString().slice(0, 60)}`
-      if (!sessionStorage.getItem(key)) {
-        sessionStorage.setItem(key, '1')
-        window.location.reload()
-        return new Promise<{ default: T }>(() => {})
-      }
-      throw e
-    }
-  })
-}
+import { lazyWithRetry } from '@/lib/lazyWithRetry'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { useAppStore } from '@/store/useAppStore'
 import type { EconomySubPage } from '@/store/useAppStore'

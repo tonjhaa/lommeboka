@@ -1,9 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function lazyWithRetry<T extends React.ComponentType<any>>(f: () => Promise<{ default: T }>): React.LazyExoticComponent<T> {
-  return lazy(async () => { try { return await f() } catch (e) { const k = `lazy-reload-${f.toString().slice(0,60)}`; if (!sessionStorage.getItem(k)) { sessionStorage.setItem(k,'1'); window.location.reload(); return new Promise<{default:T}>(()=>{}) } throw e } })
-}
+import { Suspense, useEffect, useState } from 'react'
+import { lazyWithRetry } from '@/lib/lazyWithRetry'
 import { useAppStore } from '@/store/useAppStore'
 import { useNewScenario } from '@/hooks/useNewScenario'
 import { useAllCalculations } from '@/hooks/useCalculator'
