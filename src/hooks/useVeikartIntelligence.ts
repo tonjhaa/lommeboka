@@ -3,6 +3,7 @@ import { useEconomyStore } from '@/application/useEconomyStore'
 import { computeEffectiveBalance } from '@/domain/economy/savingsCalculator'
 import { computeBudgetTable } from '@/domain/economy/budgetTableComputer'
 import { forecastJune } from '@/domain/economy/holidayPayCalculator'
+import { settlementBalance } from '@/domain/economy/taxSettlementCalc'
 
 // ── Typer ────────────────────────────────────────────────────────
 
@@ -80,6 +81,34 @@ export function useVeikartIntelligence() {
     const nowYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     const maxDate = new Date(now.getFullYear(), now.getMonth() + PROJECTION_MONTHS, 1)
     const maxYM = `${maxDate.getFullYear()}-${String(maxDate.getMonth() + 1).padStart(2, '0')}`
+
+    // Budsjettets trekktabell-projeksjon for inneværende år — samme kilde som
+    // Skatt-fanen, så skatteoppgjør-estimatet under matcher (ikke naiv ×12/mnd).
+    // Beregnes én gang og gjenbrukes til både skatteoppgjør-event og budgetSurplus.
+    let budgetWithheldAnnual: number | null = null
+    let budgetOverskuddCell: { budget: number; actual: number | null } | undefined
+    if (profile) {
+      const cy = now.getFullYear()
+      const juneFc = forecastJune(cy, monthHistory, profile, atfEntries)
+      const yearOv = Object.fromEntries(
+        Object.entries(budgetOverrides)
+          .filter(([k]) => k.startsWith(`${cy}:`))
+          .map(([k, v]) => [k.slice(String(cy).length + 1), v]),
+      )
+      const bt = computeBudgetTable(
+        cy, profile, budgetTemplate, monthHistory, atfEntries,
+        savingsAccounts, debts, subscriptions, insurances,
+        yearOv, temporaryPayEntries, juneFc ?? undefined,
+        false, [], fondPortfolio,
+      )
+      const rows = bt?.sections.flatMap(s => s.rows) ?? []
+      const skattR = rows.find(r => r.id === 'skatt')
+      const ekstraR = rows.find(r => r.id === 'ekstra')
+      if (skattR) {
+        budgetWithheldAnnual = Math.round(Math.abs(skattR.annualActual) + Math.abs(ekstraR?.annualActual ?? 0))
+      }
+      budgetOverskuddCell = rows.find(r => r.id === 'overskudd')?.cells[now.getMonth()]
+    }
 
     // ── Bruttoinntekt og effektiv skattesats ──────────────────
     const grossMonthly = (profile?.baseMonthly ?? 0) +
@@ -372,9 +401,12 @@ export function useVeikartIntelligence() {
             m.year === forecastYear)
           .sort((a, b) => b.month - a.month)[0]
         if (latestSlip?.slipData) {
-          const ytd = latestSlip.slipData.hittilForskuddstrekk
-          const annualized = Math.round(ytd * 12 / latestSlip.month)
-          const projected = annualized - profile!.taxForecast!.expectedTax
+          // Bruk budsjettets trekktabell-projeksjon (samme som Skatt-fanen) for
+          // trekket; fall tilbake på naiv ×12/mnd kun om budsjett mangler.
+          const expectedTax = profile!.taxForecast!.expectedTax
+          const withheld = budgetWithheldAnnual
+            ?? Math.round(latestSlip.slipData.hittilForskuddstrekk * 12 / latestSlip.month)
+          const projected = settlementBalance(withheld, expectedTax)
           if (Math.abs(projected) > 500) {
             events.push({
               id: `skatt-prognose-${forecastYear}`,
@@ -437,26 +469,8 @@ export function useVeikartIntelligence() {
 
     // ── Budsjett-overskudd (for Veikart-sammenligning) ────────
     let budgetSurplus: number | null = null
-    if (profile) {
-      const currentYear = now.getFullYear()
-      const currentMonth = now.getMonth() + 1
-      const juneForecast = forecastJune(currentYear, monthHistory, profile, atfEntries)
-      const yearOverrides = Object.fromEntries(
-        Object.entries(budgetOverrides)
-          .filter(([k]) => k.startsWith(`${currentYear}:`))
-          .map(([k, v]) => [k.slice(String(currentYear).length + 1), v])
-      )
-      const budgetTable = computeBudgetTable(
-        currentYear, profile, budgetTemplate, monthHistory, atfEntries,
-        savingsAccounts, debts, subscriptions, insurances,
-        yearOverrides, temporaryPayEntries, juneForecast ?? undefined,
-        false, [], fondPortfolio,
-      )
-      const allRows = budgetTable?.sections.flatMap(s => s.rows) ?? []
-      const overskuddCell = allRows.find(r => r.id === 'overskudd')?.cells[currentMonth - 1]
-      if (overskuddCell) {
-        budgetSurplus = overskuddCell.actual ?? overskuddCell.budget
-      }
+    if (budgetOverskuddCell) {
+      budgetSurplus = budgetOverskuddCell.actual ?? budgetOverskuddCell.budget
     }
 
     return {
