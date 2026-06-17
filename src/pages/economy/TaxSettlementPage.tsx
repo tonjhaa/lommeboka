@@ -850,6 +850,12 @@ function TaxForecastSection({
     || reisefradrag !== (saved?.reisefradragBrutto ?? 0)
     || utgiftsgodtgjoerelse !== (saved?.utgiftsgodtgjoerelseOverskudd ?? 0)
 
+  // Grunnlaget er utdatert hvis seksjonens inntekt avviker fra budsjettets nåværende
+  // brutto (f.eks. etter at forventet lønnsoppgjør ble togglet, eller en ny slipp kom).
+  // Vi overskriver ikke stille — bare varsler, så et bevisst egendefinert tall bevares.
+  const grunnlagUtdatert = autoFill.expectedIncome > 0
+    && Math.round(income) !== Math.round(autoFill.expectedIncome)
+
   function handleSave() {
     onSaveForecast({
       expectedIncome: income,
@@ -881,6 +887,23 @@ function TaxForecastSection({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+
+        {grunnlagUtdatert && (
+          <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            <span>
+              Grunnlaget avviker fra budsjettet ({fmtNOK(autoFill.expectedIncome)}). Kalkulatoren bruker {fmtNOK(income)}.
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-auto h-6 px-2 text-xs border-amber-500/40 hover:bg-amber-500/15"
+              onClick={applyAutoFill}
+            >
+              Synkroniser
+            </Button>
+          </div>
+        )}
 
         {/* ── Inntekt ── */}
         <div className="space-y-2">
