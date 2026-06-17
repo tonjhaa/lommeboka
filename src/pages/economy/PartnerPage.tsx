@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { Suspense, useState } from 'react'
 import { lazyWithRetry } from '@/lib/lazyWithRetry'
 import {
   LayoutDashboard, Receipt, Palmtree, Clipboard,
@@ -14,25 +14,25 @@ import { cn } from '@/lib/utils'
 const EconomyDashboard = lazyWithRetry(() =>
   import('./EconomyDashboard').then((m) => ({ default: m.EconomyDashboard }))
 )
-const SalaryPage = lazy(() =>
+const SalaryPage = lazyWithRetry(() =>
   import('./SalaryPage').then((m) => ({ default: m.SalaryPage }))
 )
-const FeriepengePage = lazy(() =>
+const FeriepengePage = lazyWithRetry(() =>
   import('./FeriepengePage').then((m) => ({ default: m.FeriepengePage }))
 )
-const BudgetPage = lazy(() =>
+const BudgetPage = lazyWithRetry(() =>
   import('./BudgetPage').then((m) => ({ default: m.BudgetPage }))
 )
-const SavingsPage = lazy(() =>
+const SavingsPage = lazyWithRetry(() =>
   import('./SavingsPage').then((m) => ({ default: m.SavingsPage }))
 )
-const DebtPage = lazy(() =>
+const DebtPage = lazyWithRetry(() =>
   import('./DebtPage').then((m) => ({ default: m.DebtPage }))
 )
-const AbsencePage = lazy(() =>
+const AbsencePage = lazyWithRetry(() =>
   import('./AbsencePage').then((m) => ({ default: m.AbsencePage }))
 )
-const TaxSettlementPage = lazy(() =>
+const TaxSettlementPage = lazyWithRetry(() =>
   import('./TaxSettlementPage').then((m) => ({ default: m.TaxSettlementPage }))
 )
 type Tab = 'dashbord' | 'lonn' | 'feriepenger' | 'budsjett' | 'sparing' | 'gjeld' | 'fravaer' | 'skatt'
