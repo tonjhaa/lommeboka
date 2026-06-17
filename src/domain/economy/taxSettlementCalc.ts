@@ -115,3 +115,25 @@ export function projectFullYearWithholding(slips: WithholdingSlip[]): number {
   }
   return total
 }
+
+/**
+ * Velger årets forskuddstrekk-prognose for skatteoppgjør-sammenligningen.
+ *
+ * Foretrekker budsjettets trekktabell-baserte projeksjon (skatt + ekstra trekk)
+ * når den finnes — den bruker offisiell trekktabell per måned og teller ATF-topper
+ * kun i månedene de faktisk utbetales, så Skatt-fanen holder seg i takt med
+ * Budsjett-fanen. Faller tilbake på slipp-gjennomsnitt (projectFullYearWithholding)
+ * kun når budsjett-projeksjonen mangler (ingen profil).
+ *
+ * budgetSkattAnnual/budgetEkstraAnnual er budsjettradenes årssum (negative = trekk).
+ */
+export function resolveProjectedWithholding(opts: {
+  budgetSkattAnnual: number | null
+  budgetEkstraAnnual: number
+  slips: WithholdingSlip[]
+}): number {
+  if (opts.budgetSkattAnnual !== null) {
+    return Math.round(Math.abs(opts.budgetSkattAnnual) + Math.abs(opts.budgetEkstraAnnual))
+  }
+  return projectFullYearWithholding(opts.slips)
+}

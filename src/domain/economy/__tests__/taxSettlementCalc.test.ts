@@ -104,3 +104,30 @@ describe('settlementBalance — fortegn (positivt = til gode)', () => {
     expect(settlementBalance(100_000, 100_000)).toBe(0)
   })
 })
+
+import { resolveProjectedWithholding } from '../taxSettlementCalc'
+
+describe('resolveProjectedWithholding — foretrekker budsjettets trekktabell-projeksjon', () => {
+  const slips = [1, 2, 3, 4, 5].map((month) => ({ month, skattetrekk: 10_000, ekstraTrekk: 1_000 }))
+
+  it('bruker budsjett-projeksjonen (skatt + ekstra) når den finnes, ikke slipp-snittet', () => {
+    // Budsjett-rader er negative (trekk): -276 481 skatt, -12 000 ekstra → 288 481
+    const result = resolveProjectedWithholding({
+      budgetSkattAnnual: -276_481,
+      budgetEkstraAnnual: -12_000,
+      slips,
+    })
+    expect(result).toBe(288_481)
+    // og IKKE slipp-snittet (som ville inkludert evt. ATF-topp i snittet)
+    expect(result).not.toBe(projectFullYearWithholding(slips))
+  })
+
+  it('faller tilbake på slipp-snitt når budsjett-projeksjonen mangler', () => {
+    const result = resolveProjectedWithholding({
+      budgetSkattAnnual: null,
+      budgetEkstraAnnual: 0,
+      slips,
+    })
+    expect(result).toBe(projectFullYearWithholding(slips))
+  })
+})

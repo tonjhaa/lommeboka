@@ -10,7 +10,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Cell,
 } from 'recharts'
 import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
-import { analyzeTaxSettlements, settlementBalance, projectFullYearWithholding } from '@/domain/economy/taxSettlementCalc'
+import { analyzeTaxSettlements, settlementBalance, resolveProjectedWithholding } from '@/domain/economy/taxSettlementCalc'
 import { calcNorwegianTax, getTaxRules } from '@/domain/economy/norwegianTaxRules'
 import type { NorwegianTaxBreakdown } from '@/domain/economy/norwegianTaxRules'
 import { parseTaxSettlementFromPDF } from '@/features/taxSettlement/taxSettlementParser'
@@ -149,15 +149,18 @@ export function TaxSettlementPage() {
   const skattRow = allRows.find((r) => r.id === 'skatt')
   const ekstraRow = allRows.find((r) => r.id === 'ekstra')
   const bruttoRow = allRows.find((r) => r.id === 'brutto')
-  const projectedWithheld = slipMonth > 0
-    ? projectFullYearWithholding(slipsThisYear.map((m) => ({
-        month: m.month,
-        skattetrekk: m.slipData!.skattetrekk ?? 0,
-        ekstraTrekk: m.slipData!.ekstraTrekk ?? 0,
-      })))
-    : skattRow
-      ? Math.abs(skattRow.annualActual) + Math.abs(ekstraRow?.annualActual ?? 0)
-      : 0
+  // Bruk budsjettets trekktabell-projeksjon (samme tall som Budsjett-fanen) når den
+  // finnes; den teller ATF-topper kun i utbetalingsmånedene. Fall tilbake på
+  // slipp-snitt kun uten budsjett-tabell (ingen profil).
+  const projectedWithheld = resolveProjectedWithholding({
+    budgetSkattAnnual: skattRow ? skattRow.annualActual : null,
+    budgetEkstraAnnual: ekstraRow?.annualActual ?? 0,
+    slips: slipsThisYear.map((m) => ({
+      month: m.month,
+      skattetrekk: m.slipData!.skattetrekk ?? 0,
+      ekstraTrekk: m.slipData!.ekstraTrekk ?? 0,
+    })),
+  })
   const projectedIncome = bruttoRow
     ? Math.abs(bruttoRow.annualActual)
     : slipMonth > 0 ? Math.round((grossYTD / slipMonth) * 12) : 0
