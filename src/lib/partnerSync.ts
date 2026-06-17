@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react'
 import { supabase } from './supabase'
 import { usePartnerStore } from '@/application/usePartnerStore'
 import { useEconomyStore } from '@/application/useEconomyStore'
@@ -126,7 +127,7 @@ export async function loadPartnerData(partnerId: string): Promise<object | null>
     .from('user_data')
     .select('economy_data')
     .eq('user_id', partnerId)
-    .single()
+    .maybeSingle()
 
   return data?.economy_data ?? null
 }
@@ -165,7 +166,11 @@ export function subscribeToPartnerData(
         if (payload.new?.economy_data) onUpdate(payload.new.economy_data as object)
       },
     )
-    .subscribe()
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        Sentry.captureMessage(`Realtime partner-data ${status} (partner ${partnerId})`, 'warning')
+      }
+    })
 
   return () => { supabase.removeChannel(channel) }
 }

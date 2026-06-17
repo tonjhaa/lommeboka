@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react'
 import { supabase } from './supabase'
 import type { IVFTransactionType } from '@/types/economy'
 
@@ -85,7 +86,11 @@ export function subscribeToSharedProject(
       { event: 'DELETE', schema: 'public', table: 'shared_project_transactions', filter: `partnership_id=eq.${partnershipId}` },
       (p) => onDelete((p.old as { id: string }).id),
     )
-    .subscribe()
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        Sentry.captureMessage(`Realtime shared-project ${status} (partnership ${partnershipId})`, 'warning')
+      }
+    })
 
   return () => { supabase.removeChannel(channel) }
 }
