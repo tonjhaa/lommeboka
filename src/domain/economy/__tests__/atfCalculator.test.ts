@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   calculateATF,
+  calculateATFRates,
   beregnTimesatsATab,
   beregnOT50Sats,
   sumATFByYear,
@@ -249,5 +250,43 @@ describe('sumATFByYear', () => {
     expect(sumATFByYear(entries, 2026)).toBe(8000)
     expect(sumATFByYear(entries, 2025)).toBe(7000)
     expect(sumATFByYear(entries, 2024)).toBe(0)
+  })
+})
+
+describe('calculateATFRates — HTA-tillegg i lønnsgrunnlag', () => {
+  // Grunnlønn 670 132 kr/år (55 844,40/mnd), HTA 1 700/mnd = 20 400/år.
+  // Basis = 690 532. ts = 690 532 / 1850 = 373,26. Hverdag-dagssats = 6 088 kr.
+  // Bekreftet fra ekte Cold Response-slipp april 2026.
+  const GRUNNLONN = 670_132
+  const HTA_AARLIG = 20_400 // 1 700/mnd × 12
+
+  it('uten HTA: hverdag-dagssats ca 5 909 kr', () => {
+    const rates = calculateATFRates(GRUNNLONN, 0)
+    expect(rates.ovingHverdag).toBeCloseTo(5909, 0)
+  })
+
+  it('med HTA 20 400 kr/år: hverdag-dagssats matcher slipp (6 088 kr)', () => {
+    const rates = calculateATFRates(GRUNNLONN, HTA_AARLIG)
+    expect(rates.ovingHverdag).toBeCloseTo(6088, 0)
+  })
+
+  it('med HTA: pr t hverdag-sats matcher slipp (380,50 kr/t)', () => {
+    const rates = calculateATFRates(GRUNNLONN, HTA_AARLIG)
+    expect(rates.ovingPrTimeHverdag).toBeCloseTo(380.50, 1)
+  })
+
+  it('med HTA + fungering 6 406,62/mnd: ovingHverdag × 1,5 ≈ 2250-sats fra slipp (10 157,60)', () => {
+    // U19 (mai 2026): grunnlønn + HTA + fungering = 767 412 kr/år
+    const FUNGERING_AARLIG = 6_406.62 * 12
+    const rates = calculateATFRates(GRUNNLONN + FUNGERING_AARLIG, HTA_AARLIG)
+    const sats2250 = rates.ovingHverdag * 1.5 // IP-type: hverdag-dagssats × 1,5
+    // Avrundingsavvik < 20 kr (formelkonstanters presisjon)
+    expect(Math.abs(sats2250 - 10_157.60)).toBeLessThan(20)
+  })
+
+  it('fixedAdditions=0 er bakoverkompatibelt', () => {
+    const ratesOld = calculateATFRates(GRUNNLONN)
+    const ratesNew = calculateATFRates(GRUNNLONN, 0)
+    expect(ratesOld.ovingHverdag).toBeCloseTo(ratesNew.ovingHverdag, 2)
   })
 })
