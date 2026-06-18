@@ -33,6 +33,7 @@ import type {
   PartnerAccount,
   PartnerDebt,
   BankAccountPreset,
+  TieredRateHistoryEntry,
 } from '@/types/economy'
 import { POLICY_RATE_HISTORY } from '@/config/economy.config'
 import { DEFAULT_BANK_PRESETS } from '@/config/bankPresets'
@@ -1205,9 +1206,22 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 20,
+      version: 21,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
+        // v20 → v21: migrer tieredRates (snapshot) til tieredRateHistory (tidsserie)
+        if (fromVersion < 21 && Array.isArray(state.savingsAccounts)) {
+          state.savingsAccounts = (state.savingsAccounts as SavingsAccount[]).map((acc) => {
+            if (acc.tieredRates?.length && !acc.tieredRateHistory?.length) {
+              return {
+                ...acc,
+                tieredRateHistory: [{ fromDate: acc.openingDate, tiers: acc.tieredRates }] as TieredRateHistoryEntry[],
+                tieredRates: undefined,
+              }
+            }
+            return acc
+          })
+        }
         // v19 → v20: forventede lønnsoppgjør slås AV i prognosen som standard.
         // Brukeren slår på de hen stoler på. (LonnsoppgjorRecord er importert i denne fila.)
         if (fromVersion < 20 && Array.isArray(state.lonnsoppgjor)) {
