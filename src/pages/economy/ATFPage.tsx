@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Trash2, Pencil, ChevronDown, ChevronRight, Download } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -16,9 +16,10 @@ import {
   beregnTidskompensasjonFromRows,
   beregnATFMedPlanstatus,
   type AppliedATFRule,
+  type ATFRates,
 } from '@/domain/economy/atfCalculator'
 import { estimateSalaryTrend, projectMonthlySalary } from '@/domain/economy/salaryCalculator'
-import type { ATFEntry, ATFDatoRad, KnownATFRate, PlanningStatus } from '@/types/economy'
+import type { ATFEntry, ATFDatoRad, KnownATFRate, MonthRecord, PlanningStatus } from '@/types/economy'
 
 // ------------------------------------------------------------
 // FORMATTING HELPERS
@@ -205,6 +206,18 @@ function BreakdownTable({
 // SATS CARD
 // ------------------------------------------------------------
 
+// Artskode → { label, rateKey } for sammenligning mot slip-satser
+const ARTSKODE_RATE_INFO: Record<string, { label: string; rateKey: keyof ATFRates; enhet: 'døgn' | 'time' }> = {
+  '2230': { label: 'Hverdag-døgn', rateKey: 'ovingHverdag', enhet: 'døgn' },
+  '2232': { label: 'Helg-døgn', rateKey: 'ovingHelg', enhet: 'døgn' },
+  '2233': { label: 'Helligdag-døgn', rateKey: 'ovingHelligdag', enhet: 'døgn' },
+  '2236': { label: 'Pr t Ma-Fr', rateKey: 'ovingPrTimeHverdag', enhet: 'time' },
+  '2237': { label: 'Pr t Lø-Sø', rateKey: 'ovingPrTimeHelg', enhet: 'time' },
+  '2238': { label: 'Pr t helligdag', rateKey: 'ovingPrTimeHelligdag', enhet: 'time' },
+  '2242': { label: 'Inntil 7t 50% Ma-Fr', rateKey: 'ovingInntil7t50Hverdag', enhet: 'time' },
+  '2243': { label: 'Inntil 7t Lø-Sø', rateKey: 'ovingInntil7tHelg', enhet: 'time' },
+}
+
 function SatsCard({
   annualSalary,
   fixedAdditions = 0,
@@ -225,6 +238,22 @@ function SatsCard({
     { label: 'Pr time helg', value: fmtSats(rates.ovingPrTimeHelg) + '/t' },
     { label: 'Inntil 7t 50%', value: fmtSats(rates.ovingInntil7t50Hverdag) + '/t' },
   ]
+
+  // Satser observert på importerte slipper, med avviksberegning
+  const slipRateRows = knownATFRates
+    ? Object.entries(knownATFRates)
+        .filter(([kode]) => ARTSKODE_RATE_INFO[kode])
+        .map(([kode, known]) => {
+          const info = ARTSKODE_RATE_INFO[kode]
+          // Forventet inkluderer HTA-tillegg (fixedAdditions) i grunnlaget — samme som kalkulatoren
+          const forventet = calculateATFRates(known.fraAarslonn, fixedAdditions)[info.rateKey]
+          const avvikPct = forventet > 0 ? ((known.sats - forventet) / forventet) * 100 : 0
+          const hasFungeringAvvik = avvikPct > 2
+          return { kode, info, known, forventet, avvikPct, hasFungeringAvvik }
+        })
+        .sort((a, b) => a.kode.localeCompare(b.kode))
+    : []
+
   return (
     <Card>
       <CardHeader className="pb-2 pt-3">
@@ -241,9 +270,60 @@ function SatsCard({
             </div>
           ))}
         </div>
+        {fixedAdditions > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Grunnlag: {Math.round(annualSalary + fixedAdditions).toLocaleString('no-NO')} kr/år
+            (grunnlønn + HTA {Math.round(fixedAdditions).toLocaleString('no-NO')} kr/år)
+          </p>
+        )}
         <p className={cn('text-xs', isEstimated ? 'text-yellow-500' : 'text-muted-foreground')}>
           {sourceLabel}
         </p>
+
+        {slipRateRows.length > 0 && (
+          <div className="border-t border-border pt-2 space-y-1.5">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Fra importerte slipper</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-[10px] text-muted-foreground border-b border-border">
+                    <th className="text-left py-1 pr-2 font-medium">Kode</th>
+                    <th className="text-left py-1 pr-2 font-medium">Type</th>
+                    <th className="text-right py-1 pr-2 font-medium">Fra slipp</th>
+                    <th className="text-right py-1 pr-2 font-medium">Forventet*</th>
+                    <th className="text-right py-1 font-medium">Avvik</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {slipRateRows.map(({ kode, info, known, forventet, avvikPct, hasFungeringAvvik }) => (
+                    <tr key={kode} className={cn('border-b border-border/40', hasFungeringAvvik && 'bg-purple-500/5')}>
+                      <td className="py-1 pr-2 font-mono text-muted-foreground">{kode}</td>
+                      <td className="py-1 pr-2">{info.label}</td>
+                      <td className={cn('py-1 pr-2 text-right font-mono', hasFungeringAvvik ? 'text-purple-300' : '')}>
+                        {fmtSats(known.sats)}{info.enhet === 'time' ? '/t' : ''}
+                      </td>
+                      <td className="py-1 pr-2 text-right font-mono text-muted-foreground">
+                        {fmtSats(forventet)}{info.enhet === 'time' ? '/t' : ''}
+                      </td>
+                      <td className={cn('py-1 text-right font-mono', hasFungeringAvvik ? 'text-purple-300 font-semibold' : 'text-muted-foreground')}>
+                        {avvikPct >= 0 ? '+' : ''}{avvikPct.toFixed(1)} %
+                        {hasFungeringAvvik && ' ↑'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {slipRateRows.some(r => r.hasFungeringAvvik) && (
+              <p className="text-[10px] text-purple-300/80 bg-purple-500/10 border border-purple-500/20 rounded px-2 py-1.5">
+                ↑ Sats fra slipp er høyere enn forventet fra grunnlønn. Dette skyldes trolig at fungering var aktivt under øvelsen — fungeringstillegget øker ATF-lønnsgrunnlaget. Legg inn fungeringsbeløp ved redigering av øvelsen.
+              </p>
+            )}
+            <p className="text-[10px] text-muted-foreground/70">
+              * Forventet beregnet fra grunnlønn + HTA på slipp-tidspunktet ({slipRateRows[0]?.known.dato})
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
@@ -255,17 +335,21 @@ function SatsCard({
 
 function NyØvelseModal({
   defaultAnnualSalary,
+  defaultFixedAdditions = 0,
   year,
   knownATFRates,
   tableTaxPercent,
+  monthHistory,
   initialEntry,
   onSave,
   onCancel,
 }: {
   defaultAnnualSalary: number
+  defaultFixedAdditions?: number
   year: number
   knownATFRates?: Record<string, KnownATFRate>
   tableTaxPercent?: number
+  monthHistory: MonthRecord[]
   initialEntry?: ATFEntry
   onSave: (entry: ATFEntry) => void
   onCancel: () => void
@@ -283,8 +367,14 @@ function NyØvelseModal({
       : defaultAnnualSalary > 0 ? String(Math.round(defaultAnnualSalary)) : ''
   )
   const [fasteTillegg, setFasteTillegg] = useState(
-    initialEntry?.fasteTilleggInput != null ? String(initialEntry.fasteTilleggInput) : '0'
+    initialEntry?.fasteTilleggInput != null
+      ? String(initialEntry.fasteTilleggInput)
+      : defaultFixedAdditions > 0 ? String(Math.round(defaultFixedAdditions)) : '0'
   )
+  const [fungeringMnd, setFungeringMnd] = useState(
+    initialEntry?.fungeringMndInput != null ? String(initialEntry.fungeringMndInput) : ''
+  )
+  const [fungeringAutoDetected, setFungeringAutoDetected] = useState(false)
   const [notat, setNotat] = useState(initialEntry?.notat ?? '')
   const [excludeFromBudget, setExcludeFromBudget] = useState(initialEntry?.excludeFromBudget ?? false)
   const [planningStatus, setPlanningStatus] = useState<PlanningStatus>(initialEntry?.planningStatus ?? 'planned')
@@ -296,9 +386,27 @@ function NyØvelseModal({
   const fra = fraISO ? new Date(fraISO) : null
   const til = tilISO ? new Date(tilISO) : null
 
+  // Auto-detect fungering fra importerte slipper når datoer endres
+  useEffect(() => {
+    if (!fra || !til || til <= fra) return
+    // Ikke overskriv manuelt inntastet verdi (bare auto-detektert)
+    if (fungeringMnd !== '' && !fungeringAutoDetected) return
+    const detected = detectFungeringForPeriod(fra, til, monthHistory)
+    if (detected !== null && detected > 0) {
+      setFungeringMnd(String(Math.round(detected)))
+      setFungeringAutoDetected(true)
+    } else if (fungeringAutoDetected) {
+      setFungeringMnd('')
+      setFungeringAutoDetected(false)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fraDato, tilDato])
 
   const parsedSalary = parseFloat(årslønn.replace(/\s/g, '')) || 0
   const parsedTillegg = parseFloat(fasteTillegg.replace(/\s/g, '')) || 0
+  const parsedFungering = parseFloat(fungeringMnd.replace(/\s/g, '')) || 0
+  // Fungering øker ATF-lønnsgrunnlaget: effektiv årslønn = grunnlønn + fungeringstillegg × 12
+  const effectiveSalary = parsedSalary + parsedFungering * 12
 
   // Utbetalingsmåned = måneden etter øvelsens slutt
   const payoutMonth = til ? new Date(til.getFullYear(), til.getMonth() + 1, 1).getMonth() + 1 : undefined
@@ -314,7 +422,7 @@ function NyØvelseModal({
   let computeError: string | null = null
   if (fra && til && datesValid && parsedSalary > 0) {
     try {
-      const result = beregnATFMedPlanstatus(fra, til, parsedSalary, parsedTillegg, øvelsestype, knownATFRates, planningStatus)
+      const result = beregnATFMedPlanstatus(fra, til, effectiveSalary, parsedTillegg, øvelsestype, knownATFRates, planningStatus)
       rows = result.rows
       appliedRule = result.appliedRule
     } catch (err) {
@@ -354,6 +462,7 @@ function NyØvelseModal({
       payoutYear,
       årslønnInput: parsedSalary || undefined,
       fasteTilleggInput: parsedTillegg || undefined,
+      fungeringMndInput: parsedFungering > 0 ? parsedFungering : undefined,
       excludeFromBudget: excludeFromBudget || undefined,
       planningStatus,
       appliedRule,
@@ -475,7 +584,7 @@ function NyØvelseModal({
             )}
           </div>
 
-          {/* Årslønn */}
+          {/* Årslønn + fungering */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">Årslønn (kr)</Label>
@@ -487,14 +596,34 @@ function NyØvelseModal({
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Faste tillegg (kr/år)</Label>
+              <Label className="text-xs">HTA-tillegg (kr/år)</Label>
               <Input
                 type="number"
                 value={fasteTillegg}
                 onChange={e => setFasteTillegg(e.target.value)}
                 placeholder="0"
               />
+              <p className="text-[10px] text-muted-foreground/70">Kronetillegg (1162) som inngår i ATF-grunnlaget</p>
             </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Fungeringstillegg under øvelsen (kr/mnd) — valgfritt</Label>
+            <Input
+              type="number"
+              value={fungeringMnd}
+              onChange={e => { setFungeringMnd(e.target.value); setFungeringAutoDetected(false) }}
+              placeholder="0"
+            />
+            {parsedFungering > 0 ? (
+              <p className="text-[10px] text-purple-300/80">
+                {fungeringAutoDetected ? 'Automatisk detektert fra importert slipp — ' : ''}
+                ATF-grunnlag inkl. fungering: {Math.round(effectiveSalary + parsedTillegg).toLocaleString('no-NO')} kr/år
+              </p>
+            ) : (
+              <p className="text-[10px] text-muted-foreground/70">
+                Aktivt fungeringstillegg (10P2) øker ATF-lønnsgrunnlaget og dermed øvingssatsen. Detekteres automatisk fra importerte slipper.
+              </p>
+            )}
           </div>
 
           {/* Beregningsfeil */}
@@ -570,6 +699,109 @@ function NyØvelseModal({
 }
 
 // ------------------------------------------------------------
+// ÅRSOPPSUMMERING
+// ------------------------------------------------------------
+
+function ÅrsoppsummeringCard({
+  activeYear,
+  yearEntries,
+  monthHistory,
+}: {
+  activeYear: number
+  yearEntries: ATFEntry[]
+  monthHistory: MonthRecord[]
+}) {
+  const yearSlips = monthHistory.filter(
+    (m) => m.source === 'imported_slip' && m.year === activeYear && m.slipData
+  )
+  const atfFraSlipp = yearSlips.reduce((s, m) => s + (m.slipData?.atfBeløp ?? 0), 0)
+  const fungeringFraSlipp = yearSlips.reduce((s, m) => s + (m.slipData?.fungeringBeløp ?? 0), 0)
+
+  // Planlagt ATF = kalkulator-entries uten importert slipp for utbetalingsmåneden
+  const slipMonthSet = new Set(yearSlips.map((m) => `${m.year}-${m.month}`))
+  const pendingEntries = yearEntries.filter((e) => {
+    const py = e.payoutYear ?? e.year
+    const pm = e.payoutMonth ?? 1
+    return !slipMonthSet.has(`${py}-${pm}`)
+  })
+  const atfFraKalkulator = pendingEntries.reduce((s, e) => s + e.beregnetBeløp, 0)
+
+  // Fungering-effekt: for kalkulator-entries med fungering, beregn ca. ekstra ATF
+  // Ratio-approx fungerer fordi ATF-satser er tilnærmet lineære i lønnsgrunnlaget.
+  const fungeringKalkulatorEffekt = yearEntries.reduce((s, e) => {
+    const fungering = (e.fungeringMndInput ?? 0) * 12
+    if (fungering <= 0) return s
+    const årslonn = e.årslønnInput ?? 0
+    const hta = e.fasteTilleggInput ?? 0
+    const baseSalary = årslonn + hta
+    const effectiveSalary = baseSalary + fungering
+    if (baseSalary <= 0 || effectiveSalary <= baseSalary) return s
+    return s + e.beregnetBeløp * (1 - baseSalary / effectiveSalary)
+  }, 0)
+
+  const totalAtf = atfFraSlipp + atfFraKalkulator
+  if (totalAtf === 0 && fungeringFraSlipp === 0) return null
+
+  return (
+    <Card>
+      <CardHeader className="pb-2 pt-3">
+        <CardTitle className="text-xs text-muted-foreground uppercase tracking-wide">
+          Årsoppsummering {activeYear}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pb-3 space-y-1.5">
+        {atfFraSlipp > 0 && (
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">ATF hittil i år (bekreftet fra slipper)</span>
+            <span className="font-mono font-medium text-green-400">{fmtNOK(atfFraSlipp)}</span>
+          </div>
+        )}
+        {atfFraKalkulator > 0 && (
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground text-yellow-400/80">
+              Planlagt ATF, slipp ikke importert
+              {pendingEntries.length > 0 && (
+                <span className="ml-1 text-[10px] text-muted-foreground/60">
+                  ({pendingEntries.map((e) => e.øvelsesnavn).join(', ')})
+                </span>
+              )}
+            </span>
+            <span className="font-mono font-medium text-yellow-400">{fmtNOK(atfFraKalkulator)}</span>
+          </div>
+        )}
+        {totalAtf > 0 && (
+          <div className="flex justify-between text-sm border-t border-border pt-1.5 mt-0.5">
+            <span className="font-medium">Sum ATF {activeYear}</span>
+            <span className="font-mono font-semibold">{fmtNOK(totalAtf)}</span>
+          </div>
+        )}
+        {(fungeringFraSlipp > 0 || fungeringKalkulatorEffekt > 0) && (
+          <div className="border-t border-border/50 pt-1.5 mt-0.5 space-y-1">
+            <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wide font-medium">
+              Fungering (10P2)
+            </p>
+            {fungeringFraSlipp > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-purple-300/80">Fungeringstillegg hittil i år</span>
+                <span className="font-mono text-purple-300">{fmtNOK(fungeringFraSlipp)}</span>
+              </div>
+            )}
+            {fungeringKalkulatorEffekt > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-purple-300/60">
+                  Estimert ATF-økning pga. fungering
+                </span>
+                <span className="font-mono text-purple-300/80">+{fmtNOK(fungeringKalkulatorEffekt)}</span>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ------------------------------------------------------------
 // CSV EKSPORT
 // ------------------------------------------------------------
 
@@ -603,6 +835,21 @@ function exportATFToCSV(entries: ATFEntry[], year: number) {
 // MAIN PAGE
 // ------------------------------------------------------------
 
+// Auto-detektion: finn fungeringsbeløp fra importerte slipper for en øvelsesperiode
+function detectFungeringForPeriod(fra: Date, til: Date, monthHistory: MonthRecord[]): number | null {
+  const fraYM = fra.getFullYear() * 12 + fra.getMonth()
+  const tilYM = til.getFullYear() * 12 + til.getMonth()
+  const amounts = monthHistory
+    .filter(m => m.source === 'imported_slip' && m.slipData)
+    .filter(m => {
+      const mYM = m.year * 12 + (m.month - 1)
+      return mYM >= fraYM && mYM <= tilYM
+    })
+    .map(m => m.slipData!.fungeringBeløp ?? 0)
+    .filter(f => f > 0)
+  return amounts.length > 0 ? Math.max(...amounts) : null
+}
+
 export function ATFPage() {
   const { atfEntries, addATFEntry, updateATFEntry, removeATFEntry, profile, monthHistory } = useEconomyStore()
   const [activeYear, setActiveYear] = useState(CURRENT_YEAR)
@@ -615,8 +862,12 @@ export function ATFPage() {
   const annualSalary = profile
     ? projectMonthlySalary(trend, activeYear, 5) * 12  // bruk mai (etter forventet oppgjør)
     : 0
+  // Kun HTA-kronetillegg (artskoder 1162 og tilsvarende) inngår i ATF-lønnsgrunnlaget
+  const HTA_KODER = new Set(['1162', '1040', '1041', '1042', '1043', '1044', '1045'])
   const fixedAdditions = profile
-    ? profile.fixedAdditions.reduce((s, a) => s + a.amount * 12, 0)
+    ? profile.fixedAdditions
+        .filter((a) => HTA_KODER.has(a.kode))
+        .reduce((s, a) => s + a.amount * 12, 0)
     : 0
   const knownATFRates = profile?.knownATFRates
   const tableTaxPercent = profile?.lastKnownTableTaxPercent
@@ -667,13 +918,22 @@ export function ATFPage() {
         <SatsCard annualSalary={annualSalary} fixedAdditions={fixedAdditions} knownATFRates={knownATFRates} />
       )}
 
+      {/* Årsoppsummering */}
+      <ÅrsoppsummeringCard
+        activeYear={activeYear}
+        yearEntries={yearEntries}
+        monthHistory={monthHistory}
+      />
+
       {/* Modal — ny eller rediger */}
       {(showModal || editingEntry) && (
         <NyØvelseModal
           defaultAnnualSalary={annualSalary}
+          defaultFixedAdditions={fixedAdditions}
           year={activeYear}
           knownATFRates={knownATFRates}
           tableTaxPercent={tableTaxPercent}
+          monthHistory={monthHistory}
           initialEntry={editingEntry ?? undefined}
           onSave={(entry) => {
             if (editingEntry) {
@@ -721,11 +981,16 @@ export function ATFPage() {
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       )}
                       <div>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-medium text-sm">{entry.øvelsesnavn}</span>
                           {entry.planningStatus === 'unplanned' && (
                             <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/30 font-medium">
                               Ikke-planlagt
+                            </span>
+                          )}
+                          {(entry.fungeringMndInput ?? 0) > 0 && (
+                            <span className="text-[9px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/30 font-medium">
+                              Fungering +{Math.round(entry.fungeringMndInput!).toLocaleString('no-NO')} kr/mnd
                             </span>
                           )}
                         </div>
@@ -781,7 +1046,13 @@ export function ATFPage() {
                   </div>
 
                   {isExpanded && (
-                    <div className="mt-3 border-t border-border pt-3">
+                    <div className="mt-3 border-t border-border pt-3 space-y-2">
+                      {(entry.fungeringMndInput ?? 0) > 0 && (
+                        <div className="rounded border border-purple-500/30 bg-purple-500/10 px-2.5 py-1.5 text-xs text-purple-300">
+                          Fungering {Math.round(entry.fungeringMndInput!).toLocaleString('no-NO')} kr/mnd var aktivt under øvelsen.
+                          {entry.årslønnInput && ` Effektiv årslønn: ${Math.round(entry.årslønnInput + entry.fungeringMndInput! * 12).toLocaleString('no-NO')} kr (grunnlønn + fungering × 12).`}
+                        </div>
+                      )}
                       {hasDateRows ? (
                         <BreakdownTable
                           rows={entry.datoRader!}

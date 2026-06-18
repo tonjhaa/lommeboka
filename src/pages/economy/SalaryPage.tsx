@@ -137,6 +137,7 @@ export function SalaryPage() {
     profile,
     setProfile,
     monthHistory,
+    atfEntries,
     temporaryPayEntries,
     addTemporaryPay,
     removeTemporaryPay,
@@ -226,9 +227,25 @@ export function SalaryPage() {
 
   // KPI-grunnlag
   const fasteTilleggMnd = profile?.fixedAdditions.reduce((s, a) => s + Math.max(0, a.amount), 0) ?? 0
-  const variableYTD = importedSlips
+  const atfYTD = importedSlips
     .filter((m) => m.year === nowYear)
-    .reduce((s, m) => s + (m.slipData?.atfBeløp ?? 0) + (m.slipData?.fungeringBeløp ?? 0), 0)
+    .reduce((s, m) => s + (m.slipData?.atfBeløp ?? 0), 0)
+  const fungeringYTD = importedSlips
+    .filter((m) => m.year === nowYear)
+    .reduce((s, m) => s + (m.slipData?.fungeringBeløp ?? 0), 0)
+  const variableYTD = atfYTD + fungeringYTD
+
+  // ATF-kalkulator: øvelser som forventes utbetalt hittil i år men mangler importert slipp
+  const nowMonth = new Date().getMonth() + 1
+  const slipMonthSet = new Set(importedSlips.map(s => `${s.year}-${s.month}`))
+  const pendingAtfCalc = atfEntries
+    .filter(e => {
+      const py = e.payoutYear ?? e.year
+      const pm = e.payoutMonth ?? 1
+      return py === nowYear && pm <= nowMonth && !slipMonthSet.has(`${py}-${pm}`)
+    })
+  const pendingAtfCalcSum = pendingAtfCalc.reduce((s, e) => s + e.beregnetBeløp, 0)
+
   const normalNettos = normalSlips.slice(0, 6)
     .map((m) => m.slipData?.nettoUtbetalt ?? m.nettoUtbetalt)
     .filter((n) => n > 0)
@@ -334,8 +351,19 @@ export function SalaryPage() {
               </div>
               <div className="rounded-lg border border-border bg-card px-4 py-3">
                 <p className="text-[11px] text-muted-foreground mb-0.5">Variable tillegg i {nowYear}</p>
-                <p className="text-lg font-semibold font-mono tabular-nums text-sky-400">{Math.round(variableYTD).toLocaleString('no-NO')} kr</p>
-                <p className="text-[11px] text-muted-foreground">ATF + fungering hittil i år</p>
+                <p className="text-lg font-semibold font-mono tabular-nums text-sky-400">
+                  {Math.round(variableYTD + pendingAtfCalcSum).toLocaleString('no-NO')} kr
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {atfYTD > 0 && fungeringYTD > 0
+                    ? `ATF ${Math.round(atfYTD).toLocaleString('no-NO')} · Fungering ${Math.round(fungeringYTD).toLocaleString('no-NO')} kr fra slipp`
+                    : atfYTD > 0
+                      ? `ATF fra slipp hittil i år`
+                      : fungeringYTD > 0
+                        ? `Fungering fra slipp hittil i år`
+                        : `ATF + fungering hittil i år`}
+                  {pendingAtfCalcSum > 0 && ` · +${Math.round(pendingAtfCalcSum).toLocaleString('no-NO')} kr ATF kalkulator (slipp ikke importert: ${pendingAtfCalc.map(e => e.øvelsesnavn).join(', ')})`}
+                </p>
               </div>
               {normalNettoMedian != null && (
                 <div className="rounded-lg border border-border bg-card px-4 py-3">

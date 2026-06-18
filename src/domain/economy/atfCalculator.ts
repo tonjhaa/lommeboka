@@ -255,19 +255,21 @@ export type ATFRates = { [K in keyof typeof ATF_BASE_RATES]: number }
 
 /**
  * Beregner ATF-satser fra Excel-formler (ATF kalkulator 1.mai 2023, ltr 72).
- * Alle satser beregnes direkte fra årslønn — ingen skalering fra statisk tabell.
+ * Alle satser beregnes direkte fra ATF-lønnsgrunnlaget = grunnlønn + HTA-tillegg.
  *
- * @param annualSalary  Grunnlønn × 12
- * @param _fixedAdditions  Ubrukt (beholdt for bakoverkompatibilitet)
- * @param _knownATFRates  Ubrukt (beholdt for bakoverkompatibilitet)
+ * @param annualSalary    Grunnlønn × 12
+ * @param fixedAdditions  HTA-kronetillegg × 12 (1162 og tilsvarende koder) — øker ATF-grunnlaget
+ * @param _knownATFRates  Ubrukt
  */
 export function calculateATFRates(
   annualSalary: number,
-  _fixedAdditions = 0,
+  fixedAdditions = 0,
   _knownATFRates?: Record<string, KnownATFRate>,
 ): ATFRates {
+  // ATF-lønnsgrunnlag = grunnlønn + HTA-kronetillegg (ATF særavtale pkt 1.3)
+  const basis = annualSalary + fixedAdditions
   // A-tabell timesats og overtidssatser
-  const timesats = annualSalary / 1850
+  const timesats = basis / 1850
   const OT50  = timesats * 1.5
   const OT100 = timesats * 2
   const OTA50 = OT50 / 3        // = timesats * 0.5
@@ -298,7 +300,7 @@ export function calculateATFRates(
   const ovingInntil7tHelg = (OT50 + OT100) / 2 + lordag
 
   // Helligdag: skaler fra base-sats (formler ikke tilgjengelig fra Excel)
-  const scale = annualSalary / ATF_BASE_ANNUAL
+  const scale = basis / ATF_BASE_ANNUAL
   const ovingHelligdag       = ATF_BASE_RATES.ovingHelligdag * scale
   const ovingPrTimeHelligdag = ATF_BASE_RATES.ovingPrTimeHelligdag * scale
 
@@ -320,7 +322,7 @@ export function calculateATFRates(
  * Vises i UI under sats-kortet.
  */
 export function getATFRatesSourceLabel(_knownATFRates?: Record<string, KnownATFRate>): string {
-  return 'Satser beregnet fra årslønn (ATF kalkulator 1.mai 2023)'
+  return 'Satser beregnet fra grunnlønn + HTA-tillegg (ATF-kalkulator 1. mai 2023)'
 }
 
 // ------------------------------------------------------------

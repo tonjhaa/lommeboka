@@ -240,6 +240,8 @@ export interface ATFEntry {
   årslønnInput?: number
   /** Input faste tillegg lagret for forhåndsutfylling ved redigering. */
   fasteTilleggInput?: number
+  /** Månedlig fungeringstillegg (10P2) aktivt under øvelsen — øker ATF-lønnsgrunnlaget. */
+  fungeringMndInput?: number
   /** Skjul denne øvelsens ATF-sum fra budsjettberegninger */
   excludeFromBudget?: boolean
   /**

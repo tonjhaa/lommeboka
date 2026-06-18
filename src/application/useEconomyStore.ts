@@ -475,8 +475,11 @@ export const useEconomyStore = create<EconomyState>()(
             // SPK-pensjon er alltid 2% — bruker ikke ratio-estimat (base inkluderer 1162/10P2 i tillegg til 1S01)
           }
 
-          // Beregn og lagre effektiv /440-trekkprosent
-          if (slip.tabelltrekkGrunnlag > 0 && slip.tabelltrekkBelop > 0) {
+          // Beregn og lagre effektiv /440-trekkprosent.
+          // Juni-slipper har ferietrekk som drastisk reduserer tabelltrekk-grunnlaget —
+          // bruk ikke disse til %-beregning da de gir feil sats (typisk <10% mot normalt 25-35%).
+          const harFerietrekk = (slip.ferietrekk ?? 0) > 0
+          if (slip.tabelltrekkGrunnlag > 0 && slip.tabelltrekkBelop > 0 && !harFerietrekk) {
             const pct = (slip.tabelltrekkBelop / slip.tabelltrekkGrunnlag) * 100
             updatedProfile = { ...updatedProfile, lastKnownTableTaxPercent: Math.round(pct * 100) / 100 }
           }
