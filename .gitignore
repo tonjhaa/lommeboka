@@ -34,3 +34,7 @@ dist-ssr
 graphify-out/
 docs/slips/
 Lønnslipper/
+
+# Genererte filer fra batch-slip-import (inneholder persondata)
+public/_slips.json
+public/_slips-import.js
