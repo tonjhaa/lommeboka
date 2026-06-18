@@ -2498,7 +2498,7 @@ function AccountCard({
                                 type="number"
                                 step={10000}
                                 disabled={idx === 0}
-                                value={tier.fromBalance || ''}
+                                value={tier.fromBalance ?? ''}
                                 placeholder="0"
                                 onChange={(e) => setRateEntryDraft((d) => d ? {
                                   ...d,
@@ -2510,7 +2510,7 @@ function AccountCard({
                               <Input
                                 type="number"
                                 step={0.05}
-                                value={tier.rate || ''}
+                                value={tier.rate ?? ''}
                                 placeholder="0.00"
                                 onChange={(e) => setRateEntryDraft((d) => d ? {
                                   ...d,
@@ -2549,12 +2549,11 @@ function AccountCard({
                           <div className="flex items-center gap-2 pt-1">
                             <button
                               onClick={() => {
-                                if (!rateEntryDraft) return
-                                const newHistory = history.map((e) =>
-                                  e.fromDate === entry.fromDate
-                                    ? { fromDate: rateEntryDraft.fromDate, tiers: rateEntryDraft.tiers }
-                                    : e
-                                )
+                                if (!rateEntryDraft || !rateEntryDraft.fromDate) return
+                                const newHistory = [
+                                  ...history.filter((e) => e.fromDate !== entry.fromDate && e.fromDate !== rateEntryDraft.fromDate),
+                                  { fromDate: rateEntryDraft.fromDate, tiers: rateEntryDraft.tiers },
+                                ]
                                 onUpdate({ tieredRateHistory: newHistory })
                                 setEditingRateEntry(null)
                                 setRateEntryDraft(null)
@@ -2595,7 +2594,7 @@ function AccountCard({
                             type="number"
                             step={10000}
                             disabled={idx === 0}
-                            value={tier.fromBalance || ''}
+                            value={tier.fromBalance ?? ''}
                             placeholder="0"
                             onChange={(e) => setRateEntryDraft((d) => d ? {
                               ...d,
@@ -2607,7 +2606,7 @@ function AccountCard({
                           <Input
                             type="number"
                             step={0.05}
-                            value={tier.rate || ''}
+                            value={tier.rate ?? ''}
                             placeholder="0.00"
                             onChange={(e) => setRateEntryDraft((d) => d ? {
                               ...d,
