@@ -1147,6 +1147,9 @@ export const useEconomyStore = create<EconomyState>()(
           if (prefs?.enabledTabs && !prefs.enabledTabs.includes('partner')) {
             prefs.enabledTabs = [...prefs.enabledTabs, 'partner']
           }
+          if (prefs?.enabledTabs && !prefs.enabledTabs.includes('pension')) {
+            prefs.enabledTabs = [...prefs.enabledTabs, 'pension']
+          }
           // Saniter profil fra sky/backup: OF11 (feriepenger) skal aldri ligge som
           // månedlig fast tillegg — eldre lagret data kan fortsatt ha den.
           let importedProfile = (data.profile ?? null) as EmploymentProfile | null
@@ -1189,6 +1192,7 @@ export const useEconomyStore = create<EconomyState>()(
             partnerVeikart: data.partnerVeikart ?? defaultPartnerVeikart,
             savingsPlanTarget: data.savingsPlanTarget ?? 0,
             savingsPlanHorizon: data.savingsPlanHorizon ?? 48,
+            pensionSettings: data.pensionSettings ?? null,
           })
         } catch {
           console.error('[EconomyStore] importData: ugyldig JSON')
@@ -1223,6 +1227,7 @@ export const useEconomyStore = create<EconomyState>()(
           fondPortfolio: DEFAULT_FOND_PORTFOLIO,
           budgetOverrides: {},
           userPreferences: null,
+          pensionSettings: null,
         }),
     }),
     {

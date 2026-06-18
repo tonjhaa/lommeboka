@@ -161,6 +161,7 @@ export async function saveToSupabase(): Promise<void> {
     partnerVeikart: state.partnerVeikart,
     savingsPlanTarget: state.savingsPlanTarget,
     savingsPlanHorizon: state.savingsPlanHorizon,
+    pensionSettings: state.pensionSettings,
   }
 
   const { error } = await supabase.from('user_data').upsert({
