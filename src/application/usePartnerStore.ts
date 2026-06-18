@@ -502,6 +502,9 @@ export const usePartnerStore = create<EconomyState>()(
 
       setUserPreferences: (prefs: UserPreferences) => set({ userPreferences: prefs }),
 
+      pensionSettings: null,
+      setPensionSettings: () => {},
+
       // ── Export / import / reset ────────────────────────────────────────────
       exportData: () => JSON.stringify(get(), null, 2),
 

@@ -34,8 +34,9 @@ import type {
   PartnerDebt,
   BankAccountPreset,
   TieredRateHistoryEntry,
+  PensionSettings,
 } from '@/types/economy'
-import { POLICY_RATE_HISTORY } from '@/config/economy.config'
+import { POLICY_RATE_HISTORY, LONNSVEKST_DEFAULT, GRUNNBELOP_VEKST_DEFAULT } from '@/config/economy.config'
 import { DEFAULT_BANK_PRESETS } from '@/config/bankPresets'
 
 // ------------------------------------------------------------
@@ -221,6 +222,9 @@ export interface EconomyState {
   userPreferences: UserPreferences | null
   setUserPreferences: (prefs: UserPreferences) => void
 
+  pensionSettings: PensionSettings | null
+  setPensionSettings: (settings: PensionSettings) => void
+
   exportData: () => string
   importData: (json: string) => void
   clearAllSlips: () => void
@@ -253,6 +257,17 @@ const DEFAULT_IVF_SETTINGS: IVFSettings = {
 }
 
 const INITIAL_IVF_TRANSACTIONS: IVFTransaction[] = []
+
+export const DEFAULT_PENSION_SETTINGS: PensionSettings = {
+  birthYear: 1995,
+  serviceStartYear: new Date().getFullYear() - 5,
+  særalder: { enabled: false, age: 60 },
+  afpEnabled: true,
+  assumptions: {
+    salaryGrowthPct: LONNSVEKST_DEFAULT,
+    gGrowthPct: GRUNNBELOP_VEKST_DEFAULT,
+  },
+}
 
 // ------------------------------------------------------------
 // STORE
@@ -348,9 +363,12 @@ export const useEconomyStore = create<EconomyState>()(
       removeBankPreset: (id) =>
         set((s) => ({ bankPresets: s.bankPresets.filter((p) => p.id !== id) })),
 
+      pensionSettings: null,
+
       // --- Profil ---
       setProfile: (profile) => set({ profile }),
       setUserPreferences: (prefs) => set({ userPreferences: prefs }),
+      setPensionSettings: (settings) => set({ pensionSettings: settings }),
 
       // --- Måneder ---
       addMonthRecord: (record) =>
@@ -1209,7 +1227,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 21,
+      version: 22,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v20 → v21: migrer tieredRates (snapshot) til tieredRateHistory (tidsserie)
@@ -1224,6 +1242,13 @@ export const useEconomyStore = create<EconomyState>()(
             }
             return acc
           })
+        }
+        // v21 → v22: legg til 'pension' i enabledTabs for eksisterende brukere
+        if (fromVersion < 22 && state.userPreferences) {
+          const prefs = state.userPreferences as { enabledTabs?: string[] }
+          if (Array.isArray(prefs.enabledTabs) && !prefs.enabledTabs.includes('pension')) {
+            prefs.enabledTabs = [...prefs.enabledTabs, 'pension']
+          }
         }
         // v19 → v20: forventede lønnsoppgjør slås AV i prognosen som standard.
         // Brukeren slår på de hen stoler på. (LonnsoppgjorRecord er importert i denne fila.)
@@ -1420,6 +1445,7 @@ export const useEconomyStore = create<EconomyState>()(
         babyShoppingItems: state.babyShoppingItems,
         priceAlerts: state.priceAlerts,
         lastGlobalPriceCheckAt: state.lastGlobalPriceCheckAt,
+        pensionSettings: state.pensionSettings,
       }),
     }
   )
