@@ -2104,9 +2104,9 @@ function AccountCard({
                   })}
                 <button
                   onClick={() => setOpenRateHistory((v) => !v)}
-                  className="text-[10px] text-muted-foreground hover:text-foreground transition-colors pt-0.5"
+                  className="w-full mt-1 text-xs text-primary/70 hover:text-primary transition-colors border-t border-border/40 pt-1 text-left"
                 >
-                  {openRateHistory ? 'Skjul historikk ▲' : 'Administrer rentestruktur ▾'}
+                  {openRateHistory ? '▲ Skjul rentestruktur' : '▾ Administrer rentestruktur'}
                 </button>
               </div>
             ) : (
@@ -2427,7 +2427,11 @@ function AccountCard({
             Rentestrukturhistorikk
           </div>
           {(() => {
-            const history = account.tieredRateHistory ?? []
+            const history = account.tieredRateHistory?.length
+              ? account.tieredRateHistory
+              : account.tieredRates?.length
+                ? [{ fromDate: account.openingDate, tiers: account.tieredRates }]
+                : []
             const sorted = [...history].sort((a, b) => b.fromDate.localeCompare(a.fromDate))
             const activeFromDate = sorted.find((e) => e.fromDate <= nowISO)?.fromDate
 
