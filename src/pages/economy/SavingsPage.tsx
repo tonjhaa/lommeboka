@@ -27,6 +27,7 @@ import {
   computeBSUForecast,
   computeEffectiveBalance,
   getEffectiveRateFromTiers,
+  getActiveTiersForDate,
 } from '@/domain/economy/savingsCalculator'
 import { calcMaxPurchase, BSU_MAX_TOTAL } from '@/hooks/useVeikart'
 import { defaultConfig } from '@/config/default.config'
@@ -812,6 +813,7 @@ function MånedsoversiktTable({
       startBalance: contribOverrides[`start-${acc.id}`] ?? computeEffectiveBalance(acc, prevMonthEnd),
       rate: contribOverrides[`rate-${acc.id}`] ?? ([...acc.rateHistory].filter(r => r.fromDate <= nowISO).sort((a, b) => b.fromDate.localeCompare(a.fromDate))[0]?.rate ?? 0),
       tieredRates: acc.tieredRates,
+      tieredRateHistory: acc.tieredRateHistory,
       // Innskudd t.o.m. forrige måned ligger i startsaldoen; inneværende måned og
       // senere vises i kolonnene (inkl. innskudd som alt er gjennomført denne måneden)
       getBase: (year: number, month: number) => getBaseContribForMonth(acc, year, month, prevMonthEndISO),
@@ -873,8 +875,11 @@ function MånedsoversiktTable({
           }
           // Trinnvis rente: beregn effektiv rente mot løpende saldo inkl. påløpte renter
           const effectiveBal = bal0 + accruedInterest[j]
-          const effectiveRate = (acc.tieredRates?.length && !(`rate-${acc.id}` in contribOverrides))
-            ? getEffectiveRateFromTiers(acc.tieredRates, effectiveBal)
+          const activeTiersNow = acc.tieredRateHistory?.length
+            ? getActiveTiersForDate(acc.tieredRateHistory, nowISO)
+            : acc.tieredRates?.length ? acc.tieredRates : undefined
+          const effectiveRate = (activeTiersNow?.length && !(`rate-${acc.id}` in contribOverrides))
+            ? getEffectiveRateFromTiers(activeTiersNow, effectiveBal)
             : acc.rate
           const monthlyInterest = effectiveBal * effectiveRate / 100 / 12
           interest = monthlyInterest
@@ -946,8 +951,11 @@ function MånedsoversiktTable({
           : acc.monthlyOverrides?.[monthlyOverrideKey] !== undefined
             ? acc.monthlyOverrides[monthlyOverrideKey]
             : baseContrib + futureTxDelta
-        const rate = (acc.tieredRates?.length && !(`rate-p-${acc.id}` in contribOverrides))
-          ? getEffectiveRateFromTiers(acc.tieredRates, acc.runningBal)
+        const activeTiersPartner = acc.tieredRateHistory?.length
+          ? getActiveTiersForDate(acc.tieredRateHistory, nowISO)
+          : acc.tieredRates?.length ? acc.tieredRates : undefined
+        const rate = (activeTiersPartner?.length && !(`rate-p-${acc.id}` in contribOverrides))
+          ? getEffectiveRateFromTiers(activeTiersPartner, acc.runningBal)
           : (acc.rate || SAVINGS_RATE_TABLE)
         const monthlyInterest = acc.runningBal * rate / 100 / 12
         partnerAccruedInterest[j] += monthlyInterest
