@@ -6,6 +6,7 @@ import type {
   BalanceHistoryEntry,
   RateHistoryEntry,
   TieredRate,
+  TieredRateHistoryEntry,
 } from '@/types/economy'
 import { BSU_MAX_YEARLY, BSU_MAX_TOTAL } from '@/config/economy.config'
 
@@ -191,9 +192,24 @@ export function getEffectiveRateFromTiers(tiers: TieredRate[], balance: number):
   return sorted.find(t => balance >= t.fromBalance)?.rate ?? sorted.at(-1)!.rate
 }
 
+export function getActiveTiersForDate(
+  history: TieredRateHistoryEntry[],
+  date: string,
+): TieredRate[] | undefined {
+  return [...history]
+    .filter((e) => e.fromDate <= date)
+    .sort((a, b) => b.fromDate.localeCompare(a.fromDate))[0]?.tiers
+}
+
 export function getEffectiveRate(account: SavingsAccount, balance: number): number {
-  if (account.tieredRates?.length) {
-    return getEffectiveRateFromTiers(account.tieredRates, balance)
+  const nowISO = new Date().toISOString().slice(0, 10)
+  const activeTiers = account.tieredRateHistory?.length
+    ? getActiveTiersForDate(account.tieredRateHistory, nowISO)
+    : account.tieredRates?.length
+      ? account.tieredRates
+      : undefined
+  if (activeTiers?.length) {
+    return getEffectiveRateFromTiers(activeTiers, balance)
   }
   return getCurrentRateForDate(account.rateHistory, new Date())
 }
@@ -274,7 +290,15 @@ export function projectSavingsGrowth(
 
     currentBalance += contribution + withdrawalThisMonth
 
-    const rate = getCurrentRateForDate(account.rateHistory, date)
+    const dateISO = `${y}-${String(m).padStart(2, '0')}-01`
+    const activeTiers = account.tieredRateHistory?.length
+      ? getActiveTiersForDate(account.tieredRateHistory, dateISO)
+      : account.tieredRates?.length
+        ? account.tieredRates
+        : undefined
+    const rate = activeTiers?.length
+      ? getEffectiveRateFromTiers(activeTiers, currentBalance)
+      : getCurrentRateForDate(account.rateHistory, date)
     const monthlyRate = rate / 100 / 12
 
     if (account.interestCreditFrequency === 'yearly') {
@@ -411,8 +435,14 @@ export function computeYearlyInterestIncome(account: SavingsAccount, year: numbe
     balance += contrib
 
     const date = new Date(year, m - 1, 1)
-    const rate = account.tieredRates?.length
-      ? getEffectiveRateFromTiers(account.tieredRates, balance)
+    const dateISO = `${year}-${String(m).padStart(2, '0')}-01`
+    const activeTiersYearly = account.tieredRateHistory?.length
+      ? getActiveTiersForDate(account.tieredRateHistory, dateISO)
+      : account.tieredRates?.length
+        ? account.tieredRates
+        : undefined
+    const rate = activeTiersYearly?.length
+      ? getEffectiveRateFromTiers(activeTiersYearly, balance)
       : getCurrentRateForDate(account.rateHistory, date)
     const monthlyInterest = balance * (rate / 100 / 12)
 

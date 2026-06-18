@@ -97,8 +97,55 @@ describe('calculateGoalProgress', () => {
   })
 })
 
-import { getEffectiveRateFromTiers, getEffectiveRate } from '../savingsCalculator'
-import type { TieredRate } from '@/types/economy'
+import { getEffectiveRateFromTiers, getEffectiveRate, getActiveTiersForDate } from '../savingsCalculator'
+import type { TieredRate, TieredRateHistoryEntry } from '@/types/economy'
+
+describe('getActiveTiersForDate', () => {
+  const history: TieredRateHistoryEntry[] = [
+    { fromDate: '2025-01-01', tiers: [{ fromBalance: 0, rate: 3.0 }, { fromBalance: 150_000, rate: 3.5 }] },
+    { fromDate: '2026-01-01', tiers: [{ fromBalance: 0, rate: 3.4 }, { fromBalance: 100_000, rate: 3.7 }, { fromBalance: 500_000, rate: 4.35 }] },
+    { fromDate: '2026-08-01', tiers: [{ fromBalance: 0, rate: 3.5 }, { fromBalance: 150_000, rate: 3.8 }] },
+  ]
+
+  it('returnerer riktig struktur for en dato i fortiden', () => {
+    const tiers = getActiveTiersForDate(history, '2025-06-15')
+    expect(tiers).toEqual([{ fromBalance: 0, rate: 3.0 }, { fromBalance: 150_000, rate: 3.5 }])
+  })
+
+  it('returnerer nyeste struktur for en dato etter siste innslag', () => {
+    const tiers = getActiveTiersForDate(history, '2026-03-01')
+    expect(tiers).toEqual([
+      { fromBalance: 0, rate: 3.4 },
+      { fromBalance: 100_000, rate: 3.7 },
+      { fromBalance: 500_000, rate: 4.35 },
+    ])
+  })
+
+  it('fremtidige innslag brukes ikke', () => {
+    const tiers = getActiveTiersForDate(history, '2026-07-31')
+    expect(tiers).toEqual([
+      { fromBalance: 0, rate: 3.4 },
+      { fromBalance: 100_000, rate: 3.7 },
+      { fromBalance: 500_000, rate: 4.35 },
+    ])
+  })
+
+  it('returnerer undefined for tom historikk', () => {
+    expect(getActiveTiersForDate([], '2026-01-01')).toBeUndefined()
+  })
+
+  it('returnerer undefined når alle innslag er fremtidige', () => {
+    const future: TieredRateHistoryEntry[] = [
+      { fromDate: '2099-01-01', tiers: [{ fromBalance: 0, rate: 5.0 }] },
+    ]
+    expect(getActiveTiersForDate(future, '2026-01-01')).toBeUndefined()
+  })
+
+  it('bruker eksakt match på fromDate', () => {
+    const tiers = getActiveTiersForDate(history, '2026-01-01')
+    expect(tiers?.[0].rate).toBe(3.4)
+  })
+})
 
 describe('getEffectiveRateFromTiers', () => {
   const tiers: TieredRate[] = [
@@ -134,14 +181,30 @@ describe('getEffectiveRateFromTiers', () => {
 })
 
 describe('getEffectiveRate', () => {
-  it('faller tilbake på rateHistory når tieredRates mangler', () => {
+  it('faller tilbake på rateHistory når tieredRateHistory mangler', () => {
     const acc = makeBSUAccount({
       rateHistory: [{ fromDate: '2025-01-01', rate: 6.3 }],
     })
     expect(getEffectiveRate(acc, 50_000)).toBe(6.3)
   })
 
-  it('bruker tieredRates når tilstede', () => {
+  it('bruker tieredRateHistory når tilstede', () => {
+    const acc = makeBSUAccount({
+      rateHistory: [{ fromDate: '2025-01-01', rate: 6.3 }],
+      tieredRateHistory: [
+        {
+          fromDate: '2025-01-01',
+          tiers: [
+            { fromBalance: 0,       rate: 3.25 },
+            { fromBalance: 100_000, rate: 3.55 },
+          ],
+        },
+      ],
+    })
+    expect(getEffectiveRate(acc, 150_000)).toBe(3.55)
+  })
+
+  it('faller tilbake på tieredRates (gammel data) hvis tieredRateHistory mangler', () => {
     const acc = makeBSUAccount({
       rateHistory: [{ fromDate: '2025-01-01', rate: 6.3 }],
       tieredRates: [
