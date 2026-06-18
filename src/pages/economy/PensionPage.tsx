@@ -42,13 +42,57 @@ export function PensionPage() {
   const stored = useEconomyStore((s) => s.pensionSettings)
   const setPensionSettings = useEconomyStore((s) => s.setPensionSettings)
 
-  const settings: PensionSettings = stored ?? {
+  // Alle hooks må kalles før enhver betinget return (Rules of Hooks).
+  const settings = useMemo<PensionSettings>(() => stored ?? {
     ...DEFAULT_PENSION_SETTINGS,
     birthYear: prefs?.birthYear ?? DEFAULT_PENSION_SETTINGS.birthYear,
-  }
+  }, [stored, prefs?.birthYear])
+
   const [uttaksalder, setUttaksalder] = useState(67)
 
-  // Guards
+  const baseInput: Omit<PensionInput, 'uttaksalder'> | null = useMemo(() => {
+    if (!profile) return null
+    const fasteTillegg = (profile.fixedAdditions ?? []).reduce((s, t) => s + t.amount, 0)
+    const spkGrunnlag = (profile.baseMonthly + fasteTillegg) * 12
+    // Folketrygd inkluderer variable tillegg/ATF — grovt anslag: +5 % over SPK-grunnlag.
+    const folketrygdInntekt = spkGrunnlag * 1.05
+    return {
+      birthYear: settings.birthYear,
+      serviceStartYear: settings.serviceStartYear,
+      currentYear: new Date().getFullYear(),
+      currentG: GRUNNBELOP_NOK,
+      folketrygdAnnualIncome: folketrygdInntekt,
+      spkAnnualGrunnlag: spkGrunnlag,
+      salaryGrowthPct: settings.assumptions.salaryGrowthPct,
+      gGrowthPct: settings.assumptions.gGrowthPct,
+      afpEnabled: settings.afpEnabled,
+      særalder: settings.særalder,
+    }
+  }, [profile, settings])
+
+  const projection = useMemo(() => {
+    if (!baseInput) return null
+    try {
+      return projectPension({ ...baseInput, uttaksalder })
+    } catch (err) {
+      if (import.meta.env.DEV) console.error('[PensionPage] projectPension feilet:', err)
+      return null
+    }
+  }, [baseInput, uttaksalder])
+
+  const sammenligning = useMemo(() => {
+    if (!baseInput) return []
+    return UTTAKSALDRE.flatMap((a) => {
+      try {
+        return [projectPension({ ...baseInput, uttaksalder: a })]
+      } catch (err) {
+        if (import.meta.env.DEV) console.error('[PensionPage] sammenligning feilet for', a, err)
+        return []
+      }
+    })
+  }, [baseInput])
+
+  // Guards — etter alle hook-kall.
   if (!profile || !prefs?.birthYear) {
     return (
       <div className="flex h-full items-center justify-center p-6 text-center">
@@ -70,44 +114,6 @@ export function PensionPage() {
       </div>
     )
   }
-
-  const baseInput: Omit<PensionInput, 'uttaksalder'> = useMemo(() => {
-    const fasteTillegg = (profile.fixedAdditions ?? []).reduce((s, t) => s + t.amount, 0)
-    const spkGrunnlag = (profile.baseMonthly + fasteTillegg) * 12
-    // Folketrygd inkluderer variable tillegg/ATF — grovt anslag: +5 % over SPK-grunnlag.
-    const folketrygdInntekt = spkGrunnlag * 1.05
-    return {
-      birthYear: settings.birthYear,
-      serviceStartYear: settings.serviceStartYear,
-      currentYear: new Date().getFullYear(),
-      currentG: GRUNNBELOP_NOK,
-      folketrygdAnnualIncome: folketrygdInntekt,
-      spkAnnualGrunnlag: spkGrunnlag,
-      salaryGrowthPct: settings.assumptions.salaryGrowthPct,
-      gGrowthPct: settings.assumptions.gGrowthPct,
-      afpEnabled: settings.afpEnabled,
-      særalder: settings.særalder,
-    }
-  }, [profile, settings])
-
-  const projection = useMemo(() => {
-    try {
-      return projectPension({ ...baseInput, uttaksalder })
-    } catch {
-      return null
-    }
-  }, [baseInput, uttaksalder])
-
-  const sammenligning = useMemo(() => {
-    return UTTAKSALDRE.flatMap((a) => {
-      try {
-        return [projectPension({ ...baseInput, uttaksalder: a })]
-      } catch {
-        return []
-      }
-    })
-  }, [baseInput])
-
   if (!projection) {
     return (
       <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
