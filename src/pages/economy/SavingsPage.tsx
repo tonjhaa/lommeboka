@@ -1975,6 +1975,9 @@ function AccountCard({
   const [activeTab, setActiveTab] = useState<AccountTab | null>(null)
   const [showLog, setShowLog] = useState(false)
   const [editingAccount, setEditingAccount] = useState(false)
+  const [openRateHistory, setOpenRateHistory] = useState(false)
+  const [editingRateEntry, setEditingRateEntry] = useState<string | null>(null) // fromDate eller '__new__'
+  const [rateEntryDraft, setRateEntryDraft] = useState<{ fromDate: string; tiers: TieredRate[] } | null>(null)
   const [bsuPickYear, setBsuPickYear] = useState<string>(String(now.getFullYear() + 2))
   const [bsuPickMonth, setBsuPickMonth] = useState<number>(now.getMonth() + 1)
   const [bsuPostRate, setBsuPostRate] = useState(3.0)
@@ -2023,6 +2026,7 @@ function AccountCard({
   }
 
   return (
+    <>
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
@@ -2076,32 +2080,43 @@ function AccountCard({
         {/* Stats grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
           <MiniStat label="Saldo" value={fmtNOK(currentBalance)} highlight />
-          {account.tieredRates && account.tieredRates.length > 1 ? (
-            <div className="rounded-lg border border-border bg-muted/10 p-2 space-y-0.5">
-              <p className="text-xs text-muted-foreground">Rentesats (trinnvis)</p>
-              {[...account.tieredRates]
-                .sort((a, b) => a.fromBalance - b.fromBalance)
-                .map((t, i, arr) => {
-                  const isActive = currentBalance >= t.fromBalance &&
-                    (i === arr.length - 1 || currentBalance < arr[i + 1].fromBalance)
-                  return (
-                    <div key={t.fromBalance} className={`flex justify-between text-xs ${isActive ? 'text-primary font-semibold' : 'text-muted-foreground'}`}>
-                      <span>
-                        {t.fromBalance === 0 ? '0' : `${(t.fromBalance / 1000).toFixed(0)}k`}
-                        {i < arr.length - 1 ? `–${(arr[i + 1].fromBalance / 1000).toFixed(0)}k` : '+'}
-                      </span>
-                      <span>{t.rate.toFixed(2)} %{isActive ? ' ◀' : ''}</span>
-                    </div>
-                  )
-                })}
-            </div>
-          ) : (
-            <MiniStat
-              label="Rentesats"
-              value={`${currentRate.toFixed(2)} %`}
-              subvalue={isBSU ? 'krediteres 31. des' : 'månedlig kreditering'}
-            />
-          )}
+          {(() => {
+            const displayTiers = account.tieredRateHistory?.length
+              ? getActiveTiersForDate(account.tieredRateHistory, nowISO)
+              : account.tieredRates
+            return displayTiers && displayTiers.length > 1 ? (
+              <div className="rounded-lg border border-border bg-muted/10 p-2 space-y-0.5">
+                <p className="text-xs text-muted-foreground">Rentesats (trinnvis)</p>
+                {[...displayTiers]
+                  .sort((a, b) => a.fromBalance - b.fromBalance)
+                  .map((t, i, arr) => {
+                    const isActive = currentBalance >= t.fromBalance &&
+                      (i === arr.length - 1 || currentBalance < arr[i + 1].fromBalance)
+                    return (
+                      <div key={t.fromBalance} className={`flex justify-between text-xs ${isActive ? 'text-primary font-semibold' : 'text-muted-foreground'}`}>
+                        <span>
+                          {t.fromBalance === 0 ? '0' : `${(t.fromBalance / 1000).toFixed(0)}k`}
+                          {i < arr.length - 1 ? `–${(arr[i + 1].fromBalance / 1000).toFixed(0)}k` : '+'}
+                        </span>
+                        <span>{t.rate.toFixed(2)} %{isActive ? ' ◀' : ''}</span>
+                      </div>
+                    )
+                  })}
+                <button
+                  onClick={() => setOpenRateHistory((v) => !v)}
+                  className="text-[10px] text-muted-foreground hover:text-foreground transition-colors pt-0.5"
+                >
+                  {openRateHistory ? 'Skjul historikk ▲' : 'Administrer rentestruktur ▾'}
+                </button>
+              </div>
+            ) : (
+              <MiniStat
+                label="Rentesats"
+                value={`${currentRate.toFixed(2)} %`}
+                subvalue={isBSU ? 'krediteres 31. des' : 'månedlig kreditering'}
+              />
+            )
+          })()}
           <MiniStat label="Årets innskudd" value={fmtNOK(ytdContribs || 0)} />
           {interestForecast > 0 ? (
             <MiniStat
@@ -2404,6 +2419,276 @@ function AccountCard({
         )}
       </CardContent>
     </Card>
+
+      {/* Rentestruktur-accordion */}
+      {openRateHistory && (
+        <div className="rounded-md border border-border/50 overflow-hidden -mt-1">
+          <div className="bg-muted/20 px-3 py-1.5 text-xs font-medium text-muted-foreground">
+            Rentestrukturhistorikk
+          </div>
+          {(() => {
+            const history = account.tieredRateHistory ?? []
+            const sorted = [...history].sort((a, b) => b.fromDate.localeCompare(a.fromDate))
+            const activeFromDate = sorted.find((e) => e.fromDate <= nowISO)?.fromDate
+
+            return (
+              <>
+                {sorted.map((entry) => {
+                  const isFuture = entry.fromDate > nowISO
+                  const isActive = entry.fromDate === activeFromDate
+                  const isEditing = editingRateEntry === entry.fromDate
+                  const colorClass = isFuture
+                    ? 'text-amber-400/80'
+                    : isActive ? 'text-green-400' : 'text-muted-foreground'
+                  const rateSummary = [...entry.tiers]
+                    .sort((a, b) => a.fromBalance - b.fromBalance)
+                    .map((t) => `${t.rate.toFixed(2)}`)
+                    .join(' / ')
+
+                  return (
+                    <div key={entry.fromDate} className="border-t border-border/30">
+                      {!isEditing ? (
+                        <div className="flex items-center justify-between px-3 py-1.5 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className={colorClass}>
+                              {isFuture && '▶ '}Fra {fmtDate(entry.fromDate)}
+                            </span>
+                            {isActive && <span className="text-[10px] bg-green-400/10 text-green-400 rounded px-1 py-0.5">Aktiv</span>}
+                            {isFuture && <span className="text-[10px] bg-amber-400/10 text-amber-400/80 rounded px-1 py-0.5">Kommende</span>}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className={`${colorClass} font-mono`}>{rateSummary} %</span>
+                            <button
+                              onClick={() => {
+                                setEditingRateEntry(entry.fromDate)
+                                setRateEntryDraft({ fromDate: entry.fromDate, tiers: [...entry.tiers] })
+                              }}
+                              className="text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                            {history.length > 1 && (
+                              <button
+                                onClick={() => onUpdate({
+                                  tieredRateHistory: history.filter((e) => e.fromDate !== entry.fromDate),
+                                })}
+                                className="text-muted-foreground hover:text-red-400 transition-colors"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        /* Inline mini-editor */
+                        <div className="px-3 py-2 space-y-2 bg-muted/10">
+                          <div className="flex items-center gap-2">
+                            <Label className="text-xs w-20">Fra dato</Label>
+                            <Input
+                              type="date"
+                              value={rateEntryDraft!.fromDate}
+                              onChange={(e) => setRateEntryDraft((d) => d ? { ...d, fromDate: e.target.value } : d)}
+                              className="h-7 text-xs w-36"
+                            />
+                          </div>
+                          {rateEntryDraft!.tiers.map((tier, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground w-20">Fra saldo</span>
+                              <Input
+                                type="number"
+                                step={10000}
+                                disabled={idx === 0}
+                                value={tier.fromBalance || ''}
+                                placeholder="0"
+                                onChange={(e) => setRateEntryDraft((d) => d ? {
+                                  ...d,
+                                  tiers: d.tiers.map((t, i) => i === idx ? { ...t, fromBalance: parseFloat(e.target.value) || 0 } : t),
+                                } : d)}
+                                className="h-7 text-xs w-28"
+                              />
+                              <span className="text-xs text-muted-foreground">kr →</span>
+                              <Input
+                                type="number"
+                                step={0.05}
+                                value={tier.rate || ''}
+                                placeholder="0.00"
+                                onChange={(e) => setRateEntryDraft((d) => d ? {
+                                  ...d,
+                                  tiers: d.tiers.map((t, i) => i === idx ? { ...t, rate: parseFloat(e.target.value) || 0 } : t),
+                                } : d)}
+                                className="h-7 text-xs w-20"
+                              />
+                              <span className="text-xs text-muted-foreground">%</span>
+                              {idx > 0 && (
+                                <button
+                                  onClick={() => setRateEntryDraft((d) => d ? {
+                                    ...d,
+                                    tiers: d.tiers.filter((_, i) => i !== idx),
+                                  } : d)}
+                                  className="text-muted-foreground hover:text-red-400 transition-colors"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                          {rateEntryDraft!.tiers.length < 6 && (
+                            <button
+                              onClick={() => {
+                                const lastBal = rateEntryDraft!.tiers.at(-1)?.fromBalance ?? 0
+                                setRateEntryDraft((d) => d ? {
+                                  ...d,
+                                  tiers: [...d.tiers, { fromBalance: lastBal + 100_000, rate: 0 }],
+                                } : d)
+                              }}
+                              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <Plus className="h-3 w-3" /> Legg til trinn
+                            </button>
+                          )}
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              onClick={() => {
+                                if (!rateEntryDraft) return
+                                const newHistory = history.map((e) =>
+                                  e.fromDate === entry.fromDate
+                                    ? { fromDate: rateEntryDraft.fromDate, tiers: rateEntryDraft.tiers }
+                                    : e
+                                )
+                                onUpdate({ tieredRateHistory: newHistory })
+                                setEditingRateEntry(null)
+                                setRateEntryDraft(null)
+                              }}
+                              className="text-xs bg-primary text-primary-foreground rounded px-2 py-1"
+                            >
+                              Lagre
+                            </button>
+                            <button
+                              onClick={() => { setEditingRateEntry(null); setRateEntryDraft(null) }}
+                              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              Avbryt
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                {/* Ny periode-knapp */}
+                <div className="px-3 py-2 border-t border-border/30">
+                  {editingRateEntry === '__new__' ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs w-20">Fra dato</Label>
+                        <Input
+                          type="date"
+                          value={rateEntryDraft!.fromDate}
+                          onChange={(e) => setRateEntryDraft((d) => d ? { ...d, fromDate: e.target.value } : d)}
+                          className="h-7 text-xs w-36"
+                        />
+                      </div>
+                      {rateEntryDraft!.tiers.map((tier, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground w-20">Fra saldo</span>
+                          <Input
+                            type="number"
+                            step={10000}
+                            disabled={idx === 0}
+                            value={tier.fromBalance || ''}
+                            placeholder="0"
+                            onChange={(e) => setRateEntryDraft((d) => d ? {
+                              ...d,
+                              tiers: d.tiers.map((t, i) => i === idx ? { ...t, fromBalance: parseFloat(e.target.value) || 0 } : t),
+                            } : d)}
+                            className="h-7 text-xs w-28"
+                          />
+                          <span className="text-xs text-muted-foreground">kr →</span>
+                          <Input
+                            type="number"
+                            step={0.05}
+                            value={tier.rate || ''}
+                            placeholder="0.00"
+                            onChange={(e) => setRateEntryDraft((d) => d ? {
+                              ...d,
+                              tiers: d.tiers.map((t, i) => i === idx ? { ...t, rate: parseFloat(e.target.value) || 0 } : t),
+                            } : d)}
+                            className="h-7 text-xs w-20"
+                          />
+                          <span className="text-xs text-muted-foreground">%</span>
+                          {idx > 0 && (
+                            <button
+                              onClick={() => setRateEntryDraft((d) => d ? {
+                                ...d,
+                                tiers: d.tiers.filter((_, i) => i !== idx),
+                              } : d)}
+                              className="text-muted-foreground hover:text-red-400 transition-colors"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {rateEntryDraft!.tiers.length < 6 && (
+                        <button
+                          onClick={() => {
+                            const lastBal = rateEntryDraft!.tiers.at(-1)?.fromBalance ?? 0
+                            setRateEntryDraft((d) => d ? {
+                              ...d,
+                              tiers: [...d.tiers, { fromBalance: lastBal + 100_000, rate: 0 }],
+                            } : d)
+                          }}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <Plus className="h-3 w-3" /> Legg til trinn
+                        </button>
+                      )}
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          onClick={() => {
+                            if (!rateEntryDraft?.fromDate) return
+                            onUpdate({
+                              tieredRateHistory: [
+                                ...history.filter((e) => e.fromDate !== rateEntryDraft.fromDate),
+                                { fromDate: rateEntryDraft.fromDate, tiers: rateEntryDraft.tiers },
+                              ],
+                            })
+                            setEditingRateEntry(null)
+                            setRateEntryDraft(null)
+                          }}
+                          className="text-xs bg-primary text-primary-foreground rounded px-2 py-1"
+                        >
+                          Lagre
+                        </button>
+                        <button
+                          onClick={() => { setEditingRateEntry(null); setRateEntryDraft(null) }}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          Avbryt
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        const activeTiers = activeFromDate
+                          ? history.find((e) => e.fromDate === activeFromDate)?.tiers ?? []
+                          : []
+                        setEditingRateEntry('__new__')
+                        setRateEntryDraft({ fromDate: '', tiers: [...activeTiers] })
+                      }}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <Plus className="h-3 w-3" /> Ny periode fra dato
+                    </button>
+                  )}
+                </div>
+              </>
+            )
+          })()}
+        </div>
+      )}
+    </>
   )
 }
 
