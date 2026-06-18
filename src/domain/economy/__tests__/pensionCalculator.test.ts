@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { buildIncomeProjection, buildGProjection, accrueFolketrygdBeholdning, annualFromBeholdning } from '../pensionCalculator'
-import { FOLKETRYGD_OPPTJENINGSSATS, TAK_FOLKETRYGD_G } from '@/config/economy.config'
+import { buildIncomeProjection, buildGProjection, accrueFolketrygdBeholdning, annualFromBeholdning, accrueSpkPaaslagBeholdning } from '../pensionCalculator'
+import { FOLKETRYGD_OPPTJENINGSSATS, TAK_FOLKETRYGD_G, SPK_PAASLAG_SATS_LAV, SPK_PAASLAG_SATS_HOY, TAK_SPK_G } from '@/config/economy.config'
 
 describe('buildIncomeProjection', () => {
   it('holder inntekt konstant når vekst = 0', () => {
@@ -52,5 +52,31 @@ describe('accrueFolketrygdBeholdning', () => {
 describe('annualFromBeholdning', () => {
   it('deler beholdning på delingstall', () => {
     expect(annualFromBeholdning(1_600_000, 16)).toBeCloseTo(100_000, 6)
+  })
+})
+
+describe('accrueSpkPaaslagBeholdning', () => {
+  it('gir kun lav sats når grunnlag ≤ 7,1G', () => {
+    const G = 100_000
+    const grunnlag = { 2030: 500_000 } // < 7,1G
+    const beholdning = accrueSpkPaaslagBeholdning(grunnlag, { 2030: G })
+    expect(beholdning).toBeCloseTo(500_000 * SPK_PAASLAG_SATS_LAV, 2)
+  })
+
+  it('legger høy sats på båndet 7,1G–12G', () => {
+    const G = 100_000
+    const grunnlag = { 2030: 800_000 } // 7,1G=710k, 12G=1,2M → bånd = 90k
+    const beholdning = accrueSpkPaaslagBeholdning(grunnlag, { 2030: G })
+    const forventet = 800_000 * SPK_PAASLAG_SATS_LAV + (800_000 - 7.1 * G) * SPK_PAASLAG_SATS_HOY
+    expect(beholdning).toBeCloseTo(forventet, 2)
+  })
+
+  it('kapper grunnlaget ved 12G', () => {
+    const G = 100_000
+    const grunnlag = { 2030: 2_000_000 } // over 12G
+    const beholdning = accrueSpkPaaslagBeholdning(grunnlag, { 2030: G })
+    const cap = TAK_SPK_G * G // 1,2M
+    const forventet = cap * SPK_PAASLAG_SATS_LAV + (cap - 7.1 * G) * SPK_PAASLAG_SATS_HOY
+    expect(beholdning).toBeCloseTo(forventet, 2)
   })
 })

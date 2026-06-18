@@ -7,6 +7,9 @@
 import {
   FOLKETRYGD_OPPTJENINGSSATS,
   TAK_FOLKETRYGD_G,
+  SPK_PAASLAG_SATS_LAV,
+  SPK_PAASLAG_SATS_HOY,
+  TAK_SPK_G,
 } from '@/config/economy.config'
 
 interface IncomeProjectionParams {
@@ -62,4 +65,22 @@ export function accrueFolketrygdBeholdning(
 /** Årlig ytelse = beholdning / delingstall. */
 export function annualFromBeholdning(beholdning: number, delingstall: number): number {
   return delingstall > 0 ? beholdning / delingstall : 0
+}
+
+/** SPK påslagsbeholdning: 5,7 % av grunnlag ≤ 12G + 18,1 % av båndet 7,1G–12G. */
+export function accrueSpkPaaslagBeholdning(
+  grunnlagByYear: Record<number, number>,
+  gByYear: Record<number, number>,
+): number {
+  let beholdning = 0
+  for (const [yearStr, grunnlag] of Object.entries(grunnlagByYear)) {
+    const year = Number(yearStr)
+    const g = gByYear[year]
+    if (!g) continue
+    const lavtGrunnlag = Math.min(grunnlag, TAK_SPK_G * g)
+    const baandStart = TAK_FOLKETRYGD_G * g
+    const baand = Math.max(0, Math.min(grunnlag, TAK_SPK_G * g) - baandStart)
+    beholdning += lavtGrunnlag * SPK_PAASLAG_SATS_LAV + baand * SPK_PAASLAG_SATS_HOY
+  }
+  return beholdning
 }
