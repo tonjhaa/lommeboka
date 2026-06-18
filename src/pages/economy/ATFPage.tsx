@@ -715,7 +715,6 @@ function ÅrsoppsummeringCard({
     (m) => m.source === 'imported_slip' && m.year === activeYear && m.slipData
   )
   const atfFraSlipp = yearSlips.reduce((s, m) => s + (m.slipData?.atfBeløp ?? 0), 0)
-  const fungeringFraSlipp = yearSlips.reduce((s, m) => s + (m.slipData?.fungeringBeløp ?? 0), 0)
 
   // Planlagt ATF = kalkulator-entries uten importert slipp for utbetalingsmåneden
   const slipMonthSet = new Set(yearSlips.map((m) => `${m.year}-${m.month}`))
@@ -726,9 +725,18 @@ function ÅrsoppsummeringCard({
   })
   const atfFraKalkulator = pendingEntries.reduce((s, e) => s + e.beregnetBeløp, 0)
 
-  // Fungering-effekt: for kalkulator-entries med fungering, beregn ca. ekstra ATF
-  // Ratio-approx fungerer fordi ATF-satser er tilnærmet lineære i lønnsgrunnlaget.
-  const fungeringKalkulatorEffekt = yearEntries.reduce((s, e) => {
+  // ATF-effekt av fungering fra slipper: andelen av ATF som skyldes at 10P2
+  // øker lønnsgrunnlaget. Ratio-approx: ATF er tilnærmet lineær i lønnsgrunnlaget.
+  const atfFungeringEffektFraSlipp = yearSlips.reduce((s, m) => {
+    const atf = m.slipData?.atfBeløp ?? 0
+    const fung = m.slipData?.fungeringBeløp ?? 0
+    const lonn = m.slipData?.maanedslonn ?? 0
+    if (atf <= 0 || fung <= 0 || lonn <= 0) return s
+    return s + atf * (fung / (lonn + fung))
+  }, 0)
+
+  // ATF-effekt av fungering fra kalkulator-entries (ikke-bekreftede øvelser)
+  const atfFungeringEffektFraKalkulator = pendingEntries.reduce((s, e) => {
     const fungering = (e.fungeringMndInput ?? 0) * 12
     if (fungering <= 0) return s
     const årslonn = e.årslønnInput ?? 0
@@ -739,8 +747,9 @@ function ÅrsoppsummeringCard({
     return s + e.beregnetBeløp * (1 - baseSalary / effectiveSalary)
   }, 0)
 
+  const totalAtfFungeringEffekt = atfFungeringEffektFraSlipp + atfFungeringEffektFraKalkulator
   const totalAtf = atfFraSlipp + atfFraKalkulator
-  if (totalAtf === 0 && fungeringFraSlipp === 0) return null
+  if (totalAtf === 0) return null
 
   return (
     <Card>
@@ -775,25 +784,17 @@ function ÅrsoppsummeringCard({
             <span className="font-mono font-semibold">{fmtNOK(totalAtf)}</span>
           </div>
         )}
-        {(fungeringFraSlipp > 0 || fungeringKalkulatorEffekt > 0) && (
+        {totalAtfFungeringEffekt > 0 && (
           <div className="border-t border-border/50 pt-1.5 mt-0.5 space-y-1">
             <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wide font-medium">
-              Fungering (10P2)
+              Fungering (10P2) — effekt på ATF
             </p>
-            {fungeringFraSlipp > 0 && (
-              <div className="flex justify-between text-sm">
-                <span className="text-purple-300/80">Fungeringstillegg hittil i år</span>
-                <span className="font-mono text-purple-300">{fmtNOK(fungeringFraSlipp)}</span>
-              </div>
-            )}
-            {fungeringKalkulatorEffekt > 0 && (
-              <div className="flex justify-between text-sm">
-                <span className="text-purple-300/60">
-                  Estimert ATF-økning pga. fungering
-                </span>
-                <span className="font-mono text-purple-300/80">+{fmtNOK(fungeringKalkulatorEffekt)}</span>
-              </div>
-            )}
+            <div className="flex justify-between text-sm">
+              <span className="text-purple-300/80">
+                Ekstra brutto ATF pga. fungering i lønnsgrunnlag
+              </span>
+              <span className="font-mono text-purple-300">+{fmtNOK(totalAtfFungeringEffekt)}</span>
+            </div>
           </div>
         )}
       </CardContent>
