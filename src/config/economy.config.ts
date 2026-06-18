@@ -311,9 +311,9 @@ export const LONNSVEKST_DEFAULT = 3.0
 
 /** Folketrygd alderspensjon: opptjeningssats av inntekt ≤ 7,1G. (NAV: 0.181) */
 export const FOLKETRYGD_OPPTJENINGSSATS = 0.181
-/** SPK påslag: lav sats av grunnlag ≤ 12G. */
+/** SPK påslag: grunnsats på HELE grunnlaget opp til 12G (gjelder også ≤ 7,1G). */
 export const SPK_PAASLAG_SATS_LAV = 0.057
-/** SPK påslag: høy sats i båndet 7,1G–12G. */
+/** SPK påslag: tilleggssats på grunnlag i båndet 7,1G–12G (kumulativt med grunnsatsen). */
 export const SPK_PAASLAG_SATS_HOY = 0.181
 /** Ny livsvarig offentlig AFP: opptjeningssats av livsinntekt ≤ 7,1G. (NAV: 0.0421) */
 export const AFP_OPPTJENINGSSATS = 0.0421
@@ -328,8 +328,11 @@ export const MIN_UTTAKSALDER = 62
 
 /**
  * Delingstall per uttaksalder.
- * FORELØPIG: seeded med NAVs publiserte tall for 1963-kullet som baseline.
- * Erstatt med forventede delingstall for brukerens årskull ved verifisering mot nav.no.
+ * FORELØPIG: NAVs publiserte tall for 1963-kullet (siste kull med offentliggjorte tall).
+ * NB: yngre kull (f.eks. 1995) får HØYERE delingstall pga. lengre forventet levetid →
+ * disse tallene UNDERVURDERER pensjon per opptjent krone for en 1995-bruker.
+ * Erstatt med prognosetall for brukerens faktiske årskull fra nav.no når tilgjengelig.
+ * Tabellen må holdes TETT (ingen hull mellom aldre) for at interpolasjonen skal være korrekt.
  */
 export const DELINGSTALL_BASELINE: Record<number, number> = {
   62: 19.39,
@@ -354,5 +357,8 @@ export function getDelingstall(uttaksalder: number): number {
   const hoy = Math.ceil(uttaksalder)
   if (lav === hoy) return DELINGSTALL_BASELINE[lav]
   const frac = uttaksalder - lav
-  return DELINGSTALL_BASELINE[lav] + (DELINGSTALL_BASELINE[hoy] - DELINGSTALL_BASELINE[lav]) * frac
+  // Defensiv mot hull i tabellen: fall tilbake på ytterpunktene om en alder mangler.
+  const lavVal = DELINGSTALL_BASELINE[lav] ?? DELINGSTALL_BASELINE[minA]
+  const hoyVal = DELINGSTALL_BASELINE[hoy] ?? DELINGSTALL_BASELINE[maxA]
+  return lavVal + (hoyVal - lavVal) * frac
 }

@@ -838,4 +838,3 @@ export interface PensionProjection {
   replacementRate: number         // monthlyTotal / (sluttlønn per mnd)
   confidence: 'lav' | 'middels'   // alltid ≤ middels (~40 års horisont)
 }
-

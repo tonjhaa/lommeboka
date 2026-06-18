@@ -18,7 +18,10 @@ describe('getDelingstall', () => {
     expect(getDelingstall(maxAlder + 5)).toBe(DELINGSTALL_BASELINE[maxAlder])
   })
 
-  it('senere uttak gir lavere delingstall (monotont)', () => {
-    expect(getDelingstall(70)).toBeLessThan(getDelingstall(62))
+  it('senere uttak gir lavere delingstall (monotont, hvert steg)', () => {
+    const aldre = Object.keys(DELINGSTALL_BASELINE).map(Number).sort((a, b) => a - b)
+    for (let i = 1; i < aldre.length; i++) {
+      expect(getDelingstall(aldre[i])).toBeLessThan(getDelingstall(aldre[i - 1]))
+    }
   })
 })
