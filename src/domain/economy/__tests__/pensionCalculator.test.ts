@@ -53,6 +53,10 @@ describe('annualFromBeholdning', () => {
   it('deler beholdning på delingstall', () => {
     expect(annualFromBeholdning(1_600_000, 16)).toBeCloseTo(100_000, 6)
   })
+
+  it('returnerer 0 ved delingstall = 0 (defensiv guard)', () => {
+    expect(annualFromBeholdning(100_000, 0)).toBe(0)
+  })
 })
 
 describe('accrueSpkPaaslagBeholdning', () => {
@@ -125,7 +129,19 @@ describe('projectPension', () => {
     expect(p.monthlyTotal).toBeCloseTo(
       p.perPilar.folketrygd + p.perPilar.spk + p.perPilar.afp + p.perPilar.særalder, 4,
     )
+    // Fornuftig intervall: en heltidskarriere skal gi en månedspensjon av betydning.
+    expect(p.monthlyTotal).toBeGreaterThan(10_000)
     expect(p.confidence).toBe('middels')
+  })
+
+  it('gir en kompensasjonsgrad mellom 0 og 2', () => {
+    const p = projectPension(makeInput())
+    expect(p.replacementRate).toBeGreaterThan(0)
+    expect(p.replacementRate).toBeLessThan(2) // >200 % ville vært en feil
+  })
+
+  it('kaster når yrkesstart er etter uttaksår', () => {
+    expect(() => projectPension(makeInput({ serviceStartYear: 2099, uttaksalder: 62 }))).toThrow()
   })
 
   it('gir 0 AFP når afpEnabled = false', () => {

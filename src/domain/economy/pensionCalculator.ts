@@ -108,6 +108,11 @@ export function accrueSpkPaaslagBeholdning(
   return beholdning
 }
 
+/**
+ * Domenelagets input. Bevisst «flatet» variant av PensionSettings (assumptions
+ * pakket ut til salaryGrowthPct/gGrowthPct) + avledede inntektsgrunnlag, slik at
+ * funksjonen er enkel å teste isolert.
+ */
 export interface PensionInput {
   birthYear: number
   serviceStartYear: number
@@ -119,7 +124,7 @@ export interface PensionInput {
   salaryGrowthPct: number
   gGrowthPct: number
   afpEnabled: boolean
-  særalder: { enabled: boolean; age: number }
+  særalder: { enabled: boolean; age: 57 | 60 | 63 }
 }
 
 const MIN_BIRTH_YEAR_NY_MODELL = 1963
@@ -140,6 +145,9 @@ export function projectPension(input: PensionInput): PensionProjection {
   const uttaksaar = input.birthYear + Math.max(input.uttaksalder, MIN_UTTAKSALDER)
   const fromYear = input.serviceStartYear
   const toYear = uttaksaar - 1 // opptjening til og med året før uttak
+  if (toYear < fromYear) {
+    throw new Error(`Ugyldig yrkesstart: serviceStartYear ${fromYear} er etter uttaksår ${uttaksaar}`)
+  }
 
   const gByYear = buildGProjection({
     currentYear: input.currentYear, currentG: input.currentG,
@@ -179,6 +187,8 @@ export function projectPension(input: PensionInput): PensionProjection {
     perPilar,
     monthlyTotal,
     replacementRate: sluttlonnMnd > 0 ? monthlyTotal / sluttlonnMnd : 0,
+    // TODO (fase 2): sett 'lav' når uttak ligger svært langt fram (stor usikkerhet
+    // i delingstall og G-vekst). Hardkodet 'middels' inntil videre.
     confidence: 'middels',
   }
 }
