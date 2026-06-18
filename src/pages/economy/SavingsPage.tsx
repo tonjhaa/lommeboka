@@ -48,6 +48,7 @@ import type {
   ContributionPeriod,
   BankAccountPreset,
   TieredRate,
+  TieredRateHistoryEntry,
 } from '@/types/economy'
 import { partnerNonBsuEquity } from '@/types/economy'
 import { SavingsImporter } from '@/features/savings/SavingsImporter'
@@ -2763,10 +2764,16 @@ function AccountForm({
   const [selectedPresetId, setSelectedPresetId] = useState<string>(initialPresetId)
   const enabledPresets = bankPresets.filter((p) => p.enabled)
   const initialPreset = initialPresetId !== 'manual' ? enabledPresets.find((p) => p.id === initialPresetId) : undefined
+  const todayISO = new Date().toISOString().slice(0, 10)
+  const activeTiersFromHistory = initial?.tieredRateHistory?.length
+    ? getActiveTiersForDate(initial.tieredRateHistory, todayISO)
+    : undefined
   const [tieredRates, setTieredRates] = useState<TieredRate[]>(
     initialPreset?.tieredRates
       ? [...initialPreset.tieredRates]
-      : (initial?.tieredRates ?? [{ fromBalance: 0, rate: initial?.rateHistory?.slice().sort((a, b) => b.fromDate.localeCompare(a.fromDate))[0]?.rate ?? 3.5 }])
+      : activeTiersFromHistory
+        ?? initial?.tieredRates
+        ?? [{ fromBalance: 0, rate: initial?.rateHistory?.slice().sort((a, b) => b.fromDate.localeCompare(a.fromDate))[0]?.rate ?? 3.5 }]
   )
   const [interestFreq, setInterestFreq] = useState<'monthly' | 'yearly'>(
     initialPreset?.interestCreditFrequency ?? initial?.interestCreditFrequency ?? 'monthly'
@@ -2848,8 +2855,22 @@ function AccountForm({
     if (!label.trim()) return
     const hasMultipleTiers = tieredRates.length > 1 ||
       (tieredRates.length === 1 && tieredRates[0].fromBalance > 0)
-    const effectiveTieredRates = hasMultipleTiers ? tieredRates : undefined
     const flatRate = tieredRates[0]?.rate ?? 3.5
+
+    // Bygg oppdatert tieredRateHistory: oppdater det aktive innslaget, behold resten
+    const existingHistory = initial?.tieredRateHistory ?? []
+    const activeEntry = [...existingHistory]
+      .filter((e) => e.fromDate <= todayISO)
+      .sort((a, b) => b.fromDate.localeCompare(a.fromDate))[0]
+      ?? existingHistory[0]
+
+    const updatedHistory: TieredRateHistoryEntry[] = hasMultipleTiers
+      ? activeEntry
+        ? existingHistory.map((e) =>
+            e.fromDate === activeEntry.fromDate ? { ...e, tiers: tieredRates } : e
+          )
+        : [{ fromDate: openingDate, tiers: tieredRates }]
+      : []
 
     const account: SavingsAccount = {
       id: initial?.id ?? crypto.randomUUID(),
@@ -2861,7 +2882,8 @@ function AccountForm({
       birthYear: isBSU && birthYear ? parseInt(birthYear) : undefined,
       interestCreditFrequency: isBSU ? 'yearly' : interestFreq,
       rateHistory: isBSU ? rateHistoryBsu : (initial?.rateHistory ?? [{ fromDate: openingDate, rate: flatRate }]),
-      tieredRates: effectiveTieredRates,
+      tieredRates: undefined,
+      tieredRateHistory: updatedHistory.length > 0 ? updatedHistory : undefined,
       bankPresetId: selectedPresetId !== 'manual' ? selectedPresetId : undefined,
       monthlyContribution: periods.length > 0 ? 0 : defaultMonthly,
       contributionPeriods: periods.length > 0 ? periods : undefined,
