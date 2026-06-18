@@ -19,6 +19,7 @@ import {
   Umbrella,
   Map,
   Gift,
+  Landmark,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -64,6 +65,9 @@ const VeikartPage = lazyWithRetry(() =>
 const GiftPage = lazyWithRetry(() =>
   import('./GiftPage').then((m) => ({ default: m.GiftPage }))
 )
+const PensionPage = lazyWithRetry(() =>
+  import('./PensionPage').then((m) => ({ default: m.PensionPage }))
+)
 
 interface NavItem {
   page: EconomySubPage
@@ -84,6 +88,7 @@ const NAV_ITEMS: NavItem[] = [
   { page: 'subscriptions', label: 'Abo & Fors.', Icon: RefreshCw },
   { page: 'vacation', label: 'Ferie', Icon: Umbrella },
   { page: 'veikart', label: 'Veikart', Icon: Map },
+  { page: 'pension', label: 'Pensjon', Icon: Landmark },
   { page: 'gaver', label: 'Gaver', Icon: Gift },
 ]
 
@@ -211,6 +216,7 @@ export function EconomyPage() {
           {currentPage === 'feriepenger' && <FeriepengePage />}
           {currentPage === 'vacation' && <VacationPage />}
           {currentPage === 'veikart' && <VeikartPage />}
+          {currentPage === 'pension' && <PensionPage />}
           {currentPage === 'gaver' && <GiftPage />}
           {currentPage === 'settings' && <EconomySettingsPage />}
         </Suspense>
