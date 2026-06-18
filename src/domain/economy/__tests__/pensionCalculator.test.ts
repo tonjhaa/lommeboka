@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { buildIncomeProjection, buildGProjection, accrueFolketrygdBeholdning, annualFromBeholdning, accrueSpkPaaslagBeholdning } from '../pensionCalculator'
-import { FOLKETRYGD_OPPTJENINGSSATS, TAK_FOLKETRYGD_G, SPK_PAASLAG_SATS_LAV, SPK_PAASLAG_SATS_HOY, TAK_SPK_G } from '@/config/economy.config'
+import { buildIncomeProjection, buildGProjection, accrueFolketrygdBeholdning, annualFromBeholdning, accrueSpkPaaslagBeholdning, sumLivsinntektUnder7_1G, annualAfp } from '../pensionCalculator'
+import { FOLKETRYGD_OPPTJENINGSSATS, TAK_FOLKETRYGD_G, SPK_PAASLAG_SATS_LAV, SPK_PAASLAG_SATS_HOY, TAK_SPK_G, AFP_OPPTJENINGSSATS } from '@/config/economy.config'
 
 describe('buildIncomeProjection', () => {
   it('holder inntekt konstant når vekst = 0', () => {
@@ -78,5 +78,22 @@ describe('accrueSpkPaaslagBeholdning', () => {
     const cap = TAK_SPK_G * G // 1,2M
     const forventet = cap * SPK_PAASLAG_SATS_LAV + (cap - 7.1 * G) * SPK_PAASLAG_SATS_HOY
     expect(beholdning).toBeCloseTo(forventet, 2)
+  })
+})
+
+describe('AFP (ny livsvarig)', () => {
+  it('summerer livsinntekt kappet ved 7,1G', () => {
+    const G = 100_000
+    const income = { 2030: 500_000, 2031: 900_000 } // år 2: kappes til 710k
+    const sum = sumLivsinntektUnder7_1G(income, { 2030: G, 2031: G })
+    expect(sum).toBeCloseTo(500_000 + 710_000, 2)
+  })
+
+  it('beregner AFP = livsinntekt × 4,21 % / delingstall', () => {
+    const livsinntekt = 20_000_000
+    const delingstall = 16
+    expect(annualAfp(livsinntekt, delingstall)).toBeCloseTo(
+      livsinntekt * AFP_OPPTJENINGSSATS / delingstall, 4,
+    )
   })
 })
