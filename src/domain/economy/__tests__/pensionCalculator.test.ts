@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildIncomeProjection, buildGProjection, accrueFolketrygdBeholdning, annualFromBeholdning, accrueSpkPaaslagBeholdning, sumLivsinntektUnder7_1G, annualAfp } from '../pensionCalculator'
+import { buildIncomeProjection, buildGProjection, accrueFolketrygdBeholdning, annualFromBeholdning, accrueSpkPaaslagBeholdning, sumLivsinntektUnder7_1G, annualAfp, projectPension, type PensionInput } from '../pensionCalculator'
 import { FOLKETRYGD_OPPTJENINGSSATS, TAK_FOLKETRYGD_G, SPK_PAASLAG_SATS_LAV, SPK_PAASLAG_SATS_HOY, TAK_SPK_G, AFP_OPPTJENINGSSATS } from '@/config/economy.config'
 
 describe('buildIncomeProjection', () => {
@@ -95,5 +95,56 @@ describe('AFP (ny livsvarig)', () => {
     expect(annualAfp(livsinntekt, delingstall)).toBeCloseTo(
       livsinntekt * AFP_OPPTJENINGSSATS / delingstall, 4,
     )
+  })
+})
+
+function makeInput(overrides: Partial<PensionInput> = {}): PensionInput {
+  return {
+    birthYear: 1995,
+    serviceStartYear: 2016,
+    currentYear: 2026,
+    currentG: 130_000,
+    folketrygdAnnualIncome: 600_000, // inkl. ATF/tillegg
+    spkAnnualGrunnlag: 550_000,      // fast lønn + faste tillegg
+    uttaksalder: 67,
+    salaryGrowthPct: 0,
+    gGrowthPct: 0,
+    afpEnabled: true,
+    særalder: { enabled: false, age: 60 },
+    ...overrides,
+  }
+}
+
+describe('projectPension', () => {
+  it('returnerer positive beløp for alle aktive pilarer', () => {
+    const p = projectPension(makeInput())
+    expect(p.perPilar.folketrygd).toBeGreaterThan(0)
+    expect(p.perPilar.spk).toBeGreaterThan(0)
+    expect(p.perPilar.afp).toBeGreaterThan(0)
+    expect(p.perPilar.særalder).toBe(0)
+    expect(p.monthlyTotal).toBeCloseTo(
+      p.perPilar.folketrygd + p.perPilar.spk + p.perPilar.afp + p.perPilar.særalder, 4,
+    )
+    expect(p.confidence).toBe('middels')
+  })
+
+  it('gir 0 AFP når afpEnabled = false', () => {
+    const p = projectPension(makeInput({ afpEnabled: false }))
+    expect(p.perPilar.afp).toBe(0)
+  })
+
+  it('gir særalderbeløp > 0 når særalder er på', () => {
+    const p = projectPension(makeInput({ særalder: { enabled: true, age: 60 }, uttaksalder: 60 }))
+    expect(p.perPilar.særalder).toBeGreaterThan(0)
+  })
+
+  it('kaster for årskull før 1963', () => {
+    expect(() => projectPension(makeInput({ birthYear: 1960 }))).toThrow()
+  })
+
+  it('senere uttaksalder gir høyere folketrygd', () => {
+    const tidlig = projectPension(makeInput({ uttaksalder: 62 }))
+    const sen = projectPension(makeInput({ uttaksalder: 70 }))
+    expect(sen.perPilar.folketrygd).toBeGreaterThan(tidlig.perPilar.folketrygd)
   })
 })
