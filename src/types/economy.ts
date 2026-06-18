@@ -267,6 +267,11 @@ export interface TieredRate {
   rate: number         // % per år — gjelder hele saldoen når balance >= fromBalance
 }
 
+export interface TieredRateHistoryEntry {
+  fromDate: string    // ISO "YYYY-MM-DD" — når strukturen gjelder fra
+  tiers: TieredRate[] // hele trinnstrukturen for denne perioden
+}
+
 export interface BankAccountPreset {
   id: string
   bankName: string
@@ -330,6 +335,8 @@ export interface SavingsAccount {
   monthlyContributionToDate?: string
   /** Trinnvis rente — overstyrer rateHistory for saldobasert renteberegning */
   tieredRates?: TieredRate[]
+  /** Tidsbevisst trinnvisrente — erstatter tieredRates */
+  tieredRateHistory?: TieredRateHistoryEntry[]
   /** ID til bankpreset som ble valgt ved opprettelse/sist redigering */
   bankPresetId?: string
   /** Fleksible spareperioder — overskriver monthlyContribution når tilstede */
