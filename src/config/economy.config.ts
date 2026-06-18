@@ -295,3 +295,64 @@ export const ARTSKODE_NAVN: Record<string, string> = {
   '2572': 'Timelønn (Tariff)',
   '2698': 'Kompensasjon kvote 98',
 }
+
+// ------------------------------------------------------------
+// PENSJON (2020-modellen — ny offentlig tjenestepensjon)
+// Satser forankret i navikt/pensjonssimulator (se design-spec).
+// Sist verifisert: 2026-06-18.
+// ------------------------------------------------------------
+
+/** Grunnbeløp (G) i kr. VERIFISER mot nav.no ved implementering (per 1. mai 2025 ≈ 130 160). */
+export const GRUNNBELOP_NOK = 130_160
+/** Antatt årlig G-regulering (%). */
+export const GRUNNBELOP_VEKST_DEFAULT = 3.5
+/** Antatt årlig lønnsvekst (%). */
+export const LONNSVEKST_DEFAULT = 3.0
+
+/** Folketrygd alderspensjon: opptjeningssats av inntekt ≤ 7,1G. (NAV: 0.181) */
+export const FOLKETRYGD_OPPTJENINGSSATS = 0.181
+/** SPK påslag: lav sats av grunnlag ≤ 12G. */
+export const SPK_PAASLAG_SATS_LAV = 0.057
+/** SPK påslag: høy sats i båndet 7,1G–12G. */
+export const SPK_PAASLAG_SATS_HOY = 0.181
+/** Ny livsvarig offentlig AFP: opptjeningssats av livsinntekt ≤ 7,1G. (NAV: 0.0421) */
+export const AFP_OPPTJENINGSSATS = 0.0421
+
+/** Inntektstak for folketrygd/AFP i antall G. */
+export const TAK_FOLKETRYGD_G = 7.1
+/** Øvre grunnlagstak for SPK-påslag i antall G. */
+export const TAK_SPK_G = 12
+
+/** Minste uttaksalder for alderspensjon/AFP. */
+export const MIN_UTTAKSALDER = 62
+
+/**
+ * Delingstall per uttaksalder.
+ * FORELØPIG: seeded med NAVs publiserte tall for 1963-kullet som baseline.
+ * Erstatt med forventede delingstall for brukerens årskull ved verifisering mot nav.no.
+ */
+export const DELINGSTALL_BASELINE: Record<number, number> = {
+  62: 19.39,
+  63: 18.59,
+  64: 17.79,
+  65: 16.99,
+  66: 16.20,
+  67: 15.42,
+  68: 14.64,
+  69: 13.87,
+  70: 13.11,
+}
+
+/** Slår opp delingstall med lineær interpolasjon; klamrer til ytterpunktene. */
+export function getDelingstall(uttaksalder: number): number {
+  const aldre = Object.keys(DELINGSTALL_BASELINE).map(Number).sort((a, b) => a - b)
+  const minA = aldre[0]
+  const maxA = aldre[aldre.length - 1]
+  if (uttaksalder <= minA) return DELINGSTALL_BASELINE[minA]
+  if (uttaksalder >= maxA) return DELINGSTALL_BASELINE[maxA]
+  const lav = Math.floor(uttaksalder)
+  const hoy = Math.ceil(uttaksalder)
+  if (lav === hoy) return DELINGSTALL_BASELINE[lav]
+  const frac = uttaksalder - lav
+  return DELINGSTALL_BASELINE[lav] + (DELINGSTALL_BASELINE[hoy] - DELINGSTALL_BASELINE[lav]) * frac
+}
