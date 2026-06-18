@@ -6,6 +6,8 @@ import { Progress } from '@/components/ui/progress'
 import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
 import type { EconomyState } from '@/application/useEconomyStore'
 import { calculateGoalProgress, computeEffectiveBalance, checkBSULimits } from '@/domain/economy/savingsCalculator'
+import { projectPension } from '@/domain/economy/pensionCalculator'
+import { GRUNNBELOP_NOK } from '@/config/economy.config'
 import { analyzeTaxSettlements } from '@/domain/economy/taxSettlementCalc'
 import { getDaysUsedLast12Months, getDaysUsedFromEvents, getAbsenceStatus, getAbsenceStatusFromEvents, getStatusColor } from '@/domain/economy/absenceCalculator'
 import type { AbsenceStatus } from '@/types/economy'
@@ -96,6 +98,7 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
     ivfTransactions,
     userPreferences,
     partnerVeikart,
+    pensionSettings,
   } = useActiveEconomyStore()
 
   const now = useMemo(() => new Date(), [])
@@ -396,6 +399,32 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
       text: `Budsjettunderskudd denne måneden: ${fmtNOK(Math.abs(overskuddFraBudsjett))}`,
       accent: 'red',
     })
+  }
+
+  // Pensjon-chip
+  if (profile && userPreferences?.birthYear && (userPreferences.birthYear >= 1963)) {
+    const fasteTillegg = (profile.fixedAdditions ?? []).reduce((s, t) => s + t.amount, 0)
+    const spkGrunnlag = (profile.baseMonthly + fasteTillegg) * 12
+    const ps = pensionSettings
+    try {
+      const proj = projectPension({
+        birthYear: userPreferences.birthYear,
+        serviceStartYear: ps?.serviceStartYear ?? currentYear - 5,
+        currentYear,
+        currentG: GRUNNBELOP_NOK,
+        folketrygdAnnualIncome: spkGrunnlag * 1.05,
+        spkAnnualGrunnlag: spkGrunnlag,
+        uttaksalder: 67,
+        salaryGrowthPct: ps?.assumptions.salaryGrowthPct ?? 3,
+        gGrowthPct: ps?.assumptions.gGrowthPct ?? 3.5,
+        afpEnabled: ps?.afpEnabled ?? true,
+        særalder: ps?.særalder ?? { enabled: false, age: 60 },
+      })
+      chips.push({
+        icon: '🏛️',
+        text: `Forventet pensjon ~${Math.round(proj.monthlyTotal).toLocaleString('no-NO')} kr/mnd ved 67 (estimat)`,
+      })
+    } catch { /* født før 1963 — hopp over */ }
   }
 
   // ── Render ────────────────────────────────────────────────
