@@ -299,11 +299,11 @@ export const ARTSKODE_NAVN: Record<string, string> = {
 // ------------------------------------------------------------
 // PENSJON (2020-modellen — ny offentlig tjenestepensjon)
 // Satser forankret i navikt/pensjonssimulator (se design-spec).
-// Sist verifisert: 2026-06-18.
+// Sist verifisert: 2026-06-19.
 // ------------------------------------------------------------
 
-/** Grunnbeløp (G) i kr. VERIFISER mot nav.no ved implementering (per 1. mai 2025 ≈ 130 160). */
-export const GRUNNBELOP_NOK = 130_160
+/** Grunnbeløp (G) i kr — fastsatt av NAV per 1. mai 2026. Kilde: nav.no/grunnbelopet. */
+export const GRUNNBELOP_NOK = 136_549
 /** Antatt årlig G-regulering (%). */
 export const GRUNNBELOP_VEKST_DEFAULT = 3.5
 /** Antatt årlig lønnsvekst (%). */
