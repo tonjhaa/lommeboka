@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
 import type { EconomyState } from '@/application/useEconomyStore'
+import { DEFAULT_PENSION_SETTINGS } from '@/application/useEconomyStore'
 import { calculateGoalProgress, computeEffectiveBalance, checkBSULimits } from '@/domain/economy/savingsCalculator'
+import { projectPension, buildPensionInputFromProfile } from '@/domain/economy/pensionCalculator'
 import { analyzeTaxSettlements } from '@/domain/economy/taxSettlementCalc'
 import { getDaysUsedLast12Months, getDaysUsedFromEvents, getAbsenceStatus, getAbsenceStatusFromEvents, getStatusColor } from '@/domain/economy/absenceCalculator'
 import type { AbsenceStatus } from '@/types/economy'
@@ -96,6 +98,7 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
     ivfTransactions,
     userPreferences,
     partnerVeikart,
+    pensionSettings,
   } = useActiveEconomyStore()
 
   const now = useMemo(() => new Date(), [])
@@ -396,6 +399,21 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
       text: `Budsjettunderskudd denne måneden: ${fmtNOK(Math.abs(overskuddFraBudsjett))}`,
       accent: 'red',
     })
+  }
+
+  // Pensjon-chip
+  if (profile && userPreferences?.birthYear && (userPreferences.birthYear >= 1963)) {
+    const ps = pensionSettings ?? { ...DEFAULT_PENSION_SETTINGS, birthYear: userPreferences.birthYear }
+    try {
+      const proj = projectPension({
+        ...buildPensionInputFromProfile(profile, ps, currentYear),
+        uttaksalder: 67,
+      })
+      chips.push({
+        icon: '🏛️',
+        text: `Forventet pensjon ~${Math.round(proj.monthlyTotal).toLocaleString('no-NO')} kr/mnd ved 67 (estimat)`,
+      })
+    } catch { /* født før 1963 / ugyldig input — hopp over */ }
   }
 
   // ── Render ────────────────────────────────────────────────

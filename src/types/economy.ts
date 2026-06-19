@@ -694,6 +694,7 @@ export type EconomyTab =
   | 'dashboard' | 'budget' | 'salary' | 'atf' | 'feriepenger'
   | 'savings' | 'fond' | 'debt' | 'absence' | 'tax'
   | 'subscriptions' | 'ivf' | 'vacation' | 'settings' | 'veikart' | 'gaver' | 'partner' | 'permisjon'
+  | 'pension'
 
 export interface UserPreferences {
   onboardingCompleted: boolean
@@ -807,3 +808,33 @@ export function partnerMonthlySavingsTotal(p: PartnerVeikart): number {
   return (p.accounts?.length ?? 0) > 0 ? p.accounts.reduce((s, a) => s + (a.monthlyContribution ?? 0), 0) : (p.monthlySavings ?? 0)
 }
 
+// ------------------------------------------------------------
+// PENSJON (2020-modellen, født 1963+)
+// ------------------------------------------------------------
+
+export interface PensionSettings {
+  birthYear: number               // default fra userPreferences
+  serviceStartYear: number        // yrkesstart / opptjeningsstart
+  særalder: { enabled: boolean; age: 57 | 60 | 63 }  // FLAGGES USIKKER i UI
+  afpEnabled: boolean             // antas oppfylt; kan skrus av
+  assumptions: {
+    salaryGrowthPct: number       // forventet årlig lønnsvekst, f.eks. 3
+    gGrowthPct: number            // forventet G-regulering, f.eks. 3.5
+  }
+  officialEstimate?: number       // valgfritt norskpensjon.no-tall (krok for senere kalibrering)
+}
+
+export interface PensionPillarBreakdown {
+  folketrygd: number              // kr/mnd
+  spk: number                     // kr/mnd
+  afp: number                     // kr/mnd
+  særalder: number                // kr/mnd (0 hvis av)
+}
+
+export interface PensionProjection {
+  uttaksalder: number
+  perPilar: PensionPillarBreakdown
+  monthlyTotal: number            // sum perPilar
+  replacementRate: number         // monthlyTotal / (sluttlønn per mnd)
+  confidence: 'lav' | 'middels'   // alltid ≤ middels (~40 års horisont)
+}

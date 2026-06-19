@@ -295,3 +295,72 @@ export const ARTSKODE_NAVN: Record<string, string> = {
   '2572': 'Timelønn (Tariff)',
   '2698': 'Kompensasjon kvote 98',
 }
+
+// ------------------------------------------------------------
+// PENSJON (2020-modellen — ny offentlig tjenestepensjon)
+// Satser forankret i navikt/pensjonssimulator (se design-spec).
+// Sist verifisert: 2026-06-19.
+// ------------------------------------------------------------
+
+/** Grunnbeløp (G) i kr — fastsatt av NAV per 1. mai 2026. Kilde: nav.no/grunnbelopet. */
+export const GRUNNBELOP_NOK = 136_549
+/** Antatt årlig G-regulering (%). */
+export const GRUNNBELOP_VEKST_DEFAULT = 3.5
+/** Antatt årlig lønnsvekst (%). */
+export const LONNSVEKST_DEFAULT = 3.0
+
+/** Folketrygd alderspensjon: opptjeningssats av inntekt ≤ 7,1G. (NAV: 0.181) */
+export const FOLKETRYGD_OPPTJENINGSSATS = 0.181
+/** SPK påslag: grunnsats på HELE grunnlaget opp til 12G (gjelder også ≤ 7,1G). */
+export const SPK_PAASLAG_SATS_LAV = 0.057
+/** SPK påslag: tilleggssats på grunnlag i båndet 7,1G–12G (kumulativt med grunnsatsen). */
+export const SPK_PAASLAG_SATS_HOY = 0.181
+/** Ny livsvarig offentlig AFP: opptjeningssats av livsinntekt ≤ 7,1G. (NAV: 0.0421) */
+export const AFP_OPPTJENINGSSATS = 0.0421
+
+/** Inntektstak for folketrygd/AFP i antall G. */
+export const TAK_FOLKETRYGD_G = 7.1
+/** Øvre grunnlagstak for SPK-påslag i antall G. */
+export const TAK_SPK_G = 12
+
+/** Minste uttaksalder for alderspensjon/AFP. */
+export const MIN_UTTAKSALDER = 62
+
+/**
+ * Forventede delingstall per uttaksalder for et ungt årskull (~1995).
+ * PROGNOSE — IKKE offisielt fastsatt. NAV fastsetter endelige delingstall først året
+ * årskullet fyller 61 (for 1995-kullet i 2056); kun prognoser finnes inntil da, og de
+ * hentes fra NAVs interne aktuartjeneste (ikke en offentlig tabell). Verdiene her er en
+ * glatt interpolasjon forankret i NAVs omtrentlige nivåer for unge kull: ~21,5 ved 62,
+ * ~17,5 ved 67, ~15,2 ved 70. Oppdater når NAV publiserer prognosetall for årskullet.
+ * Kilde-anker: nav.no/alderspensjon, snl.no/delingstall. Sist verifisert: 2026-06-19.
+ * Tabellen må holdes TETT (ingen hull mellom aldre) for at interpolasjonen skal være korrekt.
+ */
+export const DELINGSTALL_BASELINE: Record<number, number> = {
+  62: 21.50,
+  63: 20.70,
+  64: 19.90,
+  65: 19.10,
+  66: 18.30,
+  67: 17.50,
+  68: 16.73,
+  69: 15.97,
+  70: 15.20,
+}
+
+/** Slår opp delingstall med lineær interpolasjon; klamrer til ytterpunktene. */
+export function getDelingstall(uttaksalder: number): number {
+  const aldre = Object.keys(DELINGSTALL_BASELINE).map(Number).sort((a, b) => a - b)
+  const minA = aldre[0]
+  const maxA = aldre[aldre.length - 1]
+  if (uttaksalder <= minA) return DELINGSTALL_BASELINE[minA]
+  if (uttaksalder >= maxA) return DELINGSTALL_BASELINE[maxA]
+  const lav = Math.floor(uttaksalder)
+  const hoy = Math.ceil(uttaksalder)
+  if (lav === hoy) return DELINGSTALL_BASELINE[lav]
+  const frac = uttaksalder - lav
+  // Defensiv mot hull i tabellen: fall tilbake på ytterpunktene om en alder mangler.
+  const lavVal = DELINGSTALL_BASELINE[lav] ?? DELINGSTALL_BASELINE[minA]
+  const hoyVal = DELINGSTALL_BASELINE[hoy] ?? DELINGSTALL_BASELINE[maxA]
+  return lavVal + (hoyVal - lavVal) * frac
+}
