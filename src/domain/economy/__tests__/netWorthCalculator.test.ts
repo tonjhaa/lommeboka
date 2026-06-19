@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { enumerateMonths, monthEndDate, computeNetWorthSeries, savingsBalanceAt, fondValueAt, ivfBalanceAt } from '../netWorthCalculator'
-import type { NetWorthInput, SavingsAccount, FondPortfolio, IVFTransaction } from '@/types/economy'
+import { enumerateMonths, monthEndDate, computeNetWorthSeries, savingsBalanceAt, fondValueAt, ivfBalanceAt, debtBalanceAt } from '../netWorthCalculator'
+import type { NetWorthInput, SavingsAccount, FondPortfolio, IVFTransaction, DebtAccount } from '@/types/economy'
 
 function konto(overrides: Partial<SavingsAccount> = {}): SavingsAccount {
   return {
@@ -90,6 +90,33 @@ describe('ivfBalanceAt', () => {
   it('kumulativ sum ≤ måned, gulvet på 0', () => {
     expect(ivfBalanceAt(txs, 2026, 1)).toBe(20_000)
     expect(ivfBalanceAt(txs, 2026, 2)).toBe(15_000)
+  })
+})
+
+function laan(overrides: Partial<DebtAccount> = {}): DebtAccount {
+  return {
+    id: 'd1', creditor: 'Lånekassen', type: 'studielaan',
+    originalAmount: 200_000, currentBalance: 120_000,
+    rateHistory: [{ fromDate: '2020-01-01', nominalRate: 4 }],
+    monthlyPayment: 3_000, termFee: 0, startDate: '2020-01-01',
+    ...overrides,
+  }
+}
+
+describe('debtBalanceAt', () => {
+  const now = { year: 2026, month: 6 }
+  it('gir currentBalance ved nå', () => {
+    expect(debtBalanceAt([laan()], 2026, 6, now)).toBeCloseTo(120_000, 0)
+  })
+  it('interpolerer bakover mellom originalAmount (startdato) og currentBalance (nå)', () => {
+    // et punkt mellom start og nå skal ligge mellom 120k og 200k
+    const v = debtBalanceAt([laan()], 2023, 1, now)
+    expect(v).toBeGreaterThan(120_000)
+    expect(v).toBeLessThanOrEqual(200_000)
+  })
+  it('reduseres fremover (amortisering)', () => {
+    const v = debtBalanceAt([laan()], 2026, 12, now)
+    expect(v).toBeLessThan(120_000)
   })
 })
 

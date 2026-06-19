@@ -3,8 +3,9 @@
 // Utleder netto formue per måned fra eksisterende data.
 // ============================================================
 
-import type { NetWorthInput, NetWorthPoint, NetWorthSeries, SavingsAccount, FondPortfolio, IVFTransaction } from '@/types/economy'
+import type { NetWorthInput, NetWorthPoint, NetWorthSeries, SavingsAccount, FondPortfolio, IVFTransaction, DebtAccount } from '@/types/economy'
 import { computeEffectiveBalance, projectSavingsGrowth } from './savingsCalculator'
+import { buildRepaymentPlan } from './debtCalculator'
 
 /**
  * Siste dag i måneden som Date i UTC. `month` er 1-basert (1 = januar).
@@ -83,6 +84,45 @@ export function ivfBalanceAt(txs: IVFTransaction[], year: number, month: number)
   const cutoff = monthEndDate(year, month).toISOString().split('T')[0]
   const sum = txs.filter((t) => t.date <= cutoff).reduce((s, t) => s + t.amount, 0)
   return Math.max(0, sum)
+}
+
+/** Antall måneder fra (ay,am) til (by,bm). */
+function monthsDiff(ay: number, am: number, by: number, bm: number): number {
+  return (by - ay) * 12 + (bm - am)
+}
+
+/**
+ * Gjeldssaldo (sum, positivt) ved (year,month).
+ * Nå: currentBalance. Fremtid: buildRepaymentPlan. Fortid: lineær interpolasjon
+ * mellom originalAmount (startDate) og currentBalance (nå) — tilnærming, lander
+ * eksakt på currentBalance ved nå. Gjeld uten gyldig startDate: flat på currentBalance bakover.
+ */
+export function debtBalanceAt(
+  debts: DebtAccount[],
+  year: number,
+  month: number,
+  now: { year: number; month: number },
+): number {
+  const future = year > now.year || (year === now.year && month > now.month)
+  return debts.reduce((sum, d) => {
+    if (year === now.year && month === now.month) return sum + d.currentBalance
+    if (future) {
+      const plan = buildRepaymentPlan(d)
+      const idx = monthsDiff(now.year, now.month, year, month) - 1
+      const bal = idx >= 0 && idx < plan.rows.length ? plan.rows[idx].balance : 0
+      return sum + bal
+    }
+    // fortid: interpoler start→nå
+    const start = new Date(d.startDate)
+    if (isNaN(start.getTime()) || !d.originalAmount) return sum + d.currentBalance
+    const startY = start.getFullYear()
+    const startM = start.getMonth() + 1
+    const totalMonths = monthsDiff(startY, startM, now.year, now.month)
+    if (totalMonths <= 0) return sum + d.currentBalance
+    const elapsed = monthsDiff(startY, startM, year, month)
+    const frac = Math.min(1, Math.max(0, elapsed / totalMonths))
+    return sum + (d.originalAmount + (d.currentBalance - d.originalAmount) * frac)
+  }, 0)
 }
 
 /** True hvis (year,month) er etter `now`. */
