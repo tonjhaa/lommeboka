@@ -3,7 +3,7 @@
 // Utleder netto formue per måned fra eksisterende data.
 // ============================================================
 
-import type { NetWorthInput, NetWorthPoint, NetWorthSeries, SavingsAccount, FondPortfolio, IVFTransaction, DebtAccount } from '@/types/economy'
+import type { NetWorthInput, NetWorthPoint, NetWorthSeries, SavingsAccount, FondPortfolio, IVFTransaction, DebtAccount, PartnerVeikart } from '@/types/economy'
 import { computeEffectiveBalance, projectSavingsGrowth } from './savingsCalculator'
 import { buildRepaymentPlan } from './debtCalculator'
 
@@ -130,15 +130,28 @@ function isAfter(year: number, month: number, now: { year: number; month: number
   return year > now.year || (year === now.year && month > now.month)
 }
 
+function partnerNetWorthAt(
+  _partner: PartnerVeikart, _year: number, _month: number, _now: { year: number; month: number },
+): { sparing: number; fond: number; gjeld: number } {
+  return { sparing: 0, fond: 0, gjeld: 0 }
+}
+
 export function computeNetWorthSeries(input: NetWorthInput): NetWorthSeries {
   return enumerateMonths(input.from, input.to).map(({ year, month }): NetWorthPoint => {
-    const sparing = 0
-    const fond = 0
-    const ivf = 0
-    const gjeld = 0
+    const sparing = savingsBalanceAt(input.savingsAccounts, year, month, input.now)
+    const fond = fondValueAt(input.fondPortfolio, year, month, input.now)
+    const ivf = ivfBalanceAt(input.ivfTransactions, year, month)
+    const gjeld = debtBalanceAt(input.debts, year, month, input.now)
+    const partner = input.scope === 'felles'
+      ? partnerNetWorthAt(input.partnerVeikart, year, month, input.now)
+      : { sparing: 0, fond: 0, gjeld: 0 }
+    const totalSparing = sparing + partner.sparing
+    const totalFond = fond + partner.fond
+    const totalGjeld = gjeld + partner.gjeld
     return {
-      year, month, sparing, fond, ivf, gjeld,
-      total: sparing + fond + ivf - gjeld,
+      year, month,
+      sparing: totalSparing, fond: totalFond, ivf, gjeld: totalGjeld,
+      total: totalSparing + totalFond + ivf - totalGjeld,
       isProjected: isAfter(year, month, input.now),
     }
   })

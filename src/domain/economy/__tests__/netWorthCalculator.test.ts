@@ -130,3 +130,20 @@ describe('computeNetWorthSeries — tom', () => {
     expect(s[2].isProjected).toBe(true)  // mars > nå
   })
 })
+
+describe('computeNetWorthSeries — konsistens-invariant (din)', () => {
+  it('nå-punkt.total == Σ faktisk sparing + fond + maks(0,ivf) − Σ currentBalance', () => {
+    const input: NetWorthInput = {
+      ...EMPTY,
+      from: { year: 2026, month: 1 }, to: { year: 2026, month: 3 }, now: { year: 2026, month: 2 },
+      savingsAccounts: [konto()],
+      debts: [laan()],
+    }
+    const s = computeNetWorthSeries(input)
+    const naa = s.find((p) => p.year === 2026 && p.month === 2)!
+    const forventet = savingsBalanceAt([konto()], 2026, 2, input.now)
+      + 0 /* fond */ + 0 /* ivf */ - 120_000 /* gjeld currentBalance */
+    expect(naa.total).toBeCloseTo(forventet, 0)
+    expect(naa.gjeld).toBeCloseTo(120_000, 0)
+  })
+})
