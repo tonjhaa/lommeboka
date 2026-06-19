@@ -137,21 +137,24 @@ export function PensionPage() {
           </span>
         </div>
 
-        {/* Uttaksalder-segmentkontroll */}
+        {/* Uttaksalder-slider */}
         <div>
-          <p className="text-xs text-muted-foreground mb-2">Uttaksalder</p>
-          <div className="flex gap-1.5 flex-wrap">
-            {UTTAKSALDRE.map((a) => (
-              <Button
-                key={a}
-                size="sm"
-                variant={uttaksalder === a ? 'default' : 'outline'}
-                className="h-8 px-3 text-xs"
-                onClick={() => setUttaksalder(a)}
-              >
-                {a} år
-              </Button>
-            ))}
+          <div className="flex items-baseline justify-between mb-2">
+            <p className="text-xs text-muted-foreground">Uttaksalder</p>
+            <p className="text-sm font-mono font-semibold tabular-nums">{uttaksalder} år</p>
+          </div>
+          <input
+            type="range"
+            min={62}
+            max={79}
+            step={1}
+            value={uttaksalder}
+            onChange={(e) => setUttaksalder(parseInt(e.target.value))}
+            className="w-full accent-primary"
+            aria-label="Uttaksalder"
+          />
+          <div className="flex justify-between text-[9px] text-muted-foreground mt-1">
+            <span>62 år</span><span>79 år</span>
           </div>
         </div>
       </div>

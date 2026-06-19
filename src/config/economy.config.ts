@@ -346,6 +346,17 @@ export const DELINGSTALL_BASELINE: Record<number, number> = {
   68: 16.73,
   69: 15.97,
   70: 15.20,
+  // 71+ dekker utsatt uttak i UI-slideren (62–79). I praksis kan folketrygd-uttak
+  // normalt utsettes til 75; verdiene over 75 er en ren ekstrapolasjon.
+  71: 14.45,
+  72: 13.70,
+  73: 12.97,
+  74: 12.25,
+  75: 11.55,
+  76: 10.87,
+  77: 10.20,
+  78: 9.55,
+  79: 8.92,
 }
 
 /** Slår opp delingstall med lineær interpolasjon; klamrer til ytterpunktene. */
