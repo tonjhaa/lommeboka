@@ -22,6 +22,8 @@ export function FormuePage() {
 
   const sisteFaktiske = [...serie].reverse().find((p) => !p.isProjected)
   const naa = sisteFaktiske?.total ?? 0
+  const periodeStart = serie.find((p) => !p.isProjected)?.total ?? naa
+  const delta = naa - periodeStart
 
   if (serie.every((p) => p.total === 0)) {
     return (
@@ -38,6 +40,11 @@ export function FormuePage() {
         <div>
           <p className="text-xs text-muted-foreground">Netto formue nå</p>
           <p className="text-3xl font-bold font-mono tabular-nums">{fmtNOK(naa)}</p>
+          {delta !== 0 && (
+            <p className={cn('text-xs font-mono', delta > 0 ? 'text-green-400' : 'text-red-400')}>
+              {delta > 0 ? '↑' : '↓'} {fmtNOK(Math.abs(delta))} i perioden
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           {partnerVeikart.enabled && (
@@ -78,19 +85,26 @@ export function FormuePage() {
         </ResponsiveContainer>
       </div>
 
-      {/* Sammensetningspanel: dagens fordeling */}
+      {/* Sammensetningspanel: dagens fordeling (andel av brutto eiendeler) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {sisteFaktiske && ([
-          ['Sparing', sisteFaktiske.sparing, 'text-blue-400'],
-          ['Fond', sisteFaktiske.fond, 'text-green-400'],
-          ['Prosjekt', sisteFaktiske.ivf, 'text-purple-400'],
-          ['Gjeld', -sisteFaktiske.gjeld, 'text-red-400'],
-        ] as const).map(([navn, verdi, farge]) => (
-          <div key={navn} className="rounded-lg border border-border/50 bg-card/60 p-3">
-            <p className="text-[11px] text-muted-foreground">{navn}</p>
-            <p className={cn('text-sm font-mono font-semibold', farge)}>{fmtNOK(verdi)}</p>
-          </div>
-        ))}
+        {sisteFaktiske && (() => {
+          const brutto = sisteFaktiske.sparing + sisteFaktiske.fond + sisteFaktiske.ivf
+          const andel = (v: number) => brutto > 0 ? Math.round((v / brutto) * 100) : 0
+          return ([
+            ['Sparing', sisteFaktiske.sparing, 'text-blue-400', true],
+            ['Fond', sisteFaktiske.fond, 'text-green-400', true],
+            ['Prosjekt', sisteFaktiske.ivf, 'text-purple-400', true],
+            ['Gjeld', -sisteFaktiske.gjeld, 'text-red-400', false],
+          ] as const).map(([navn, verdi, farge, visAndel]) => (
+            <div key={navn} className="rounded-lg border border-border/50 bg-card/60 p-3">
+              <div className="flex items-baseline justify-between">
+                <p className="text-[11px] text-muted-foreground">{navn}</p>
+                {visAndel && <p className="text-[10px] text-muted-foreground/70">{andel(verdi)} %</p>}
+              </div>
+              <p className={cn('text-sm font-mono font-semibold', farge)}>{fmtNOK(verdi)}</p>
+            </div>
+          ))
+        })()}
       </div>
 
       <p className="text-[11px] text-muted-foreground">
