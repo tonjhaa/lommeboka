@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { enumerateMonths, monthEndDate, computeNetWorthSeries, savingsBalanceAt } from '../netWorthCalculator'
-import type { NetWorthInput, SavingsAccount } from '@/types/economy'
+import { enumerateMonths, monthEndDate, computeNetWorthSeries, savingsBalanceAt, fondValueAt, ivfBalanceAt } from '../netWorthCalculator'
+import type { NetWorthInput, SavingsAccount, FondPortfolio, IVFTransaction } from '@/types/economy'
 
 function konto(overrides: Partial<SavingsAccount> = {}): SavingsAccount {
   return {
@@ -61,6 +61,35 @@ describe('savingsBalanceAt', () => {
   it('projiserer fremtid ankret til faktisk nå (vokser med innskudd)', () => {
     const v = savingsBalanceAt([konto()], 2026, 4, now)
     expect(v).toBeGreaterThan(102_000) // to mnd innskudd lagt til
+  })
+})
+
+describe('fondValueAt', () => {
+  const portfolio: FondPortfolio = {
+    monthlyDeposit: 0, startDate: '2026-01-01', funds: [],
+    snapshots: [
+      { date: '2026-01-15', totalValue: 50_000 },
+      { date: '2026-03-15', totalValue: 60_000 },
+    ],
+  }
+  const now = { year: 2026, month: 3 }
+  it('bruker nærmeste snapshot ≤ måned', () => {
+    expect(fondValueAt(portfolio, 2026, 2, now)).toBe(50_000) // siste ≤ feb
+    expect(fondValueAt(portfolio, 2026, 3, now)).toBe(60_000)
+  })
+  it('gir 0 før første snapshot', () => {
+    expect(fondValueAt(portfolio, 2025, 12, now)).toBe(0)
+  })
+})
+
+describe('ivfBalanceAt', () => {
+  const txs: IVFTransaction[] = [
+    { id: '1', date: '2026-01-10', label: 'Sparing', type: 'SPARING', amount: 20_000 },
+    { id: '2', date: '2026-02-10', label: 'Faktura', type: 'FAKTURA', amount: -5_000 },
+  ]
+  it('kumulativ sum ≤ måned, gulvet på 0', () => {
+    expect(ivfBalanceAt(txs, 2026, 1)).toBe(20_000)
+    expect(ivfBalanceAt(txs, 2026, 2)).toBe(15_000)
   })
 })
 

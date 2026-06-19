@@ -3,7 +3,7 @@
 // Utleder netto formue per måned fra eksisterende data.
 // ============================================================
 
-import type { NetWorthInput, NetWorthPoint, NetWorthSeries, SavingsAccount } from '@/types/economy'
+import type { NetWorthInput, NetWorthPoint, NetWorthSeries, SavingsAccount, FondPortfolio, IVFTransaction } from '@/types/economy'
 import { computeEffectiveBalance, projectSavingsGrowth } from './savingsCalculator'
 
 /**
@@ -62,6 +62,27 @@ export function savingsBalanceAt(
     const actualNow = computeEffectiveBalance(a, monthEndDate(now.year, now.month))
     return s + projT + (actualNow - projNow)
   }, 0)
+}
+
+/** Fondverdi ved (year,month): nærmeste snapshot ≤ månedsslutt, ellers 0. Fremtid framskrives flatt fra siste snapshot. */
+export function fondValueAt(
+  portfolio: FondPortfolio,
+  year: number,
+  month: number,
+  _now: { year: number; month: number },
+): number {
+  const cutoff = monthEndDate(year, month).toISOString().split('T')[0]
+  const upto = (portfolio.snapshots ?? [])
+    .filter((s) => s.date <= cutoff)
+    .sort((a, b) => a.date.localeCompare(b.date))
+  return upto.length > 0 ? upto[upto.length - 1].totalValue : 0
+}
+
+/** IVF-kassesaldo ved (year,month): maks(0, kumulativ sum av transaksjoner ≤ månedsslutt). */
+export function ivfBalanceAt(txs: IVFTransaction[], year: number, month: number): number {
+  const cutoff = monthEndDate(year, month).toISOString().split('T')[0]
+  const sum = txs.filter((t) => t.date <= cutoff).reduce((s, t) => s + t.amount, 0)
+  return Math.max(0, sum)
 }
 
 /** True hvis (year,month) er etter `now`. */
