@@ -694,7 +694,7 @@ export type EconomyTab =
   | 'dashboard' | 'budget' | 'salary' | 'atf' | 'feriepenger'
   | 'savings' | 'fond' | 'debt' | 'absence' | 'tax'
   | 'subscriptions' | 'ivf' | 'vacation' | 'settings' | 'veikart' | 'gaver' | 'partner' | 'permisjon'
-  | 'pension'
+  | 'pension' | 'formue'
 
 export interface UserPreferences {
   onboardingCompleted: boolean
@@ -837,4 +837,35 @@ export interface PensionProjection {
   monthlyTotal: number            // sum perPilar
   replacementRate: number         // monthlyTotal / (sluttlønn per mnd)
   confidence: 'lav' | 'middels'   // alltid ≤ middels (~40 års horisont)
+}
+
+// ------------------------------------------------------------
+// FORMUE OVER TID
+// ------------------------------------------------------------
+
+export type NetWorthScope = 'din' | 'felles'
+
+export interface NetWorthPoint {
+  year: number
+  month: number              // 1–12
+  sparing: number
+  fond: number
+  ivf: number                // maks(0, kassesaldo)
+  gjeld: number              // positivt tall (trekkes fra)
+  total: number              // sparing + fond + ivf − gjeld
+  isProjected: boolean       // false = faktisk (≤ nå), true = fremskrevet
+}
+
+export type NetWorthSeries = NetWorthPoint[]
+
+export interface NetWorthInput {
+  scope: NetWorthScope
+  from: { year: number; month: number }
+  to: { year: number; month: number }
+  now: { year: number; month: number }
+  savingsAccounts: SavingsAccount[]
+  fondPortfolio: FondPortfolio
+  ivfTransactions: IVFTransaction[]
+  debts: DebtAccount[]
+  partnerVeikart: PartnerVeikart
 }
