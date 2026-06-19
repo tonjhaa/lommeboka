@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   Shield, Briefcase, PiggyBank, BarChart2, CreditCard,
   FileText, TrendingUp, RefreshCw, HeartPulse, Umbrella,
-  Palmtree, CheckCircle2, ArrowRight, ChevronLeft, Map, Gift, Baby, Landmark,
+  Palmtree, CheckCircle2, ArrowRight, ChevronLeft, Map, Gift, Baby, Landmark, LineChart,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -121,6 +121,13 @@ export const MODULES: ModuleOption[] = [
     desc: 'Planlegg foreldrepermisjon og se lønnsutfall',
     icon: Baby,
     defaultFor: [],
+  },
+  {
+    tab: 'formue',
+    label: 'Formue over tid',
+    desc: 'Netto formue (sparing/fond/gjeld) som tidsserie',
+    icon: LineChart,
+    defaultFor: ['forsvaret', 'custom'],
   },
 ]
 
