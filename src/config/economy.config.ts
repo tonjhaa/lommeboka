@@ -327,23 +327,25 @@ export const TAK_SPK_G = 12
 export const MIN_UTTAKSALDER = 62
 
 /**
- * Delingstall per uttaksalder.
- * FORELØPIG: NAVs publiserte tall for 1963-kullet (siste kull med offentliggjorte tall).
- * NB: yngre kull (f.eks. 1995) får HØYERE delingstall pga. lengre forventet levetid →
- * disse tallene UNDERVURDERER pensjon per opptjent krone for en 1995-bruker.
- * Erstatt med prognosetall for brukerens faktiske årskull fra nav.no når tilgjengelig.
+ * Forventede delingstall per uttaksalder for et ungt årskull (~1995).
+ * PROGNOSE — IKKE offisielt fastsatt. NAV fastsetter endelige delingstall først året
+ * årskullet fyller 61 (for 1995-kullet i 2056); kun prognoser finnes inntil da, og de
+ * hentes fra NAVs interne aktuartjeneste (ikke en offentlig tabell). Verdiene her er en
+ * glatt interpolasjon forankret i NAVs omtrentlige nivåer for unge kull: ~21,5 ved 62,
+ * ~17,5 ved 67, ~15,2 ved 70. Oppdater når NAV publiserer prognosetall for årskullet.
+ * Kilde-anker: nav.no/alderspensjon, snl.no/delingstall. Sist verifisert: 2026-06-19.
  * Tabellen må holdes TETT (ingen hull mellom aldre) for at interpolasjonen skal være korrekt.
  */
 export const DELINGSTALL_BASELINE: Record<number, number> = {
-  62: 19.39,
-  63: 18.59,
-  64: 17.79,
-  65: 16.99,
-  66: 16.20,
-  67: 15.42,
-  68: 14.64,
-  69: 13.87,
-  70: 13.11,
+  62: 21.50,
+  63: 20.70,
+  64: 19.90,
+  65: 19.10,
+  66: 18.30,
+  67: 17.50,
+  68: 16.73,
+  69: 15.97,
+  70: 15.20,
 }
 
 /** Slår opp delingstall med lineær interpolasjon; klamrer til ytterpunktene. */
