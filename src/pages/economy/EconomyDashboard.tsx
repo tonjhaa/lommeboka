@@ -1,5 +1,6 @@
 import { AlertTriangle, Zap, Home } from 'lucide-react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { useNetWorthSeries } from '@/hooks/useNetWorthSeries'
 import { useSharedProjectStore } from '@/store/useSharedProjectStore'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
@@ -21,10 +22,6 @@ import { cn } from '@/lib/utils'
 import { HeroBand, calcHealthScore } from '@/components/economy/widgets/HeroBand'
 import { FormueChart } from '@/components/economy/charts/FormueChart'
 
-const MONTH_NAMES = [
-  '', 'Jan', 'Feb', 'Mars', 'April', 'Mai', 'Juni',
-  'Juli', 'Aug', 'Sep', 'Okt', 'Nov', 'Des',
-]
 
 function fmtNOK(n: number): string {
   return Math.round(n).toLocaleString('no-NO') + ' kr'
@@ -165,13 +162,16 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
   const totalGjeld = debts.filter(d => d.status !== 'nedbetalt').reduce((s, d) => s + d.currentBalance, 0)
   const nettoFormue = totalSparing - totalGjeld
 
-  // ── Inntektstrend — siste 3 faktiske + 6 projiserte ─────
-  const sortedSlips = [...monthHistory]
-    .filter((m) => m.slipData != null && m.nettoUtbetalt > 0)
-    .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
+  // ── Formue over tid (netto formue-serie) ─────────────────
+  const [formueScope, setFormueScope] = useState<'din' | 'felles'>('din')
+  const formueSerie = useNetWorthSeries(formueScope)
+  const dinSerieNaa = useNetWorthSeries('din')
 
-  const last3Slips = sortedSlips.slice(-3)
-  const trendData = last3Slips.map((m) => ({ m: MONTH_NAMES[m.month], v: m.nettoUtbetalt }))
+  const MONTH_SHORT2 = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des']
+  const formueHistory = formueSerie.filter((p) => !p.isProjected).map((p) => ({ m: MONTH_SHORT2[p.month - 1], v: p.total }))
+  const formueProjected = formueSerie.filter((p) => p.isProjected).map((p) => ({ m: MONTH_SHORT2[p.month - 1], v: p.total }))
+  const sisteFaktiske = [...dinSerieNaa].reverse().find((p) => !p.isProjected)
+  const nettoFormueFraSerie = sisteFaktiske?.total ?? 0
 
   // ── Budsjett ──────────────────────────────────────────────
   const juneForecast = profile ? forecastJune(currentYear, monthHistory, profile, atfEntries) : null
@@ -197,25 +197,6 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
   const overskuddCell = allBudgetRows.find((r) => r.id === 'overskudd')?.cells[monthIdx]
   const nettoFraBudsjett = nettoCell ? (nettoCell.actual ?? nettoCell.budget) : 0
   const overskuddFraBudsjett = overskuddCell ? (overskuddCell.actual ?? overskuddCell.budget) : null
-
-  // ── Inntektstrend projeksjon — bruk budsjettabellens netto for fremtidige måneder ─────
-  const projectedTrend: { m: string; v: number }[] = (() => {
-    const MONTH_SHORT = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des']
-    const lastEntry = sortedSlips[sortedSlips.length - 1]
-    const startMonth = lastEntry ? lastEntry.month : currentMonth
-    const startYear = lastEntry ? lastEntry.year : currentYear
-    return Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(startYear, startMonth - 1 + i + 1, 1)
-      // Bruk budsjettabellens netto-celle for måneder i inneværende år, ellers siste kjente
-      const cellIdx = d.getMonth() // 0-based
-      const budgetNetto = nettoRow && d.getFullYear() === currentYear
-        ? (nettoRow.cells[cellIdx]?.budget ?? 0)
-        : 0
-      const v = budgetNetto > 0 ? budgetNetto : nettoFraBudsjett
-      if (v <= 0) return null
-      return { m: MONTH_SHORT[d.getMonth()], v }
-    }).filter((p): p is { m: string; v: number } => p !== null)
-  })()
 
   // ── Sparerate siste 12 mnd (faktisk sparevekst / total netto) ────
   const sparerate12m = (() => {
@@ -423,7 +404,7 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
       {/* ── 1. HERO BAND ── */}
       <HeroBand
         healthScore={healthScore}
-        nettoFormue={nettoFormue}
+        nettoFormue={nettoFormueFraSerie}
         totalSparing={totalSparing}
         totalGjeld={totalGjeld}
         nettoInn={nettoFraBudsjett}
@@ -442,11 +423,25 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
           overskudd={overskuddFraBudsjett}
           avgNetto12m={avgNetto12m}
         />
-        <FormueChart
-          history={trendData}
-          projected={projectedTrend}
-          nettoFormue={nettoFormue}
-        />
+        <div className="flex flex-col gap-1">
+          {partnerVeikart.enabled && (
+            <div className="flex gap-1 self-end">
+              {(['din','felles'] as const).map((sc) => (
+                <button key={sc} onClick={() => setFormueScope(sc)}
+                  className={cn('rounded px-2 py-0.5 text-[10px] font-medium border',
+                    formueScope === sc ? 'border-primary text-primary' : 'border-border/40 text-muted-foreground')}>
+                  {sc === 'din' ? 'Din' : 'Felles'}
+                </button>
+              ))}
+            </div>
+          )}
+          <FormueChart
+            history={formueHistory}
+            projected={formueProjected}
+            nettoFormue={nettoFormueFraSerie}
+            label="Netto formue"
+          />
+        </div>
         <PengePulsCard chips={chips} />
       </div>
 
