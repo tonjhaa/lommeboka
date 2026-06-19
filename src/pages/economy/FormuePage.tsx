@@ -6,13 +6,15 @@ import { cn } from '@/lib/utils'
 
 const MONTHS = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des']
 function fmtNOK(n: number): string { return Math.round(n).toLocaleString('no-NO') + ' kr' }
-const RANGES = [{ label: '1 år', m: 12 }, { label: '3 år', m: 36 }, { label: '5 år', m: 60 }, { label: 'Alt', m: 240 }]
+const RANGES = [{ label: '1 år', m: 12 }, { label: '3 år', m: 36 }, { label: '5 år', m: 60 }, { label: '20 år', m: 240 }]
 
 export function FormuePage() {
   const { partnerVeikart } = useActiveEconomyStore()
   const [scope, setScope] = useState<'din' | 'felles'>('din')
   const [historyMonths, setHistoryMonths] = useState(36)
-  const serie = useNetWorthSeries(scope, { historyMonths, projectionMonths: 60 })
+  // Hvis partner deaktiveres mens 'felles' er valgt, fall trygt tilbake til 'din'.
+  const effectiveScope = partnerVeikart.enabled ? scope : 'din'
+  const serie = useNetWorthSeries(effectiveScope, { historyMonths, projectionMonths: 60 })
 
   const data = useMemo(() => serie.map((p) => ({
     label: `${MONTHS[p.month - 1]} ${String(p.year).slice(2)}`,
@@ -25,7 +27,10 @@ export function FormuePage() {
   const periodeStart = serie.find((p) => !p.isProjected)?.total ?? naa
   const delta = naa - periodeStart
 
-  if (serie.every((p) => p.total === 0)) {
+  // Tom = ingen registrert komponent (ikke bare total 0 — en bruker med sparing == gjeld
+  // har total 0 men skal se grafen).
+  const harData = serie.some((p) => p.sparing !== 0 || p.fond !== 0 || p.ivf !== 0 || p.gjeld !== 0)
+  if (!harData) {
     return (
       <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
         Legg til sparing eller gjeld for å se formue over tid.
@@ -76,11 +81,11 @@ export function FormuePage() {
             <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
             <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
             <Tooltip formatter={(v, n) => [fmtNOK(Math.abs(Number(v))), String(n)]} />
-            <Area type="monotone" dataKey="sparing" stackId="a" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} />
-            <Area type="monotone" dataKey="fond" stackId="a" stroke="#22c55e" fill="#22c55e" fillOpacity={0.3} />
-            <Area type="monotone" dataKey="ivf" stackId="a" stroke="#a855f7" fill="#a855f7" fillOpacity={0.3} />
-            <Area type="monotone" dataKey="gjeld" stackId="b" stroke="#ef4444" fill="#ef4444" fillOpacity={0.25} />
-            <Line type="monotone" dataKey="total" stroke="#e5e7eb" strokeWidth={2} dot={false} />
+            <Area type="monotone" dataKey="sparing" name="Sparing" stackId="a" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} />
+            <Area type="monotone" dataKey="fond" name="Fond" stackId="a" stroke="#22c55e" fill="#22c55e" fillOpacity={0.3} />
+            <Area type="monotone" dataKey="ivf" name="Prosjekt" stackId="a" stroke="#a855f7" fill="#a855f7" fillOpacity={0.3} />
+            <Area type="monotone" dataKey="gjeld" name="Gjeld" stackId="b" stroke="#ef4444" fill="#ef4444" fillOpacity={0.25} />
+            <Line type="monotone" dataKey="total" name="Netto formue" stroke="#e5e7eb" strokeWidth={2} dot={false} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -94,7 +99,8 @@ export function FormuePage() {
             ['Sparing', sisteFaktiske.sparing, 'text-blue-400', true],
             ['Fond', sisteFaktiske.fond, 'text-green-400', true],
             ['Prosjekt', sisteFaktiske.ivf, 'text-purple-400', true],
-            ['Gjeld', -sisteFaktiske.gjeld, 'text-red-400', false],
+            // Gjeld vises som positivt tall i rødt — konsistent med GjeldCard ellers i appen.
+            ['Gjeld', sisteFaktiske.gjeld, 'text-red-400', false],
           ] as const).map(([navn, verdi, farge, visAndel]) => (
             <div key={navn} className="rounded-lg border border-border/50 bg-card/60 p-3">
               <div className="flex items-baseline justify-between">
