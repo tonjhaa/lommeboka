@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useEconomyStore } from '@/application/useEconomyStore'
+import { DEFAULT_FOND_RATE } from '@/config/economy.config'
 import { useVeikartIntelligence, type VeikartEvent } from '@/hooks/useVeikartIntelligence'
 import {
   calcMaxPurchase, monthlyPayment,
@@ -16,7 +17,7 @@ import { cn } from '@/lib/utils'
 const CURRENT_RATE = 0.0425
 const STRESS_RATE = Math.max(0.07, CURRENT_RATE + 0.03)
 const DEFAULT_SAVINGS_RATE = 3.5  // % per år, sparekonto
-const DEFAULT_FOND_RATE = 7.0     // % per år, indeksfond
+// DEFAULT_FOND_RATE importeres fra economy.config (delt med Formue-modulen)
 
 // ── Formatering ──────────────────────────────────────────────────
 

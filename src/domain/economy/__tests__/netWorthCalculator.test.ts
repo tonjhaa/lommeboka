@@ -85,6 +85,13 @@ describe('fondValueAt', () => {
   it('gir 0 før første snapshot', () => {
     expect(fondValueAt(portfolio, 2025, 12, now)).toBe(0)
   })
+
+  it('framskriver fremtid med innskudd + avkastning (ikke flatt)', () => {
+    const medInnskudd: FondPortfolio = { ...portfolio, monthlyDeposit: 5_000 }
+    // 12 mnd fram fra nå (mars 2026, verdi 60 000): skal vokse mer enn ren flat verdi
+    const v = fondValueAt(medInnskudd, 2027, 3, now)
+    expect(v).toBeGreaterThan(60_000 + 5_000 * 12) // innskudd + avkastning > bare innskudd
+  })
 })
 
 describe('ivfBalanceAt', () => {

@@ -4,8 +4,9 @@
 // ============================================================
 
 import type { NetWorthInput, NetWorthPoint, NetWorthSeries, SavingsAccount, FondPortfolio, IVFTransaction, DebtAccount, PartnerVeikart } from '@/types/economy'
-import { computeEffectiveBalance, projectSavingsGrowth } from './savingsCalculator'
+import { computeEffectiveBalance, projectSavingsGrowth, projectBalanceMonthly } from './savingsCalculator'
 import { buildRepaymentPlan } from './debtCalculator'
+import { DEFAULT_FOND_RATE } from '@/config/economy.config'
 import { partnerNonBsuEquity, partnerMonthlySavingsTotal } from '@/types/economy'
 
 /**
@@ -66,18 +67,34 @@ export function savingsBalanceAt(
   }, 0)
 }
 
-/** Fondverdi ved (year,month): nærmeste snapshot ≤ månedsslutt, ellers 0. Fremtid framskrives flatt fra siste snapshot. */
-export function fondValueAt(
-  portfolio: FondPortfolio,
-  year: number,
-  month: number,
-  _now: { year: number; month: number },
-): number {
+/** Siste snapshot-verdi ≤ gitt månedsslutt (0 før første snapshot). */
+function fondSnapshotAt(portfolio: FondPortfolio, year: number, month: number): number {
   const cutoff = monthEndDate(year, month).toISOString().split('T')[0]
   const upto = (portfolio.snapshots ?? [])
     .filter((s) => s.date <= cutoff)
     .sort((a, b) => a.date.localeCompare(b.date))
   return upto.length > 0 ? upto[upto.length - 1].totalValue : 0
+}
+
+/**
+ * Fondverdi ved (year,month).
+ * Fortid/nå: nærmeste snapshot ≤ månedsslutt (0 før første snapshot).
+ * Fremtid: framskriv fra nå-verdien med månedlig innskudd + forventet avkastning —
+ * samme motor (projectBalanceMonthly) og rate (DEFAULT_FOND_RATE) som Veikart bruker,
+ * slik at fond-projeksjonen er konsistent på tvers av verktøyet.
+ */
+export function fondValueAt(
+  portfolio: FondPortfolio,
+  year: number,
+  month: number,
+  now: { year: number; month: number },
+): number {
+  if (!isAfter(year, month, now)) {
+    return fondSnapshotAt(portfolio, year, month)
+  }
+  const startValue = fondSnapshotAt(portfolio, now.year, now.month)
+  const months = (year - now.year) * 12 + (month - now.month)
+  return projectBalanceMonthly(startValue, portfolio.monthlyDeposit ?? 0, DEFAULT_FOND_RATE, months)
 }
 
 /** IVF-kassesaldo ved (year,month): maks(0, kumulativ sum av transaksjoner ≤ månedsslutt). */
