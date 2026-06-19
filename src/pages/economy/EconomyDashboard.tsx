@@ -150,19 +150,7 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
   // Veikart-data for dashbord-chip
   const veikartData = useVeikart()
 
-  // ── Formue ────────────────────────────────────────────────
-  const sparingKontoer = savingsAccounts.reduce((s, a) => s + computeEffectiveBalance(a, now), 0)
-  const sortedFondSnapshots = [...(fondPortfolio?.snapshots ?? [])].sort((a, b) => b.date.localeCompare(a.date))
-  const fondVerdi = sortedFondSnapshots[0]?.totalValue ?? 0
-  const sharedIvfTxs = useSharedProjectStore((s) => s.transactions)
-  const todayStr = now.toISOString().split('T')[0]
-  const ivfSrcTxs = sharedIvfTxs.length > 0 ? sharedIvfTxs : ivfTransactions
-  const ivfSaldo = ivfSrcTxs.filter(t => t.date <= todayStr).reduce((s, t) => s + t.amount, 0)
-  const totalSparing = sparingKontoer + fondVerdi + Math.max(0, ivfSaldo)
-  const totalGjeld = debts.filter(d => d.status !== 'nedbetalt').reduce((s, d) => s + d.currentBalance, 0)
-  const nettoFormue = totalSparing - totalGjeld
-
-  // ── Formue over tid (netto formue-serie) ─────────────────
+  // ── Formue over tid (netto formue-serie) — ÉN kilde for vist formue ──
   const [formueScope, setFormueScope] = useState<'din' | 'felles'>('din')
   const formueSerie = useNetWorthSeries(formueScope)
   const dinSerieNaa = useNetWorthSeries('din')
@@ -171,7 +159,20 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
   const formueHistory = formueSerie.filter((p) => !p.isProjected).map((p) => ({ m: MONTH_SHORT2[p.month - 1], v: p.total }))
   const formueProjected = formueSerie.filter((p) => p.isProjected).map((p) => ({ m: MONTH_SHORT2[p.month - 1], v: p.total }))
   const sisteFaktiske = [...dinSerieNaa].reverse().find((p) => !p.isProjected)
-  const nettoFormueFraSerie = sisteFaktiske?.total ?? 0
+
+  // Formue-totaler hentes fra kalkulatorens nå-punkt (scope 'din') — samme kilde som grafen,
+  // brukt av både HeroBand og helsescore for å unngå divergens.
+  const totalSparing = (sisteFaktiske?.sparing ?? 0) + (sisteFaktiske?.fond ?? 0) + (sisteFaktiske?.ivf ?? 0)
+  const totalGjeld = sisteFaktiske?.gjeld ?? 0
+  const nettoFormue = sisteFaktiske?.total ?? 0
+
+  // Hjelpeverdier med egne behov: ivfSaldo trenger fortegn (chips), fondVerdi til sparemål.
+  const sortedFondSnapshots = [...(fondPortfolio?.snapshots ?? [])].sort((a, b) => b.date.localeCompare(a.date))
+  const fondVerdi = sortedFondSnapshots[0]?.totalValue ?? 0
+  const sharedIvfTxs = useSharedProjectStore((s) => s.transactions)
+  const todayStr = now.toISOString().split('T')[0]
+  const ivfSrcTxs = sharedIvfTxs.length > 0 ? sharedIvfTxs : ivfTransactions
+  const ivfSaldo = ivfSrcTxs.filter(t => t.date <= todayStr).reduce((s, t) => s + t.amount, 0)
 
   // ── Budsjett ──────────────────────────────────────────────
   const juneForecast = profile ? forecastJune(currentYear, monthHistory, profile, atfEntries) : null
@@ -404,7 +405,7 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
       {/* ── 1. HERO BAND ── */}
       <HeroBand
         healthScore={healthScore}
-        nettoFormue={nettoFormueFraSerie}
+        nettoFormue={nettoFormue}
         totalSparing={totalSparing}
         totalGjeld={totalGjeld}
         nettoInn={nettoFraBudsjett}
@@ -438,7 +439,7 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
           <FormueChart
             history={formueHistory}
             projected={formueProjected}
-            nettoFormue={nettoFormueFraSerie}
+            nettoFormue={nettoFormue}
             label="Netto formue"
           />
         </div>

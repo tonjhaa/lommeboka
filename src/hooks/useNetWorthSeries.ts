@@ -26,12 +26,15 @@ export function useNetWorthSeries(
     const ivf = sharedIvf.length > 0
       ? sharedIvf.map((t) => ({ id: t.id, date: t.date, label: t.label, type: t.type, amount: t.amount, merknad: t.merknad }))
       : ivfTransactions
+    // Ekskluder nedbetalt gjeld — konsistent med hvordan resten av verktøyet (dashbord,
+    // GjeldCard) behandler status 'nedbetalt' (teller ikke i formue/beregninger).
+    const aktivGjeld = debts.filter((d) => d.status !== 'nedbetalt')
     return computeNetWorthSeries({
       scope,
       from: { year: back.getFullYear(), month: back.getMonth() + 1 },
       to: { year: fwd.getFullYear(), month: fwd.getMonth() + 1 },
       now,
-      savingsAccounts, fondPortfolio, ivfTransactions: ivf, debts, partnerVeikart,
+      savingsAccounts, fondPortfolio, ivfTransactions: ivf, debts: aktivGjeld, partnerVeikart,
     })
   }, [scope, historyMonths, projectionMonths, savingsAccounts, fondPortfolio, ivfTransactions, sharedIvf, debts, partnerVeikart])
 }
