@@ -22,12 +22,21 @@ describe('enumerateMonths', () => {
         { year: 2026, month: 1 }, { year: 2026, month: 2 },
       ])
   })
+
+  it('gir én måned når from === to', () => {
+    expect(enumerateMonths({ year: 2026, month: 6 }, { year: 2026, month: 6 }))
+      .toEqual([{ year: 2026, month: 6 }])
+  })
 })
 
 describe('monthEndDate', () => {
-  it('gir siste dag i måneden', () => {
-    expect(monthEndDate(2026, 2).getDate()).toBe(28)
-    expect(monthEndDate(2024, 2).getDate()).toBe(29) // skuddår
+  it('gir siste dag i måneden (UTC, tidssone-robust)', () => {
+    expect(monthEndDate(2026, 2).getUTCDate()).toBe(28)
+    expect(monthEndDate(2024, 2).getUTCDate()).toBe(29) // skuddår
+  })
+
+  it('toISOString gir korrekt dato uavhengig av tidssone', () => {
+    expect(monthEndDate(2026, 2).toISOString().split('T')[0]).toBe('2026-02-28')
   })
 })
 
@@ -37,6 +46,7 @@ describe('computeNetWorthSeries — tom', () => {
     expect(s).toHaveLength(3)
     expect(s.every((p) => p.total === 0)).toBe(true)
     expect(s[0].isProjected).toBe(false) // jan ≤ nå (feb)
+    expect(s[1].isProjected).toBe(false) // feb == nå → ikke projisert
     expect(s[2].isProjected).toBe(true)  // mars > nå
   })
 })

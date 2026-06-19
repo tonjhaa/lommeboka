@@ -5,9 +5,14 @@
 
 import type { NetWorthInput, NetWorthPoint, NetWorthSeries } from '@/types/economy'
 
-/** Siste dag i måneden som Date (lokal tid). */
+/**
+ * Siste dag i måneden som Date i UTC. `month` er 1-basert (1 = januar).
+ * UTC er bevisst: forbrukere sammenligner via `toISOString().split('T')[0]`
+ * (f.eks. `computeEffectiveBalance`), og lokal-midnatt ville gitt feil dato
+ * (én dag bak) i tidssoner øst for UTC. Bruk `getUTCDate()` for dag-tall.
+ */
 export function monthEndDate(year: number, month: number): Date {
-  return new Date(year, month, 0) // dag 0 i neste måned = siste dag denne
+  return new Date(Date.UTC(year, month, 0)) // dag 0 i neste måned = siste dag denne
 }
 
 /** Alle {year,month} fra `from` til `to` inklusiv. */
