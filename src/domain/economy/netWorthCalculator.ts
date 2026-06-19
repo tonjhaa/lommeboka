@@ -34,10 +34,10 @@ export function enumerateMonths(
   return out
 }
 
-/** Månedsindeks fra konto-åpning (0-basert). */
+/** Månedsindeks fra konto-åpning (0-basert). UTC-konsistent med monthEndDate. */
 function monthIndexFromOpening(account: SavingsAccount, year: number, month: number): number {
   const open = new Date(account.openingDate)
-  return (year - open.getFullYear()) * 12 + (month - (open.getMonth() + 1))
+  return (year - open.getUTCFullYear()) * 12 + (month - (open.getUTCMonth() + 1))
 }
 
 /**
@@ -51,13 +51,13 @@ export function savingsBalanceAt(
   month: number,
   now: { year: number; month: number },
 ): number {
-  const future = year > now.year || (year === now.year && month > now.month)
-  if (!future) {
+  if (!isAfter(year, month, now)) {
     return accounts.reduce((s, a) => s + computeEffectiveBalance(a, monthEndDate(year, month)), 0)
   }
   return accounts.reduce((s, a) => {
-    const proj = projectSavingsGrowth(a, { year, month })
     const tIdx = monthIndexFromOpening(a, year, month)
+    if (tIdx < 0) return s // konto ikke åpnet ennå ved målmåneden
+    const proj = projectSavingsGrowth(a, { year, month })
     const nowIdx = monthIndexFromOpening(a, now.year, now.month)
     const projT = proj[tIdx] ?? proj[proj.length - 1] ?? 0
     const projNow = proj[nowIdx] ?? projT
@@ -104,13 +104,15 @@ export function debtBalanceAt(
   month: number,
   now: { year: number; month: number },
 ): number {
-  const future = year > now.year || (year === now.year && month > now.month)
   return debts.reduce((sum, d) => {
     if (year === now.year && month === now.month) return sum + d.currentBalance
-    if (future) {
+    if (isAfter(year, month, now)) {
+      // buildRepaymentPlan er i-dag-forankret (rows[i] = saldo etter termin i+1 fra i dag),
+      // så indekser fra systemdato. Forutsetter at `now` er inneværende måned (hooken sikrer det).
       const plan = buildRepaymentPlan(d)
-      const idx = monthsDiff(now.year, now.month, year, month) - 1
-      const bal = idx >= 0 && idx < plan.rows.length ? plan.rows[idx].balance : 0
+      const today = new Date()
+      const idx = monthsDiff(today.getUTCFullYear(), today.getUTCMonth() + 1, year, month) - 1
+      const bal = idx < 0 ? d.currentBalance : (idx < plan.rows.length ? plan.rows[idx].balance : 0)
       return sum + bal
     }
     // fortid: interpoler start→nå

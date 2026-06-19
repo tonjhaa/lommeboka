@@ -62,6 +62,11 @@ describe('savingsBalanceAt', () => {
     const v = savingsBalanceAt([konto()], 2026, 4, now)
     expect(v).toBeGreaterThan(102_000) // to mnd innskudd lagt til
   })
+  it('bidrar 0 for måneder før konto er åpnet (åpnet etter nå)', () => {
+    const fremtidig = konto({ openingDate: '2027-01-01', balanceHistory: [] })
+    // mål-måned juni 2026 er fremtidig ift. nå (feb 2026), men FØR konto-åpning (jan 2027)
+    expect(savingsBalanceAt([fremtidig], 2026, 6, now)).toBe(0)
+  })
 })
 
 describe('fondValueAt', () => {
