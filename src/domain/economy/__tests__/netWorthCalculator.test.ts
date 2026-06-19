@@ -147,3 +147,25 @@ describe('computeNetWorthSeries — konsistens-invariant (din)', () => {
     expect(naa.gjeld).toBeCloseTo(120_000, 0)
   })
 })
+
+describe('computeNetWorthSeries — felles', () => {
+  const base: NetWorthInput = {
+    ...EMPTY,
+    from: { year: 2026, month: 2 }, to: { year: 2026, month: 2 }, now: { year: 2026, month: 2 },
+    savingsAccounts: [konto()],
+  }
+  it('felles legger partnerformue oppå din', () => {
+    const partner = {
+      ...base.partnerVeikart,
+      enabled: true,
+      accounts: [{ id: 'p1', label: 'Partner sparekonto', balance: 80_000, monthlyContribution: 0, rate: 0 }],
+      debts: [{ id: 'pd', label: 'Partner billån', currentBalance: 30_000, interestRate: 5, monthlyPayment: 2000 }],
+    }
+    const din = computeNetWorthSeries({ ...base, scope: 'din', partnerVeikart: partner })
+    const felles = computeNetWorthSeries({ ...base, scope: 'felles', partnerVeikart: partner })
+    const naaDin = din[0].total
+    const naaFelles = felles[0].total
+    // Partner bidrar netto 80 000 − 30 000 = 50 000
+    expect(naaFelles - naaDin).toBeCloseTo(50_000, 0)
+  })
+})

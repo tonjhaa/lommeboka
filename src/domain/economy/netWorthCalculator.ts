@@ -6,6 +6,7 @@
 import type { NetWorthInput, NetWorthPoint, NetWorthSeries, SavingsAccount, FondPortfolio, IVFTransaction, DebtAccount, PartnerVeikart } from '@/types/economy'
 import { computeEffectiveBalance, projectSavingsGrowth } from './savingsCalculator'
 import { buildRepaymentPlan } from './debtCalculator'
+import { partnerNonBsuEquity, partnerMonthlySavingsTotal } from '@/types/economy'
 
 /**
  * Siste dag i måneden som Date i UTC. `month` er 1-basert (1 = januar).
@@ -130,10 +131,27 @@ function isAfter(year: number, month: number, now: { year: number; month: number
   return year > now.year || (year === now.year && month > now.month)
 }
 
+/**
+ * Partners netto formue ved (year,month) — SIMULERT (partner har ingen balanceHistory).
+ * Sparing: nåverdi (accounts + BSU) ± månedssparing × antall måneder fra nå.
+ * Fond: flat (fondCurrentValue). Gjeld: nåverdi ± terminbeløp.
+ */
 function partnerNetWorthAt(
-  _partner: PartnerVeikart, _year: number, _month: number, _now: { year: number; month: number },
+  partner: PartnerVeikart,
+  year: number,
+  month: number,
+  now: { year: number; month: number },
 ): { sparing: number; fond: number; gjeld: number } {
-  return { sparing: 0, fond: 0, gjeld: 0 }
+  if (!partner.enabled) return { sparing: 0, fond: 0, gjeld: 0 }
+  const dM = (year - now.year) * 12 + (month - now.month) // negativ = fortid
+  const nowSparing = partnerNonBsuEquity(partner) + (partner.bsu ?? 0)
+  const monthlySave = partnerMonthlySavingsTotal(partner) + (partner.bsuMonthlyContribution ?? 0)
+  const sparing = Math.max(0, nowSparing + monthlySave * dM)
+  const fond = partner.fondCurrentValue ?? 0
+  const nowGjeld = (partner.debts ?? []).reduce((s, d) => s + (d.currentBalance ?? 0), 0)
+  const monthlyPay = (partner.debts ?? []).reduce((s, d) => s + (d.monthlyPayment ?? 0), 0)
+  const gjeld = Math.max(0, nowGjeld - monthlyPay * dM)
+  return { sparing, fond, gjeld }
 }
 
 export function computeNetWorthSeries(input: NetWorthInput): NetWorthSeries {
