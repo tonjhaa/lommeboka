@@ -1,6 +1,18 @@
 import { describe, it, expect } from 'vitest'
-import { enumerateMonths, monthEndDate, computeNetWorthSeries } from '../netWorthCalculator'
-import type { NetWorthInput } from '@/types/economy'
+import { enumerateMonths, monthEndDate, computeNetWorthSeries, savingsBalanceAt } from '../netWorthCalculator'
+import type { NetWorthInput, SavingsAccount } from '@/types/economy'
+
+function konto(overrides: Partial<SavingsAccount> = {}): SavingsAccount {
+  return {
+    id: 's1', type: 'sparekonto', label: 'Sparekonto',
+    openingBalance: 100_000, openingDate: '2026-01-01',
+    monthlyContribution: 1_000, interestCreditFrequency: 'monthly',
+    rateHistory: [{ fromDate: '2026-01-01', rate: 0 }],
+    balanceHistory: [{ year: 2026, month: 2, balance: 102_000, isManual: false }],
+    withdrawals: [], contributions: [],
+    ...overrides,
+  }
+}
 
 const EMPTY: NetWorthInput = {
   scope: 'din',
@@ -37,6 +49,18 @@ describe('monthEndDate', () => {
 
   it('toISOString gir korrekt dato uavhengig av tidssone', () => {
     expect(monthEndDate(2026, 2).toISOString().split('T')[0]).toBe('2026-02-28')
+  })
+})
+
+describe('savingsBalanceAt', () => {
+  const now = { year: 2026, month: 2 }
+  it('bruker faktisk saldo (computeEffectiveBalance) for fortid/nå', () => {
+    // balanceHistory har 102 000 i feb 2026
+    expect(savingsBalanceAt([konto()], 2026, 2, now)).toBeCloseTo(102_000, 0)
+  })
+  it('projiserer fremtid ankret til faktisk nå (vokser med innskudd)', () => {
+    const v = savingsBalanceAt([konto()], 2026, 4, now)
+    expect(v).toBeGreaterThan(102_000) // to mnd innskudd lagt til
   })
 })
 

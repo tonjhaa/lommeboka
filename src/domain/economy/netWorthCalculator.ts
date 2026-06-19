@@ -3,7 +3,8 @@
 // Utleder netto formue per måned fra eksisterende data.
 // ============================================================
 
-import type { NetWorthInput, NetWorthPoint, NetWorthSeries } from '@/types/economy'
+import type { NetWorthInput, NetWorthPoint, NetWorthSeries, SavingsAccount } from '@/types/economy'
+import { computeEffectiveBalance, projectSavingsGrowth } from './savingsCalculator'
 
 /**
  * Siste dag i måneden som Date i UTC. `month` er 1-basert (1 = januar).
@@ -29,6 +30,38 @@ export function enumerateMonths(
     if (m > 12) { m = 1; y++ }
   }
   return out
+}
+
+/** Månedsindeks fra konto-åpning (0-basert). */
+function monthIndexFromOpening(account: SavingsAccount, year: number, month: number): number {
+  const open = new Date(account.openingDate)
+  return (year - open.getFullYear()) * 12 + (month - (open.getMonth() + 1))
+}
+
+/**
+ * Sparesaldo (sum kontoer) ved (year,month).
+ * Fortid/nå: faktisk via computeEffectiveBalance.
+ * Fremtid: projectSavingsGrowth, ankret slik at nå-verdien matcher faktisk.
+ */
+export function savingsBalanceAt(
+  accounts: SavingsAccount[],
+  year: number,
+  month: number,
+  now: { year: number; month: number },
+): number {
+  const future = year > now.year || (year === now.year && month > now.month)
+  if (!future) {
+    return accounts.reduce((s, a) => s + computeEffectiveBalance(a, monthEndDate(year, month)), 0)
+  }
+  return accounts.reduce((s, a) => {
+    const proj = projectSavingsGrowth(a, { year, month })
+    const tIdx = monthIndexFromOpening(a, year, month)
+    const nowIdx = monthIndexFromOpening(a, now.year, now.month)
+    const projT = proj[tIdx] ?? proj[proj.length - 1] ?? 0
+    const projNow = proj[nowIdx] ?? projT
+    const actualNow = computeEffectiveBalance(a, monthEndDate(now.year, now.month))
+    return s + projT + (actualNow - projNow)
+  }, 0)
 }
 
 /** True hvis (year,month) er etter `now`. */
