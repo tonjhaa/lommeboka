@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils'
 import { HeroBand, calcHealthScore } from '@/components/economy/widgets/HeroBand'
 import { FormueChart } from '@/components/economy/charts/FormueChart'
 
+const MONTH_SHORT_FORMUE = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des']
 
 function fmtNOK(n: number): string {
   return Math.round(n).toLocaleString('no-NO') + ' kr'
@@ -151,17 +152,20 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
   const veikartData = useVeikart()
 
   // ── Formue over tid (netto formue-serie) — ÉN kilde for vist formue ──
+  // dinSerie er ALLTID scope 'din' og brukes til hero + helsescore. fellesSerie brukes
+  // kun i grafen når toggelen står på 'felles'. Begge hooks kalles ubetinget (Rules of Hooks).
   const [formueScope, setFormueScope] = useState<'din' | 'felles'>('din')
-  const formueSerie = useNetWorthSeries(formueScope)
-  const dinSerieNaa = useNetWorthSeries('din')
+  const dinSerie = useNetWorthSeries('din')
+  const fellesSerie = useNetWorthSeries('felles')
+  const formueSerie = formueScope === 'felles' ? fellesSerie : dinSerie
 
-  const MONTH_SHORT2 = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des']
-  const formueHistory = formueSerie.filter((p) => !p.isProjected).map((p) => ({ m: MONTH_SHORT2[p.month - 1], v: p.total }))
-  const formueProjected = formueSerie.filter((p) => p.isProjected).map((p) => ({ m: MONTH_SHORT2[p.month - 1], v: p.total }))
-  const sisteFaktiske = [...dinSerieNaa].reverse().find((p) => !p.isProjected)
+  const formueHistory = formueSerie.filter((p) => !p.isProjected).map((p) => ({ m: MONTH_SHORT_FORMUE[p.month - 1], v: p.total }))
+  const formueProjected = formueSerie.filter((p) => p.isProjected).map((p) => ({ m: MONTH_SHORT_FORMUE[p.month - 1], v: p.total }))
+  const sisteFaktiske = [...dinSerie].reverse().find((p) => !p.isProjected)
 
-  // Formue-totaler hentes fra kalkulatorens nå-punkt (scope 'din') — samme kilde som grafen,
+  // Formue-totaler hentes fra dinSerie sitt nå-punkt — samme kilde som grafen (scope 'din'),
   // brukt av både HeroBand og helsescore for å unngå divergens.
+  // NB: ikke bytt dinSerie til formueScope her, ellers ville hero/score inkludert partnerformue.
   const totalSparing = (sisteFaktiske?.sparing ?? 0) + (sisteFaktiske?.fond ?? 0) + (sisteFaktiske?.ivf ?? 0)
   const totalGjeld = sisteFaktiske?.gjeld ?? 0
   const nettoFormue = sisteFaktiske?.total ?? 0
