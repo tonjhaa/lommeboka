@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { useEconomyStore, DEFAULT_PENSION_SETTINGS } from '@/application/useEconomyStore'
-import { projectPension, type PensionInput } from '@/domain/economy/pensionCalculator'
-import { GRUNNBELOP_NOK } from '@/config/economy.config'
+import { projectPension, buildPensionInputFromProfile } from '@/domain/economy/pensionCalculator'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { PensionSettings } from '@/types/economy'
@@ -50,25 +49,10 @@ export function PensionPage() {
 
   const [uttaksalder, setUttaksalder] = useState(67)
 
-  const baseInput: Omit<PensionInput, 'uttaksalder'> | null = useMemo(() => {
-    if (!profile) return null
-    const fasteTillegg = (profile.fixedAdditions ?? []).reduce((s, t) => s + t.amount, 0)
-    const spkGrunnlag = (profile.baseMonthly + fasteTillegg) * 12
-    // Folketrygd inkluderer variable tillegg/ATF — grovt anslag: +5 % over SPK-grunnlag.
-    const folketrygdInntekt = spkGrunnlag * 1.05
-    return {
-      birthYear: settings.birthYear,
-      serviceStartYear: settings.serviceStartYear,
-      currentYear: new Date().getFullYear(),
-      currentG: GRUNNBELOP_NOK,
-      folketrygdAnnualIncome: folketrygdInntekt,
-      spkAnnualGrunnlag: spkGrunnlag,
-      salaryGrowthPct: settings.assumptions.salaryGrowthPct,
-      gGrowthPct: settings.assumptions.gGrowthPct,
-      afpEnabled: settings.afpEnabled,
-      særalder: settings.særalder,
-    }
-  }, [profile, settings])
+  const baseInput = useMemo(
+    () => (profile ? buildPensionInputFromProfile(profile, settings, new Date().getFullYear()) : null),
+    [profile, settings],
+  )
 
   const projection = useMemo(() => {
     if (!baseInput) return null

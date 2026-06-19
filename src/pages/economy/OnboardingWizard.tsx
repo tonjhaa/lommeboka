@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   Shield, Briefcase, PiggyBank, BarChart2, CreditCard,
   FileText, TrendingUp, RefreshCw, HeartPulse, Umbrella,
-  Palmtree, CheckCircle2, ArrowRight, ChevronLeft, Map, Gift, Baby,
+  Palmtree, CheckCircle2, ArrowRight, ChevronLeft, Map, Gift, Baby, Landmark,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -64,6 +64,13 @@ export const MODULES: ModuleOption[] = [
     label: 'ATF',
     desc: 'Avtalefestet tillegg og variable tillegg',
     icon: Shield,
+    defaultFor: ['forsvaret'],
+  },
+  {
+    tab: 'pension',
+    label: 'Pensjon',
+    desc: 'Pensjonsprognose: folketrygd, SPK og AFP',
+    icon: Landmark,
     defaultFor: ['forsvaret'],
   },
   {

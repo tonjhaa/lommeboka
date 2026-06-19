@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { buildIncomeProjection, buildGProjection, accrueFolketrygdBeholdning, annualFromBeholdning, accrueSpkPaaslagBeholdning, sumLivsinntektUnder7_1G, annualAfp, projectPension, type PensionInput } from '../pensionCalculator'
-import { FOLKETRYGD_OPPTJENINGSSATS, TAK_FOLKETRYGD_G, SPK_PAASLAG_SATS_LAV, SPK_PAASLAG_SATS_HOY, TAK_SPK_G, AFP_OPPTJENINGSSATS } from '@/config/economy.config'
+import { buildIncomeProjection, buildGProjection, accrueFolketrygdBeholdning, annualFromBeholdning, accrueSpkPaaslagBeholdning, sumLivsinntektUnder7_1G, annualAfp, projectPension, buildPensionInputFromProfile, type PensionInput } from '../pensionCalculator'
+import { FOLKETRYGD_OPPTJENINGSSATS, TAK_FOLKETRYGD_G, SPK_PAASLAG_SATS_LAV, SPK_PAASLAG_SATS_HOY, TAK_SPK_G, AFP_OPPTJENINGSSATS, GRUNNBELOP_NOK } from '@/config/economy.config'
+import type { EmploymentProfile, PensionSettings } from '@/types/economy'
 
 describe('buildIncomeProjection', () => {
   it('holder inntekt konstant når vekst = 0', () => {
@@ -162,5 +163,31 @@ describe('projectPension', () => {
     const tidlig = projectPension(makeInput({ uttaksalder: 62 }))
     const sen = projectPension(makeInput({ uttaksalder: 70 }))
     expect(sen.perPilar.folketrygd).toBeGreaterThan(tidlig.perPilar.folketrygd)
+  })
+})
+
+describe('buildPensionInputFromProfile', () => {
+  const settings: PensionSettings = {
+    birthYear: 1995,
+    serviceStartYear: 2016,
+    særalder: { enabled: false, age: 60 },
+    afpEnabled: true,
+    assumptions: { salaryGrowthPct: 3, gGrowthPct: 3.5 },
+  }
+
+  it('utleder SPK-grunnlag fra grunnlønn + faste tillegg og folketrygd med ATF-faktor', () => {
+    const profile = { baseMonthly: 50_000, fixedAdditions: [{ amount: 5_000 }] } as unknown as EmploymentProfile
+    const input = buildPensionInputFromProfile(profile, settings, 2026)
+    expect(input.spkAnnualGrunnlag).toBe((50_000 + 5_000) * 12)
+    expect(input.folketrygdAnnualIncome).toBeCloseTo((50_000 + 5_000) * 12 * 1.05, 2)
+    expect(input.currentG).toBe(GRUNNBELOP_NOK)
+    expect(input.særalder).toEqual(settings.særalder)
+    expect(input.currentYear).toBe(2026)
+  })
+
+  it('takler manglende faste tillegg', () => {
+    const profile = { baseMonthly: 40_000 } as unknown as EmploymentProfile
+    const input = buildPensionInputFromProfile(profile, settings, 2026)
+    expect(input.spkAnnualGrunnlag).toBe(40_000 * 12)
   })
 })

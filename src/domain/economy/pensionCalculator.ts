@@ -13,8 +13,15 @@ import {
   AFP_OPPTJENINGSSATS,
   getDelingstall,
   MIN_UTTAKSALDER,
+  GRUNNBELOP_NOK,
 } from '@/config/economy.config'
-import type { PensionProjection } from '@/types/economy'
+import type { PensionProjection, PensionSettings, EmploymentProfile } from '@/types/economy'
+
+/**
+ * Variable tillegg (ATF) teller i folketrygdgrunnlaget, men ikke i SPK-grunnlaget.
+ * Grovt anslag: folketrygdinntekt ≈ SPK-grunnlag + 5 %.
+ */
+const FOLKETRYGD_TILLEGG_FAKTOR = 1.05
 
 interface IncomeProjectionParams {
   currentYear: number
@@ -179,7 +186,9 @@ export function projectPension(input: PensionInput): PensionProjection {
   }
   const monthlyTotal = perPilar.folketrygd + perPilar.spk + perPilar.afp + perPilar.særalder
 
-  const sluttlonnMnd = (input.folketrygdAnnualIncome *
+  // Kompensasjonsgrad måles mot faktisk lønn (SPK-grunnlag), ikke det ATF-oppblåste
+  // folketrygdgrunnlaget.
+  const sluttlonnMnd = (input.spkAnnualGrunnlag *
     Math.pow(1 + input.salaryGrowthPct / 100, toYear - input.currentYear)) / 12
 
   return {
@@ -190,5 +199,31 @@ export function projectPension(input: PensionInput): PensionProjection {
     // TODO (fase 2): sett 'lav' når uttak ligger svært langt fram (stor usikkerhet
     // i delingstall og G-vekst). Hardkodet 'middels' inntil videre.
     confidence: 'middels',
+  }
+}
+
+/**
+ * Utleder domeneinput fra lønnsprofil + pensjonsinnstillinger (uten uttaksalder).
+ * Felles kilde for PensionPage og dashboard-chipen, slik at inntektsantakelsene
+ * (SPK-grunnlag + ATF-faktor) bare finnes ett sted.
+ */
+export function buildPensionInputFromProfile(
+  profile: EmploymentProfile,
+  settings: PensionSettings,
+  currentYear: number,
+): Omit<PensionInput, 'uttaksalder'> {
+  const fasteTillegg = (profile.fixedAdditions ?? []).reduce((s, t) => s + t.amount, 0)
+  const spkGrunnlag = (profile.baseMonthly + fasteTillegg) * 12
+  return {
+    birthYear: settings.birthYear,
+    serviceStartYear: settings.serviceStartYear,
+    currentYear,
+    currentG: GRUNNBELOP_NOK,
+    folketrygdAnnualIncome: spkGrunnlag * FOLKETRYGD_TILLEGG_FAKTOR,
+    spkAnnualGrunnlag: spkGrunnlag,
+    salaryGrowthPct: settings.assumptions.salaryGrowthPct,
+    gGrowthPct: settings.assumptions.gGrowthPct,
+    afpEnabled: settings.afpEnabled,
+    særalder: settings.særalder,
   }
 }
