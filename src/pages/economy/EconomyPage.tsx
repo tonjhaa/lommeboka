@@ -20,6 +20,7 @@ import {
   Map,
   Gift,
   Landmark,
+  LineChart,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -68,6 +69,9 @@ const GiftPage = lazyWithRetry(() =>
 const PensionPage = lazyWithRetry(() =>
   import('./PensionPage').then((m) => ({ default: m.PensionPage }))
 )
+const FormuePage = lazyWithRetry(() =>
+  import('./FormuePage').then((m) => ({ default: m.FormuePage }))
+)
 
 interface NavItem {
   page: EconomySubPage
@@ -77,6 +81,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { page: 'dashboard', label: 'Dashbord', Icon: LayoutDashboard },
+  { page: 'formue', label: 'Formue', Icon: LineChart },
   { page: 'budget', label: 'Budsjett', Icon: Clipboard },
   { page: 'salary', label: 'Lønn', Icon: Receipt },
   { page: 'atf', label: 'ATF', Icon: Shield },
@@ -218,6 +223,7 @@ export function EconomyPage() {
           {currentPage === 'veikart' && <VeikartPage />}
           {currentPage === 'pension' && <PensionPage />}
           {currentPage === 'gaver' && <GiftPage />}
+          {currentPage === 'formue' && <FormuePage />}
           {currentPage === 'settings' && <EconomySettingsPage />}
         </Suspense>
         </PageErrorBoundary>
