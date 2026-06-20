@@ -136,6 +136,17 @@ export function ScenarioPage() {
           />
         </label>
 
+        {/* Lønn flat kr/mnd */}
+        <label className="block text-xs text-muted-foreground">
+          Lønn (flat) {levers.salaryKr >= 0 ? '+' : ''}{fmtNOK(levers.salaryKr)}/mnd
+          <input
+            type="range" min={-10000} max={20000} step={500} value={levers.salaryKr}
+            onChange={(e) => setLevers({ ...levers, salaryKr: parseInt(e.target.value, 10) })}
+            className="w-full accent-primary"
+            aria-label="Flat lønnsendring i kroner per måned"
+          />
+        </label>
+
         {/* Rente pp */}
         <label className="block text-xs text-muted-foreground">
           Rente {levers.rateDeltaPp >= 0 ? '+' : ''}{levers.rateDeltaPp} pp
