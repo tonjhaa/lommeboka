@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { bumpAccountRates, bumpDebtRates, addSavingsDelta } from '../scenarioSimulator'
-import type { SavingsAccount, DebtAccount } from '@/types/economy'
+import { bumpAccountRates, bumpDebtRates, addSavingsDelta, netMonthlyFromGross, applyOneTimeEvents } from '../scenarioSimulator'
+import type { SavingsAccount, DebtAccount, NetWorthPoint } from '@/types/economy'
 
 function konto(over: Partial<SavingsAccount> = {}): SavingsAccount {
   return {
@@ -47,5 +47,33 @@ describe('addSavingsDelta', () => {
     const out = addSavingsDelta([], 1_000)
     expect(out).toHaveLength(1)
     expect(out[0].monthlyContribution).toBe(1_000)
+  })
+})
+
+describe('netMonthlyFromGross', () => {
+  it('høyere brutto gir høyere netto (marginalskatt)', () => {
+    const lav = netMonthlyFromGross(50_000)
+    const hoy = netMonthlyFromGross(60_000)
+    expect(hoy).toBeGreaterThan(lav)
+    // men netto-økningen er mindre enn brutto-økningen (skatt)
+    expect(hoy - lav).toBeLessThan(10_000)
+  })
+})
+
+describe('applyOneTimeEvents', () => {
+  const series: NetWorthPoint[] = [
+    { year: 2026, month: 1, sparing: 0, fond: 0, ivf: 0, gjeld: 0, total: 100_000, isProjected: false },
+    { year: 2026, month: 2, sparing: 0, fond: 0, ivf: 0, gjeld: 0, total: 100_000, isProjected: true },
+    { year: 2026, month: 3, sparing: 0, fond: 0, ivf: 0, gjeld: 0, total: 100_000, isProjected: true },
+  ]
+  it('legger engangsbeløp til total fra hendelsesdato og framover', () => {
+    const out = applyOneTimeEvents(series, [{ id: '1', label: 'Arv', date: '2026-02-15', amount: 50_000 }])
+    expect(out[0].total).toBe(100_000) // før hendelsen
+    expect(out[1].total).toBe(150_000) // feb (≥ 2026-02)
+    expect(out[2].total).toBe(150_000) // mars
+  })
+  it('negativt beløp trekker fra', () => {
+    const out = applyOneTimeEvents(series, [{ id: '1', label: 'Bil', date: '2026-03-01', amount: -30_000 }])
+    expect(out[2].total).toBe(70_000)
   })
 })
