@@ -35,9 +35,12 @@ import type {
   BankAccountPreset,
   TieredRateHistoryEntry,
   PensionSettings,
+  CalibrationSettings,
+  CalibrationEntry,
 } from '@/types/economy'
 import { POLICY_RATE_HISTORY, LONNSVEKST_DEFAULT, GRUNNBELOP_VEKST_DEFAULT } from '@/config/economy.config'
 import { DEFAULT_BANK_PRESETS } from '@/config/bankPresets'
+import { calibrateProfile } from '@/domain/economy/forecastCalibration'
 
 // ------------------------------------------------------------
 // STATE INTERFACE
@@ -225,6 +228,13 @@ export interface EconomyState {
   pensionSettings: PensionSettings | null
   setPensionSettings: (settings: PensionSettings) => void
 
+  calibrationSettings: CalibrationSettings
+  calibrationLog: CalibrationEntry[]
+  lockedCalibrationKeys: string[]
+  setCalibrationSettings: (s: CalibrationSettings) => void
+  lockCalibration: (key: string) => void
+  unlockCalibration: (key: string) => void
+
   exportData: () => string
   importData: (json: string) => void
   clearAllSlips: () => void
@@ -268,6 +278,8 @@ export const DEFAULT_PENSION_SETTINGS: PensionSettings = {
     gGrowthPct: GRUNNBELOP_VEKST_DEFAULT,
   },
 }
+
+export const DEFAULT_CALIBRATION_SETTINGS: CalibrationSettings = { enabled: true, horizonSlips: 6 }
 
 // ------------------------------------------------------------
 // STORE
@@ -364,11 +376,23 @@ export const useEconomyStore = create<EconomyState>()(
         set((s) => ({ bankPresets: s.bankPresets.filter((p) => p.id !== id) })),
 
       pensionSettings: null,
+      calibrationSettings: DEFAULT_CALIBRATION_SETTINGS,
+      // calibrationLog kappes til maks 50 nyeste ved skriving i importSlip — vokser ikke ubegrenset.
+      calibrationLog: [],
+      lockedCalibrationKeys: [],
 
       // --- Profil ---
       setProfile: (profile) => set({ profile }),
       setUserPreferences: (prefs) => set({ userPreferences: prefs }),
       setPensionSettings: (settings) => set({ pensionSettings: settings }),
+      setCalibrationSettings: (s) => set({ calibrationSettings: s }),
+      lockCalibration: (key) => set((st) => ({
+        lockedCalibrationKeys: st.lockedCalibrationKeys.includes(key)
+          ? st.lockedCalibrationKeys : [...st.lockedCalibrationKeys, key],
+      })),
+      unlockCalibration: (key) => set((st) => ({
+        lockedCalibrationKeys: st.lockedCalibrationKeys.filter((k) => k !== key),
+      })),
 
       // --- Måneder ---
       addMonthRecord: (record) =>
@@ -455,7 +479,7 @@ export const useEconomyStore = create<EconomyState>()(
             }
           }
 
-          // Oppdater profil med siste kjente tall fra slippen.
+          // Oppdater profil med kalibrerte verdier fra slippen.
           // Hvis ingen profil eksisterer ennå, opprett én automatisk fra slippen.
           const baseProfile: EmploymentProfile = profile ?? {
             employer: 'forsvaret',
@@ -468,15 +492,17 @@ export const useEconomyStore = create<EconomyState>()(
             unionFee: 0,
             atfEnabled: false,
           }
+          const { calibrationSettings, lockedCalibrationKeys } = get()
+          const cal = calibrateProfile(updated, baseProfile, calibrationSettings, lockedCalibrationKeys)
           let updatedProfile: EmploymentProfile = {
             ...baseProfile,
-            // Lønn og trekk settes kun fra den nyeste slippen
+            // Lønn og trekk settes kun fra den nyeste slippen (via kalibrering)
             ...(isLatestSlip ? {
-              baseMonthly: slip.maanedslonn || baseProfile.baseMonthly,
-              lastKnownTaxWithholding: slip.skattetrekk || baseProfile.lastKnownTaxWithholding,
-              extraTaxWithholding: slip.ekstraTrekk > 0 ? slip.ekstraTrekk : baseProfile.extraTaxWithholding,
-              housingDeduction: slip.husleietrekk > 0 ? slip.husleietrekk : baseProfile.housingDeduction,
-              unionFee: slip.fagforeningskontingent > 0 ? slip.fagforeningskontingent : baseProfile.unionFee,
+              baseMonthly: cal.values.baseMonthly || baseProfile.baseMonthly,
+              lastKnownTaxWithholding: cal.values.skattetrekk || baseProfile.lastKnownTaxWithholding,
+              extraTaxWithholding: cal.values.extraTaxWithholding || baseProfile.extraTaxWithholding,
+              housingDeduction: cal.values.housingDeduction || baseProfile.housingDeduction,
+              unionFee: cal.values.unionFee || baseProfile.unionFee,
               // Faste tillegg: merge med eksisterende — slipper mangler noen ganger tillegg
               // som ikke var aktive den måneden (f.eks. 1501 kun på visse slipper).
               // Ny slipp oppdaterer beløp der den har koden, eksisterende beholdes ellers.
@@ -493,13 +519,11 @@ export const useEconomyStore = create<EconomyState>()(
             // SPK-pensjon er alltid 2% — bruker ikke ratio-estimat (base inkluderer 1162/10P2 i tillegg til 1S01)
           }
 
-          // Beregn og lagre effektiv /440-trekkprosent.
-          // Juni-slipper har ferietrekk som drastisk reduserer tabelltrekk-grunnlaget —
-          // bruk ikke disse til %-beregning da de gir feil sats (typisk <10% mot normalt 25-35%).
-          const harFerietrekk = (slip.ferietrekk ?? 0) > 0
-          if (slip.tabelltrekkGrunnlag > 0 && slip.tabelltrekkBelop > 0 && !harFerietrekk) {
-            const pct = (slip.tabelltrekkBelop / slip.tabelltrekkGrunnlag) * 100
-            updatedProfile = { ...updatedProfile, lastKnownTableTaxPercent: Math.round(pct * 100) / 100 }
+          // Tabelltrekk-prosent fra kalibrering (ekskluderer allerede juni-slipper og ferietrekk)
+          // tabelltrekkProsent oppdateres ubetinget (ikke isLatestSlip-gated): den er et
+          // snitt over horisonten, ikke en nyeste-slipp-verdi — bevisst asymmetri mot skalarene.
+          if (cal.values.tabelltrekkProsent !== null) {
+            updatedProfile = { ...updatedProfile, lastKnownTableTaxPercent: cal.values.tabelltrekkProsent }
           }
 
           // Lagre tabellnummer fra slippen
@@ -507,23 +531,29 @@ export const useEconomyStore = create<EconomyState>()(
             updatedProfile = { ...updatedProfile, tabellnummer: slip.tabellnummer }
           }
 
-          // Merge ATF-satser fra slippen inn i profilen (behold siste kjente per artskode)
-          if (slip.atfRater) {
+          // Merge ATF-satser fra kalibrering inn i profilen. Satsen er et order-uavhengig
+          // snitt og oppdateres alltid; dato holdes på nyeste kjente (aldri bakover) slik
+          // at ikke-kronologisk import ikke gir et misvisende eldre dato-stempel.
+          if (Object.keys(cal.values.atfRates).length > 0) {
             const slipDato = `${slip.periode.year}-${String(slip.periode.month).padStart(2, '0')}`
-            const fraAarslonn = slip.maanedslonn * 12
+            const fraAarslonn = cal.values.baseMonthly * 12
             const mergedRates: Record<string, KnownATFRate> = { ...updatedProfile.knownATFRates }
-            for (const [artskode, sats] of Object.entries(slip.atfRater)) {
+            for (const [artskode, sats] of Object.entries(cal.values.atfRates)) {
               const existing = mergedRates[artskode]
-              if (!existing || slipDato >= existing.dato) {
-                mergedRates[artskode] = { sats, fraAarslonn, dato: slipDato }
-              }
+              const dato = existing && existing.dato > slipDato ? existing.dato : slipDato
+              mergedRates[artskode] = { sats, fraAarslonn, dato }
             }
             updatedProfile = { ...updatedProfile, knownATFRates: mergedRates }
           }
 
+          const newLog = cal.entries.length > 0
+            ? [...cal.entries, ...s.calibrationLog].slice(0, 50)
+            : s.calibrationLog
+
           return {
             monthHistory: updated,
             profile: updatedProfile,
+            calibrationLog: newLog,
           }
         })
 
@@ -1050,6 +1080,9 @@ export const useEconomyStore = create<EconomyState>()(
       },
 
       // --- Migrering: gjenoppbygg profil fra eksisterende slipper hvis profil mangler ---
+      // Bevisst avvik fra spec: denne null-profil-gjenopprettingen bruker siste-verdi
+      // (ikke calibrateProfile). Den kjører kun når profile === null (sjelden datamigrasjon),
+      // og kalibrering kjører uansett ved neste slipp-import — så profilen blir konsistent da.
       restoreProfileFromSlips: () => {
         const { profile, monthHistory } = get()
         if (profile !== null) return
@@ -1153,6 +1186,9 @@ export const useEconomyStore = create<EconomyState>()(
           if (prefs?.enabledTabs && !prefs.enabledTabs.includes('formue')) {
             prefs.enabledTabs = [...prefs.enabledTabs, 'formue']
           }
+          if (prefs?.enabledTabs && !prefs.enabledTabs.includes('calibration')) {
+            prefs.enabledTabs = [...prefs.enabledTabs, 'calibration']
+          }
           // Saniter profil fra sky/backup: OF11 (feriepenger) skal aldri ligge som
           // månedlig fast tillegg — eldre lagret data kan fortsatt ha den.
           let importedProfile = (data.profile ?? null) as EmploymentProfile | null
@@ -1196,6 +1232,9 @@ export const useEconomyStore = create<EconomyState>()(
             savingsPlanTarget: data.savingsPlanTarget ?? 0,
             savingsPlanHorizon: data.savingsPlanHorizon ?? 48,
             pensionSettings: data.pensionSettings ?? null,
+            calibrationSettings: data.calibrationSettings ?? DEFAULT_CALIBRATION_SETTINGS,
+            calibrationLog: data.calibrationLog ?? [],
+            lockedCalibrationKeys: data.lockedCalibrationKeys ?? [],
           })
         } catch {
           console.error('[EconomyStore] importData: ugyldig JSON')
@@ -1235,7 +1274,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 23,
+      version: 24,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v20 → v21: migrer tieredRates (snapshot) til tieredRateHistory (tidsserie)
@@ -1263,6 +1302,13 @@ export const useEconomyStore = create<EconomyState>()(
           const prefs = state.userPreferences as { enabledTabs?: string[] }
           if (Array.isArray(prefs.enabledTabs) && !prefs.enabledTabs.includes('formue')) {
             prefs.enabledTabs = [...prefs.enabledTabs, 'formue']
+          }
+        }
+        // v23 → v24: legg til 'calibration' i enabledTabs for eksisterende brukere
+        if (fromVersion < 24 && state.userPreferences) {
+          const prefs = state.userPreferences as { enabledTabs?: string[] }
+          if (Array.isArray(prefs.enabledTabs) && !prefs.enabledTabs.includes('calibration')) {
+            prefs.enabledTabs = [...prefs.enabledTabs, 'calibration']
           }
         }
         // v19 → v20: forventede lønnsoppgjør slås AV i prognosen som standard.
@@ -1461,6 +1507,9 @@ export const useEconomyStore = create<EconomyState>()(
         priceAlerts: state.priceAlerts,
         lastGlobalPriceCheckAt: state.lastGlobalPriceCheckAt,
         pensionSettings: state.pensionSettings,
+        calibrationSettings: state.calibrationSettings,
+        calibrationLog: state.calibrationLog,
+        lockedCalibrationKeys: state.lockedCalibrationKeys,
       }),
     }
   )
