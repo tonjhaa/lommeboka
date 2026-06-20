@@ -119,6 +119,14 @@ describe('calibrateProfile', () => {
     expect(res.values.tabelltrekkProsent).toBeCloseTo(30, 1)
   })
 
+  it('tabelltrekkProsent logges som entry ved reell endring', () => {
+    const hist = [rec(2026, 2, { tabelltrekkGrunnlag: 60_000, tabelltrekkBelop: 18_000 })]
+    const res = calibrateProfile(hist, profile({ lastKnownTableTaxPercent: 25 }), SETTINGS_ON, [])
+    const entry = res.entries.find((e) => e.key === 'tabelltrekkProsent')!
+    expect(entry.previous).toBe(25)
+    expect(entry.calibrated).toBeCloseTo(30, 1)
+  })
+
   it('ingen slipper → verdier faller tilbake på current profil', () => {
     const res = calibrateProfile([], profile({ lastKnownTaxWithholding: 12_345 }), SETTINGS_ON, [])
     expect(res.values.skattetrekk).toBe(12_345)

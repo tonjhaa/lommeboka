@@ -64,6 +64,9 @@ export function calibrateProfile(
       entries.push({ key, label: LABELS[key] ?? key, previous: prev, calibrated: prev, sampleCount: 0, asOf: today(), locked: true })
       return prev
     }
+    // v > 0 er bevisst: matcher dagens importSlip-gating (`slip.X > 0 ? slip.X : base`)
+    // for ekstraTrekk/husleie/fagforening. Konsistens-invarianten (auto av ≡ i dag)
+    // krever at vi beholder dette. (En kjent konsekvens: en verdi kan ikke auto-nullstilles.)
     const values = slips.map(pick).filter((v) => v > 0)
     if (values.length === 0) return prev
     const calibrated = settings.enabled ? trimmedMean(values) : values[0]
@@ -84,12 +87,22 @@ export function calibrateProfile(
   const pctValues = slips
     .filter((s) => s.tabelltrekkGrunnlag > 0 && s.tabelltrekkBelop > 0)
     .map((s) => (s.tabelltrekkBelop / s.tabelltrekkGrunnlag) * 100)
-  let tabelltrekkProsent: number | null = current.lastKnownTableTaxPercent ?? null
-  if (!locked.has('tabelltrekkProsent') && pctValues.length > 0) {
+  const prevPct = current.lastKnownTableTaxPercent ?? null
+  let tabelltrekkProsent: number | null = prevPct
+  if (locked.has('tabelltrekkProsent')) {
+    if (prevPct !== null) {
+      entries.push({ key: 'tabelltrekkProsent', label: LABELS.tabelltrekkProsent, previous: prevPct, calibrated: prevPct, sampleCount: 0, asOf: today(), locked: true })
+    }
+  } else if (pctValues.length > 0) {
     tabelltrekkProsent = Math.round((settings.enabled ? trimmedMean(pctValues) : pctValues[0]) * 100) / 100
+    if (tabelltrekkProsent !== prevPct) {
+      entries.push({ key: 'tabelltrekkProsent', label: LABELS.tabelltrekkProsent, previous: prevPct ?? 0, calibrated: tabelltrekkProsent, sampleCount: pctValues.length, asOf: today(), locked: false })
+    }
   }
 
-  // ATF-satser: snitt av sats per artskode.
+  // ATF-satser: snitt av sats per artskode. ATF logges ikke som CalibrationEntry i v1
+  // (per-artskode-satser holdes i atfRates, ikke i loggen — bevisst, jf. spec).
+  // satser[0] = nyeste der koden finnes på nyeste slipp (slips er desc-sortert).
   const atfRates: Record<string, number> = {}
   const byKode = new Map<string, number[]>()
   for (const s of slips) {
@@ -130,6 +143,7 @@ export function computeAccuracy(rows: AccuracyRowInput[]): AccuracyReport {
       .map((c, i) => ({ ...c, i }))
       .filter((c) => c.actual !== null)
     if (withActual.length === 0) continue
+    // monthsWithData = antall unike måneder (0–11) der MINST én rad har faktisk data.
     withActual.forEach((c) => monthsWithData.add(c.i))
     const avgBudget = Math.round(withActual.reduce((s, c) => s + c.budget, 0) / withActual.length)
     const avgActual = Math.round(withActual.reduce((s, c) => s + (c.actual ?? 0), 0) / withActual.length)
