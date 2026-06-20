@@ -35,6 +35,8 @@ import type {
   BankAccountPreset,
   TieredRateHistoryEntry,
   PensionSettings,
+  CalibrationSettings,
+  CalibrationEntry,
 } from '@/types/economy'
 import { POLICY_RATE_HISTORY, LONNSVEKST_DEFAULT, GRUNNBELOP_VEKST_DEFAULT } from '@/config/economy.config'
 import { DEFAULT_BANK_PRESETS } from '@/config/bankPresets'
@@ -225,6 +227,13 @@ export interface EconomyState {
   pensionSettings: PensionSettings | null
   setPensionSettings: (settings: PensionSettings) => void
 
+  calibrationSettings: CalibrationSettings
+  calibrationLog: CalibrationEntry[]
+  lockedCalibrationKeys: string[]
+  setCalibrationSettings: (s: CalibrationSettings) => void
+  lockCalibration: (key: string) => void
+  unlockCalibration: (key: string) => void
+
   exportData: () => string
   importData: (json: string) => void
   clearAllSlips: () => void
@@ -268,6 +277,8 @@ export const DEFAULT_PENSION_SETTINGS: PensionSettings = {
     gGrowthPct: GRUNNBELOP_VEKST_DEFAULT,
   },
 }
+
+export const DEFAULT_CALIBRATION_SETTINGS: CalibrationSettings = { enabled: true, horizonSlips: 6 }
 
 // ------------------------------------------------------------
 // STORE
@@ -364,11 +375,22 @@ export const useEconomyStore = create<EconomyState>()(
         set((s) => ({ bankPresets: s.bankPresets.filter((p) => p.id !== id) })),
 
       pensionSettings: null,
+      calibrationSettings: DEFAULT_CALIBRATION_SETTINGS,
+      calibrationLog: [],
+      lockedCalibrationKeys: [],
 
       // --- Profil ---
       setProfile: (profile) => set({ profile }),
       setUserPreferences: (prefs) => set({ userPreferences: prefs }),
       setPensionSettings: (settings) => set({ pensionSettings: settings }),
+      setCalibrationSettings: (s) => set({ calibrationSettings: s }),
+      lockCalibration: (key) => set((st) => ({
+        lockedCalibrationKeys: st.lockedCalibrationKeys.includes(key)
+          ? st.lockedCalibrationKeys : [...st.lockedCalibrationKeys, key],
+      })),
+      unlockCalibration: (key) => set((st) => ({
+        lockedCalibrationKeys: st.lockedCalibrationKeys.filter((k) => k !== key),
+      })),
 
       // --- Måneder ---
       addMonthRecord: (record) =>
@@ -1153,6 +1175,9 @@ export const useEconomyStore = create<EconomyState>()(
           if (prefs?.enabledTabs && !prefs.enabledTabs.includes('formue')) {
             prefs.enabledTabs = [...prefs.enabledTabs, 'formue']
           }
+          if (prefs?.enabledTabs && !prefs.enabledTabs.includes('calibration')) {
+            prefs.enabledTabs = [...prefs.enabledTabs, 'calibration']
+          }
           // Saniter profil fra sky/backup: OF11 (feriepenger) skal aldri ligge som
           // månedlig fast tillegg — eldre lagret data kan fortsatt ha den.
           let importedProfile = (data.profile ?? null) as EmploymentProfile | null
@@ -1196,6 +1221,9 @@ export const useEconomyStore = create<EconomyState>()(
             savingsPlanTarget: data.savingsPlanTarget ?? 0,
             savingsPlanHorizon: data.savingsPlanHorizon ?? 48,
             pensionSettings: data.pensionSettings ?? null,
+            calibrationSettings: data.calibrationSettings ?? DEFAULT_CALIBRATION_SETTINGS,
+            calibrationLog: data.calibrationLog ?? [],
+            lockedCalibrationKeys: data.lockedCalibrationKeys ?? [],
           })
         } catch {
           console.error('[EconomyStore] importData: ugyldig JSON')
@@ -1235,7 +1263,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 23,
+      version: 24,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v20 → v21: migrer tieredRates (snapshot) til tieredRateHistory (tidsserie)
@@ -1263,6 +1291,13 @@ export const useEconomyStore = create<EconomyState>()(
           const prefs = state.userPreferences as { enabledTabs?: string[] }
           if (Array.isArray(prefs.enabledTabs) && !prefs.enabledTabs.includes('formue')) {
             prefs.enabledTabs = [...prefs.enabledTabs, 'formue']
+          }
+        }
+        // v23 → v24: legg til 'calibration' i enabledTabs for eksisterende brukere
+        if (fromVersion < 24 && state.userPreferences) {
+          const prefs = state.userPreferences as { enabledTabs?: string[] }
+          if (Array.isArray(prefs.enabledTabs) && !prefs.enabledTabs.includes('calibration')) {
+            prefs.enabledTabs = [...prefs.enabledTabs, 'calibration']
           }
         }
         // v19 → v20: forventede lønnsoppgjør slås AV i prognosen som standard.
@@ -1461,6 +1496,9 @@ export const useEconomyStore = create<EconomyState>()(
         priceAlerts: state.priceAlerts,
         lastGlobalPriceCheckAt: state.lastGlobalPriceCheckAt,
         pensionSettings: state.pensionSettings,
+        calibrationSettings: state.calibrationSettings,
+        calibrationLog: state.calibrationLog,
+        lockedCalibrationKeys: state.lockedCalibrationKeys,
       }),
     }
   )

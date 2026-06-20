@@ -162,6 +162,9 @@ export async function saveToSupabase(): Promise<void> {
     savingsPlanTarget: state.savingsPlanTarget,
     savingsPlanHorizon: state.savingsPlanHorizon,
     pensionSettings: state.pensionSettings,
+    calibrationSettings: state.calibrationSettings,
+    calibrationLog: state.calibrationLog,
+    lockedCalibrationKeys: state.lockedCalibrationKeys,
   }
 
   const { error } = await supabase.from('user_data').upsert({

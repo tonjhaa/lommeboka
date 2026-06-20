@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { EconomyState } from './useEconomyStore'
+import { DEFAULT_CALIBRATION_SETTINGS } from './useEconomyStore'
 import type {
   EmploymentProfile,
   BudgetTemplate,
@@ -504,6 +505,13 @@ export const usePartnerStore = create<EconomyState>()(
 
       pensionSettings: null,
       setPensionSettings: () => {},
+
+      calibrationSettings: DEFAULT_CALIBRATION_SETTINGS,
+      calibrationLog: [],
+      lockedCalibrationKeys: [],
+      setCalibrationSettings: () => {},
+      lockCalibration: () => {},
+      unlockCalibration: () => {},
 
       // ── Export / import / reset ────────────────────────────────────────────
       exportData: () => JSON.stringify(get(), null, 2),
