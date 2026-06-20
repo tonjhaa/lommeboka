@@ -694,7 +694,7 @@ export type EconomyTab =
   | 'dashboard' | 'budget' | 'salary' | 'atf' | 'feriepenger'
   | 'savings' | 'fond' | 'debt' | 'absence' | 'tax'
   | 'subscriptions' | 'ivf' | 'vacation' | 'settings' | 'veikart' | 'gaver' | 'partner' | 'permisjon'
-  | 'pension' | 'formue' | 'calibration'
+  | 'pension' | 'formue' | 'calibration' | 'scenario'
 
 export interface UserPreferences {
   onboardingCompleted: boolean
@@ -922,4 +922,37 @@ export interface AccuracyReport {
 export interface CalibrationSettings {
   enabled: boolean
   horizonSlips: number
+}
+
+// ------------------------------------------------------------
+// SCENARIO-SIMULATOR (hva-skjer-hvis)
+// ------------------------------------------------------------
+
+export interface ScenarioOneTimeEvent {
+  id: string
+  label: string
+  date: string               // "YYYY-MM-DD"
+  amount: number             // + arv/bonus, − stor utgift
+}
+
+export interface ScenarioLevers {
+  salaryPct: number           // ±% på brutto månedslønn
+  salaryKr: number            // ±kr flat på brutto månedslønn
+  rateDeltaPp: number         // ±prosentpoeng på rente (gjeld + sparing)
+  monthlySavingsDelta: number // ±kr/mnd ekstra sparing
+  oneTimeEvents: ScenarioOneTimeEvent[]
+  extraNetToSavingsPct: number // andel av ekstra netto antatt spart (0–100)
+}
+
+export interface ScenarioKeyFigures {
+  nettoPerMonth: number
+  sparerate: number           // %
+  netWorth5y: number
+  purchasingPower: number     // maks kjøpesum
+  pensionAt67: number         // kr/mnd
+}
+
+export interface ScenarioResult {
+  baseline: { series: NetWorthSeries; figures: ScenarioKeyFigures }
+  scenario: { series: NetWorthSeries; figures: ScenarioKeyFigures }
 }
