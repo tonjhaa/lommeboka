@@ -376,6 +376,7 @@ export const useEconomyStore = create<EconomyState>()(
 
       pensionSettings: null,
       calibrationSettings: DEFAULT_CALIBRATION_SETTINGS,
+      // calibrationLog kappes til maks 50 nyeste ved skriving i importSlip — vokser ikke ubegrenset.
       calibrationLog: [],
       lockedCalibrationKeys: [],
 
