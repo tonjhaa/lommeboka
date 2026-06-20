@@ -72,11 +72,20 @@ describe('calibrateProfile', () => {
       rec(2026, 2, { skattetrekk: 18_000 }),
       rec(2026, 3, { skattetrekk: 19_000 }),
     ]
-    const res = calibrateProfile(hist, profile(), SETTINGS_ON, [])
+    // current avviker fra snittet → reell kalibrering med logg-entry
+    const res = calibrateProfile(hist, profile({ lastKnownTaxWithholding: 20_000 }), SETTINGS_ON, [])
     expect(res.values.skattetrekk).toBe(18_000) // snitt 17/18/19
     const entry = res.entries.find((e) => e.key === 'skattetrekk')!
     expect(entry.calibrated).toBe(18_000)
+    expect(entry.previous).toBe(20_000)
     expect(entry.sampleCount).toBe(3)
+  })
+
+  it('logger ingen entry når kalibrert verdi == current (ingen støy)', () => {
+    const hist = [rec(2026, 1, { skattetrekk: 18_000 }), rec(2026, 2, { skattetrekk: 18_000 })]
+    const res = calibrateProfile(hist, profile({ lastKnownTaxWithholding: 18_000 }), SETTINGS_ON, [])
+    expect(res.values.skattetrekk).toBe(18_000)
+    expect(res.entries.find((e) => e.key === 'skattetrekk')).toBeUndefined()
   })
 
   it('disabled: bruker nyeste slipps verdi (siste-verdi-fallback)', () => {

@@ -67,7 +67,10 @@ export function calibrateProfile(
     const values = slips.map(pick).filter((v) => v > 0)
     if (values.length === 0) return prev
     const calibrated = settings.enabled ? trimmedMean(values) : values[0]
-    entries.push({ key, label: LABELS[key] ?? key, previous: prev, calibrated, sampleCount: values.length, asOf: today(), locked: false })
+    // Logg kun reelle endringer — unngår «18000 → 18000»-støy i kalibreringsloggen.
+    if (calibrated !== prev) {
+      entries.push({ key, label: LABELS[key] ?? key, previous: prev, calibrated, sampleCount: values.length, asOf: today(), locked: false })
+    }
     return calibrated
   }
 
