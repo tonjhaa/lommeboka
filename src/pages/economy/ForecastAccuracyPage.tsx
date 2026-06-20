@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
 import { Target, Lock, Unlock } from 'lucide-react'
+// useEconomyStore direkte (ikke useActiveEconomyStore) — kalibrering er et personlig
+// verktøy mot egne slipper, ikke en partner-kontekst.
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { computeAccuracy } from '@/domain/economy/forecastCalibration'
 import { computeBudgetTable } from '@/domain/economy/budgetTableComputer'
@@ -35,6 +37,9 @@ export function ForecastAccuracyPage() {
     const year = new Date().getFullYear()
     // Samme budsjettberegning som dashbordet — ekte data, ellers blir budsjett-cellene
     // (og dermed treff-%) feil for ATF/sparing/gjeld/abo/forsikring/fond.
+    // Kjent v1-begrensning: bruker dashbordets 15-args-kall, ikke BudgetPage sin mer
+    // nøyaktige trekktabell-/lonnsoppgjor-baserte beregning. Skattetrekk-treff kan derfor
+    // avvike marginalt fra Budsjett-fanen.
     const yearOverrides = Object.fromEntries(
       Object.entries(budgetOverrides)
         .filter(([k]) => k.startsWith(`${year}:`))
@@ -79,7 +84,7 @@ export function ForecastAccuracyPage() {
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium">Auto-kalibrer prognoser</span>
           <button
-            role="switch" aria-checked={settings.enabled}
+            role="switch" aria-checked={settings.enabled} aria-label="Auto-kalibrer prognoser"
             onClick={() => setCalibrationSettings({ ...settings, enabled: !settings.enabled })}
             className={cn('h-6 w-11 rounded-full transition-colors', settings.enabled ? 'bg-primary' : 'bg-muted')}
           >
@@ -89,7 +94,8 @@ export function ForecastAccuracyPage() {
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>Horisont</span>
           <input type="range" min={3} max={12} step={1} value={settings.horizonSlips}
-            onChange={(e) => setCalibrationSettings({ ...settings, horizonSlips: parseInt(e.target.value) })}
+            aria-label="Antall slipper i kalibreringshorisont"
+            onChange={(e) => setCalibrationSettings({ ...settings, horizonSlips: parseInt(e.target.value, 10) })}
             className="flex-1 accent-primary" />
           <span className="font-mono">{settings.horizonSlips} slipper</span>
         </div>

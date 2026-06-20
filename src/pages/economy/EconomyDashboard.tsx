@@ -403,8 +403,10 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
     } catch { /* født før 1963 / ugyldig input — hopp over */ }
   }
 
-  // Treffsikkerhet-chip: vis nyeste vesentlige kalibrering (≥ 300 kr endring)
-  const recentCal = calibrationLog.find((e) => Math.abs(e.calibrated - e.previous) >= 300)
+  // Treffsikkerhet-chip: nyeste vesentlige kalibrering (≥ 300 kr) siste 30 dager —
+  // datofilter hindrer at en gammel kalibrering vises som «ny» i det uendelige.
+  const calCutoff = new Date(now.getTime() - 30 * 86400000).toISOString().split('T')[0]
+  const recentCal = calibrationLog.find((e) => Math.abs(e.calibrated - e.previous) >= 300 && e.asOf >= calCutoff)
   if (recentCal) {
     const diff = recentCal.calibrated - recentCal.previous
     chips.push({
