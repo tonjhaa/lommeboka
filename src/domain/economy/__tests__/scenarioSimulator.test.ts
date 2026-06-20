@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { bumpAccountRates, bumpDebtRates, addSavingsDelta, netMonthlyFromGross, applyOneTimeEvents } from '../scenarioSimulator'
-import type { SavingsAccount, DebtAccount, NetWorthPoint } from '@/types/economy'
+import { bumpAccountRates, bumpDebtRates, addSavingsDelta, netMonthlyFromGross, applyOneTimeEvents, simulateScenario, DEFAULT_SCENARIO_LEVERS, type ScenarioBaseline } from '../scenarioSimulator'
+import type { SavingsAccount, DebtAccount, NetWorthPoint, ScenarioLevers } from '@/types/economy'
 
 function konto(over: Partial<SavingsAccount> = {}): SavingsAccount {
   return {
@@ -75,5 +75,56 @@ describe('applyOneTimeEvents', () => {
   it('negativt beløp trekker fra', () => {
     const out = applyOneTimeEvents(series, [{ id: '1', label: 'Bil', date: '2026-03-01', amount: -30_000 }])
     expect(out[2].total).toBe(70_000)
+  })
+})
+
+function baseline(): ScenarioBaseline {
+  return {
+    now: { year: 2026, month: 6 },
+    historyMonths: 12, projectionMonths: 60,
+    grossMonthly: 55_000,
+    baseMonthlyForPension: 50_000,
+    pensionBirthYear: 1995, pensionServiceStartYear: 2016, currentG: 136_549,
+    equity: 200_000, existingDebt: 300_000,
+    savingsAccounts: [konto({ openingBalance: 200_000, monthlyContribution: 5_000 })],
+    fondPortfolio: { monthlyDeposit: 0, startDate: '2025-01-01', funds: [], snapshots: [] },
+    ivfTransactions: [],
+    debts: [laan({ currentBalance: 300_000 })],
+    partnerVeikart: { enabled: false, annualIncome: 0, annualNetIncome: 0, equity: 0, bsu: 0, bsuMonthlyContribution: 0, monthlySavings: 0, accounts: [] },
+  }
+}
+
+describe('simulateScenario — konsistens-invariant', () => {
+  it('nøytrale spaker ⇒ scenario.series identisk med baseline.series', () => {
+    const res = simulateScenario(baseline(), DEFAULT_SCENARIO_LEVERS)
+    expect(res.scenario.series).toEqual(res.baseline.series)
+    expect(res.scenario.figures).toEqual(res.baseline.figures)
+  })
+})
+
+describe('simulateScenario — spaker', () => {
+  it('lønn +10 % gir høyere netto og pensjon', () => {
+    const levers: ScenarioLevers = { ...DEFAULT_SCENARIO_LEVERS, salaryPct: 10 }
+    const res = simulateScenario(baseline(), levers)
+    expect(res.scenario.figures.nettoPerMonth).toBeGreaterThan(res.baseline.figures.nettoPerMonth)
+    expect(res.scenario.figures.pensionAt67).toBeGreaterThan(res.baseline.figures.pensionAt67)
+  })
+
+  it('extraNetToSavingsPct=0 ⇒ lønn endrer ikke formue om 5 år', () => {
+    const levers: ScenarioLevers = { ...DEFAULT_SCENARIO_LEVERS, salaryPct: 10, extraNetToSavingsPct: 0 }
+    const res = simulateScenario(baseline(), levers)
+    expect(res.scenario.figures.netWorth5y).toBeCloseTo(res.baseline.figures.netWorth5y, 0)
+  })
+
+  it('månedssparing +3000 øker formue om 5 år', () => {
+    const levers: ScenarioLevers = { ...DEFAULT_SCENARIO_LEVERS, monthlySavingsDelta: 3_000 }
+    const res = simulateScenario(baseline(), levers)
+    expect(res.scenario.figures.netWorth5y).toBeGreaterThan(res.baseline.figures.netWorth5y)
+  })
+
+  it('engangsbeløp -100k senker formue om 5 år', () => {
+    const levers: ScenarioLevers = { ...DEFAULT_SCENARIO_LEVERS, oneTimeEvents: [{ id: '1', label: 'Bil', date: '2026-07-01', amount: -100_000 }] }
+    const res = simulateScenario(baseline(), levers)
+    expect(res.scenario.figures.netWorth5y).toBeLessThan(res.baseline.figures.netWorth5y)
   })
 })
