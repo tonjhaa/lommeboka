@@ -3,6 +3,7 @@ import { Target, Lock, Unlock } from 'lucide-react'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { computeAccuracy } from '@/domain/economy/forecastCalibration'
 import { computeBudgetTable } from '@/domain/economy/budgetTableComputer'
+import { forecastJune } from '@/domain/economy/holidayPayCalculator'
 import { cn } from '@/lib/utils'
 
 function fmtNOK(n: number): string { return Math.round(n).toLocaleString('no-NO') + ' kr' }
@@ -11,6 +12,15 @@ export function ForecastAccuracyPage() {
   const profile = useEconomyStore((s) => s.profile)
   const monthHistory = useEconomyStore((s) => s.monthHistory)
   const budgetTemplate = useEconomyStore((s) => s.budgetTemplate)
+  const atfEntries = useEconomyStore((s) => s.atfEntries)
+  const savingsAccounts = useEconomyStore((s) => s.savingsAccounts)
+  const debts = useEconomyStore((s) => s.debts)
+  const subscriptions = useEconomyStore((s) => s.subscriptions)
+  const insurances = useEconomyStore((s) => s.insurances)
+  const budgetOverrides = useEconomyStore((s) => s.budgetOverrides)
+  const temporaryPayEntries = useEconomyStore((s) => s.temporaryPayEntries)
+  const ivfTransactions = useEconomyStore((s) => s.ivfTransactions)
+  const fondPortfolio = useEconomyStore((s) => s.fondPortfolio)
   const calibrationLog = useEconomyStore((s) => s.calibrationLog)
   const settings = useEconomyStore((s) => s.calibrationSettings)
   const setCalibrationSettings = useEconomyStore((s) => s.setCalibrationSettings)
@@ -23,17 +33,25 @@ export function ForecastAccuracyPage() {
   const report = useMemo(() => {
     if (!profile) return null
     const year = new Date().getFullYear()
+    // Samme budsjettberegning som dashbordet — ekte data, ellers blir budsjett-cellene
+    // (og dermed treff-%) feil for ATF/sparing/gjeld/abo/forsikring/fond.
+    const yearOverrides = Object.fromEntries(
+      Object.entries(budgetOverrides)
+        .filter(([k]) => k.startsWith(`${year}:`))
+        .map(([k, v]) => [k.slice(String(year).length + 1), v])
+    )
+    const juneForecast = forecastJune(year, monthHistory, profile, atfEntries)
     const table = computeBudgetTable(
-      year, profile, budgetTemplate, monthHistory,
-      [], [], [], [], [],
-      {}, [], undefined,
-      false, [], undefined,
+      year, profile, budgetTemplate, monthHistory, atfEntries,
+      savingsAccounts, debts, subscriptions, insurances,
+      yearOverrides, temporaryPayEntries, juneForecast ?? undefined,
+      false, ivfTransactions, fondPortfolio,
     )
     const rows = table.sections.flatMap((s) => s.rows).map((r) => ({
       id: r.id, label: r.label, cells: r.cells.map((c) => ({ budget: c.budget, actual: c.actual })),
     }))
     return computeAccuracy(rows)
-  }, [profile, budgetTemplate, monthHistory])
+  }, [profile, budgetTemplate, monthHistory, atfEntries, savingsAccounts, debts, subscriptions, insurances, budgetOverrides, temporaryPayEntries, ivfTransactions, fondPortfolio])
 
   if (!profile || slipCount < 2) {
     return (
