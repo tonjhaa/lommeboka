@@ -48,6 +48,15 @@ describe('addSavingsDelta', () => {
     expect(out).toHaveLength(1)
     expect(out[0].monthlyContribution).toBe(1_000)
   })
+
+  it('hopper over fond/krypto (saldo-styrt) og syntetiserer en ren sparekonto', () => {
+    const fond = konto({ id: 'f1', type: 'fond', monthlyContribution: 2_000 })
+    const out = addSavingsDelta([fond], 1_000)
+    // fond-kontoen skal IKKE få deltaet (projeksjonen ignorerer contribution for fond)
+    expect(out.find((a) => a.id === 'f1')!.monthlyContribution).toBe(2_000)
+    // i stedet syntetiseres en ren sparekonto med deltaet
+    expect(out.find((a) => a.id === 'scenario-savings')!.monthlyContribution).toBe(1_000)
+  })
 })
 
 describe('netMonthlyFromGross', () => {

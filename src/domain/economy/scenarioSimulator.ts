@@ -63,16 +63,22 @@ export function applyOneTimeEvents(series: NetWorthPoint[], events: ScenarioOneT
   })
 }
 
-/** Legg månedlig sparingDelta på første ikke-BSU sparekonto; syntetiser om ingen finnes. */
-export function addSavingsDelta(accounts: SavingsAccount[], deltaPerMonth: number): SavingsAccount[] {
+/**
+ * Legg månedlig sparingDelta på første rene sparekonto (ikke BSU/fond/krypto, som er
+ * saldo-styrte og ignorerer monthlyContribution i projeksjonen); syntetiser én om ingen finnes.
+ * `nowISO` brukes for deterministisk åpningsdato på den syntetiske kontoen.
+ */
+export function addSavingsDelta(accounts: SavingsAccount[], deltaPerMonth: number, nowISO?: string): SavingsAccount[] {
   if (deltaPerMonth === 0) return accounts
-  const idx = accounts.findIndex((a) => a.type !== 'BSU')
+  const isContributionDriven = (a: SavingsAccount) => a.type !== 'BSU' && a.type !== 'fond' && a.type !== 'krypto'
+  const idx = accounts.findIndex(isContributionDriven)
   if (idx === -1) {
+    const date = nowISO ?? new Date().toISOString().split('T')[0]
     const synthetic: SavingsAccount = {
       id: 'scenario-savings', type: 'sparekonto', label: 'Scenario-sparing',
-      openingBalance: 0, openingDate: new Date().toISOString().split('T')[0],
+      openingBalance: 0, openingDate: date,
       monthlyContribution: deltaPerMonth, interestCreditFrequency: 'monthly',
-      rateHistory: [{ fromDate: new Date().toISOString().split('T')[0], rate: 0 }],
+      rateHistory: [{ fromDate: date, rate: 0 }],
       balanceHistory: [], withdrawals: [], contributions: [],
     }
     return [...accounts, synthetic]
@@ -127,7 +133,8 @@ function runOnce(b: ScenarioBaseline, levers: ScenarioLevers): { series: NetWort
   const totalSavingsDelta = savingsFromSalary + levers.monthlySavingsDelta
 
   // Transformer input
-  const accounts = addSavingsDelta(bumpAccountRates(b.savingsAccounts, levers.rateDeltaPp), totalSavingsDelta)
+  const nowISO = `${b.now.year}-${String(b.now.month).padStart(2, '0')}-01`
+  const accounts = addSavingsDelta(bumpAccountRates(b.savingsAccounts, levers.rateDeltaPp), totalSavingsDelta, nowISO)
   const debts = bumpDebtRates(b.debts, levers.rateDeltaPp)
 
   const from = new Date(b.now.year, b.now.month - 1 - b.historyMonths, 1)
@@ -143,20 +150,29 @@ function runOnce(b: ScenarioBaseline, levers: ScenarioLevers): { series: NetWort
   series = applyOneTimeEvents(series, levers.oneTimeEvents)
 
   const annualIncome = grossMonthly * 12
+  // SPK-grunnlaget skaleres proporsjonalt med den faktiske brutto-endringen, så både
+  // salaryPct og flat salaryKr fordeles riktig (unngår dobbelttelling av salaryKr).
+  const grossRatio = b.grossMonthly > 0 ? grossMonthly / b.grossMonthly : 1
   const pension = projectPension({
     birthYear: b.pensionBirthYear, serviceStartYear: b.pensionServiceStartYear,
     currentYear: b.now.year, currentG: b.currentG,
     folketrygdAnnualIncome: annualIncome,
-    spkAnnualGrunnlag: (b.baseMonthlyForPension * (1 + levers.salaryPct / 100) + levers.salaryKr) * 12,
+    spkAnnualGrunnlag: b.baseMonthlyForPension * grossRatio * 12,
     uttaksalder: 67, salaryGrowthPct: 3, gGrowthPct: 3.5,
     afpEnabled: true, særalder: { enabled: false, age: 60 },
   })
 
+  // Total sparerate: all månedlig sparing (eksisterende kontoers bidrag + spak-delta) / netto.
+  const baselineMonthlySavings = b.savingsAccounts.reduce((s, a) => s + (a.monthlyContribution ?? 0), 0)
+  const totalMonthlySavings = baselineMonthlySavings + totalSavingsDelta
+
   const netWorth5y = seriesValueAt(series, NETWORTH_5Y_MONTHS, b.now)
   const figures: ScenarioKeyFigures = {
     nettoPerMonth: scenarioNet,
-    sparerate: scenarioNet > 0 ? Math.round(totalSavingsDelta / scenarioNet * 100) : 0,
+    sparerate: scenarioNet > 0 ? Math.round(totalMonthlySavings / scenarioNet * 100) : 0,
     netWorth5y,
+    // Kjøpekraft «nå»: bruker dagens egenkapital (b.equity) — du kjøper ikke med fremtidig
+    // sparing i dag. Varierer derfor med inntektsspaker, ikke med sparing/engangsbeløp.
     purchasingPower: calcMaxPurchaseSimple(b.equity, annualIncome, b.existingDebt, defaultConfig),
     pensionAt67: pension.monthlyTotal,
   }
