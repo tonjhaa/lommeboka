@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   Shield, Briefcase, PiggyBank, BarChart2, CreditCard,
   FileText, TrendingUp, RefreshCw, HeartPulse, Umbrella,
-  Palmtree, CheckCircle2, ArrowRight, ChevronLeft, Map, Gift, Baby, Landmark, LineChart,
+  Palmtree, CheckCircle2, ArrowRight, ChevronLeft, Map, Gift, Baby, Landmark, LineChart, Target,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -57,6 +57,13 @@ export const MODULES: ModuleOption[] = [
     label: 'Skatteoppgjør',
     desc: 'Prognose og historikk for skatteoppgjør',
     icon: TrendingUp,
+    defaultFor: ['forsvaret', 'custom'],
+  },
+  {
+    tab: 'calibration',
+    label: 'Treffsikkerhet',
+    desc: 'Auto-kalibrer prognoser mot faktiske slipper',
+    icon: Target,
     defaultFor: ['forsvaret', 'custom'],
   },
   {
