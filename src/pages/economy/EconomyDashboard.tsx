@@ -97,6 +97,7 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
     userPreferences,
     partnerVeikart,
     pensionSettings,
+    calibrationLog,
   } = useActiveEconomyStore()
 
   const now = useMemo(() => new Date(), [])
@@ -400,6 +401,16 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
         text: `Forventet pensjon ~${Math.round(proj.monthlyTotal).toLocaleString('no-NO')} kr/mnd ved 67 (estimat)`,
       })
     } catch { /* født før 1963 / ugyldig input — hopp over */ }
+  }
+
+  // Treffsikkerhet-chip: vis nyeste vesentlige kalibrering (≥ 300 kr endring)
+  const recentCal = calibrationLog.find((e) => Math.abs(e.calibrated - e.previous) >= 300)
+  if (recentCal) {
+    const diff = recentCal.calibrated - recentCal.previous
+    chips.push({
+      icon: '🎯',
+      text: `${recentCal.label}-estimat justert ${diff >= 0 ? '+' : ''}${Math.round(diff).toLocaleString('no-NO')} kr`,
+    })
   }
 
   // ── Render ────────────────────────────────────────────────
