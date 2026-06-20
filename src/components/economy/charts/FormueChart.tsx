@@ -13,12 +13,16 @@ interface FormueChartProps {
 }
 
 export function FormueChart({ history, projected = [], nettoFormue, label = 'Nettoinntekt' }: FormueChartProps) {
+  // Hooks må kalles før enhver tidlig return (Rules of Hooks).
+  const svgRef = useRef<SVGSVGElement>(null)
+  const [hoverInfo, setHoverInfo] = useState<{ m: string; v: number; proj: boolean } | null>(null)
+
   const allPoints = [...history, ...projected]
 
   if (allPoints.length < 1) {
     return (
       <div className="rounded-xl border border-border/50 bg-card/60 flex flex-col items-center justify-center gap-1 p-4">
-        <p className="text-xs text-muted-foreground">Last opp lønnsslipper for å se trend</p>
+        <p className="text-xs text-muted-foreground">Ingen data å vise ennå</p>
       </div>
     )
   }
@@ -40,9 +44,6 @@ export function FormueChart({ history, projected = [], nettoFormue, label = 'Net
   const histPts = history.map((d, i) => ({ x: xOf(i), y: yOf(d.v), ...d }))
   const projOffset = history.length - 1
   const projPts = projected.map((d, i) => ({ x: xOf(projOffset + i + 1), y: yOf(d.v), ...d }))
-
-  const svgRef = useRef<SVGSVGElement>(null)
-  const [hoverInfo, setHoverInfo] = useState<{ m: string; v: number; proj: boolean } | null>(null)
 
   function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
     const svg = svgRef.current
