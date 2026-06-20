@@ -62,4 +62,25 @@ describe('konsistens-invariant: auto av ≡ siste-verdi', () => {
     expect(res.values.skattetrekk).toBe(19_000)
     expect(res.values.baseMonthly).toBe(51_000)
   })
+
+  it('enabled: baseMonthly er ALLTID nyeste (steg-funksjon, ikke snitt) — lagger ikke lønnsøkning', () => {
+    // 6 slipper: 50k → ny lønn 55k på nyeste. Snitt ville gitt ~50.8k; baseMonthly skal være 55k.
+    const hist = [
+      rec2(2026, 1, { maanedslonn: 50_000 }), rec2(2026, 2, { maanedslonn: 50_000 }),
+      rec2(2026, 3, { maanedslonn: 50_000 }), rec2(2026, 4, { maanedslonn: 50_000 }),
+      rec2(2026, 5, { maanedslonn: 50_000 }), rec2(2026, 7, { maanedslonn: 55_000 }),
+    ]
+    const res = calibrateProfile(hist, prof(), { enabled: true, horizonSlips: 6 }, [])
+    expect(res.values.baseMonthly).toBe(55_000)
+    // skattetrekk derimot snittes (varierende måling)
+    expect(res.values.skattetrekk).toBe(18_000)
+  })
+
+  it('enabled på/av gir SAMME baseMonthly (nyeste) — invariant for grunnlønn', () => {
+    const hist = [rec2(2026, 1, { maanedslonn: 50_000 }), rec2(2026, 3, { maanedslonn: 55_000 })]
+    const on = calibrateProfile(hist, prof(), { enabled: true, horizonSlips: 6 }, [])
+    const off = calibrateProfile(hist, prof(), { enabled: false, horizonSlips: 6 }, [])
+    expect(on.values.baseMonthly).toBe(off.values.baseMonthly)
+    expect(on.values.baseMonthly).toBe(55_000)
+  })
 })

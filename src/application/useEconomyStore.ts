@@ -1080,6 +1080,9 @@ export const useEconomyStore = create<EconomyState>()(
       },
 
       // --- Migrering: gjenoppbygg profil fra eksisterende slipper hvis profil mangler ---
+      // Bevisst avvik fra spec: denne null-profil-gjenopprettingen bruker siste-verdi
+      // (ikke calibrateProfile). Den kjører kun når profile === null (sjelden datamigrasjon),
+      // og kalibrering kjører uansett ved neste slipp-import — så profilen blir konsistent da.
       restoreProfileFromSlips: () => {
         const { profile, monthHistory } = get()
         if (profile !== null) return

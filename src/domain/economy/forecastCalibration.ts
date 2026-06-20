@@ -59,7 +59,10 @@ export function calibrateProfile(
   const entries: CalibrationEntry[] = []
 
   // Hjelper: kalibrer én skalar nøkkel fra en verdivelger.
-  function scalar(key: CalibrationKey, pick: (s: ParsetLonnsslipp) => number, prev: number): number {
+  // alwaysLatest=true → bruk alltid nyeste slipps verdi (aldri snitt). Brukes for
+  // grunnlønn (1S01): en steg-funksjon som endres ved lønnsoppgjør, ikke en støyende
+  // måling — å snitte den ville lagget en lønnsøkning inn i pensjon/feriepenger/Veikart.
+  function scalar(key: CalibrationKey, pick: (s: ParsetLonnsslipp) => number, prev: number, alwaysLatest = false): number {
     if (locked.has(key)) {
       entries.push({ key, label: LABELS[key] ?? key, previous: prev, calibrated: prev, sampleCount: 0, asOf: today(), locked: true })
       return prev
@@ -69,15 +72,15 @@ export function calibrateProfile(
     // krever at vi beholder dette. (En kjent konsekvens: en verdi kan ikke auto-nullstilles.)
     const values = slips.map(pick).filter((v) => v > 0)
     if (values.length === 0) return prev
-    const calibrated = settings.enabled ? trimmedMean(values) : values[0]
+    const calibrated = (settings.enabled && !alwaysLatest) ? trimmedMean(values) : values[0]
     // Logg kun reelle endringer — unngår «18000 → 18000»-støy i kalibreringsloggen.
     if (calibrated !== prev) {
-      entries.push({ key, label: LABELS[key] ?? key, previous: prev, calibrated, sampleCount: values.length, asOf: today(), locked: false })
+      entries.push({ key, label: LABELS[key] ?? key, previous: prev, calibrated, sampleCount: alwaysLatest ? 1 : values.length, asOf: today(), locked: false })
     }
     return calibrated
   }
 
-  const baseMonthly = scalar('baseMonthly', (s) => s.maanedslonn, current.baseMonthly)
+  const baseMonthly = scalar('baseMonthly', (s) => s.maanedslonn, current.baseMonthly, true)
   const skattetrekk = scalar('skattetrekk', (s) => s.skattetrekk, current.lastKnownTaxWithholding)
   const extraTaxWithholding = scalar('extraTaxWithholding', (s) => s.ekstraTrekk, current.extraTaxWithholding)
   const housingDeduction = scalar('housingDeduction', (s) => s.husleietrekk, current.housingDeduction)

@@ -52,9 +52,14 @@ export function ForecastAccuracyPage() {
       yearOverrides, temporaryPayEntries, juneForecast ?? undefined,
       false, ivfTransactions, fondPortfolio,
     )
-    const rows = table.sections.flatMap((s) => s.rows).map((r) => ({
-      id: r.id, label: r.label, cells: r.cells.map((c) => ({ budget: c.budget, actual: c.actual })),
-    }))
+    // Mål kun granulære linjerader (+ netto som hovedtall). Sum-/YTD-rader ekskluderes:
+    // de er avledet og padder treff-% med nær-duplikate avvik (sum-trekk, overskudd, brutto …).
+    const rows = table.sections
+      .flatMap((s) => s.rows)
+      .filter((r) => (!r.isBold || r.id === 'netto') && !r.isCumulative)
+      .map((r) => ({
+        id: r.id, label: r.label, cells: r.cells.map((c) => ({ budget: c.budget, actual: c.actual })),
+      }))
     return computeAccuracy(rows)
   }, [profile, budgetTemplate, monthHistory, atfEntries, savingsAccounts, debts, subscriptions, insurances, budgetOverrides, temporaryPayEntries, ivfTransactions, fondPortfolio])
 
@@ -127,11 +132,14 @@ export function ForecastAccuracyPage() {
           <div className="space-y-1.5">
             {calibrationLog.slice(0, 20).map((e, i) => {
               const isLocked = lockedKeys.includes(e.key)
+              // tabelltrekkProsent er en prosent, ikke kroner.
+              const fmt = (n: number) => e.key === 'tabelltrekkProsent' ? `${n.toFixed(1)} %` : fmtNOK(n)
               return (
                 <div key={`${e.key}-${i}`} className="flex items-center justify-between text-[11px]">
                   <span className="text-muted-foreground">
-                    {e.label}: {fmtNOK(e.previous)} → <span className="text-foreground font-mono">{fmtNOK(e.calibrated)}</span>
-                    {e.sampleCount > 0 && <span className="text-muted-foreground/60"> (snitt {e.sampleCount})</span>}
+                    {e.label}: {fmt(e.previous)} → <span className="text-foreground font-mono">{fmt(e.calibrated)}</span>
+                    {e.sampleCount > 1 && <span className="text-muted-foreground/60"> (snitt {e.sampleCount})</span>}
+                    <span className="text-muted-foreground/40 ml-1">{e.asOf}</span>
                   </span>
                   <button onClick={() => isLocked ? unlockCalibration(e.key) : lockCalibration(e.key)}
                     className="text-muted-foreground hover:text-foreground" title={isLocked ? 'Lås opp' : 'Lås (auto rører den ikke)'}>
