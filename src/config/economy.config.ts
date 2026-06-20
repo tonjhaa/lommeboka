@@ -24,6 +24,13 @@ export const BSU_MAX_YEARLY = 27_500
 export const BSU_MAX_TOTAL = 300_000
 
 // ------------------------------------------------------------
+// PROJEKSJONSRENTER (felles antakelser på tvers av Veikart/Formue)
+// ------------------------------------------------------------
+
+/** Forventet årlig avkastning for fond/indeks (% per år, historisk snitt). */
+export const DEFAULT_FOND_RATE = 7.0
+
+// ------------------------------------------------------------
 // FERIEPENGER — STATLIG MODELL
 // ------------------------------------------------------------
 

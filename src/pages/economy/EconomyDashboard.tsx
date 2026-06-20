@@ -1,5 +1,6 @@
 import { AlertTriangle, Zap, Home } from 'lucide-react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { useNetWorthSeries } from '@/hooks/useNetWorthSeries'
 import { useSharedProjectStore } from '@/store/useSharedProjectStore'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
@@ -21,10 +22,7 @@ import { cn } from '@/lib/utils'
 import { HeroBand, calcHealthScore } from '@/components/economy/widgets/HeroBand'
 import { FormueChart } from '@/components/economy/charts/FormueChart'
 
-const MONTH_NAMES = [
-  '', 'Jan', 'Feb', 'Mars', 'April', 'Mai', 'Juni',
-  'Juli', 'Aug', 'Sep', 'Okt', 'Nov', 'Des',
-]
+const MONTH_SHORT_FORMUE = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des']
 
 function fmtNOK(n: number): string {
   return Math.round(n).toLocaleString('no-NO') + ' kr'
@@ -153,25 +151,32 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
   // Veikart-data for dashbord-chip
   const veikartData = useVeikart()
 
-  // ── Formue ────────────────────────────────────────────────
-  const sparingKontoer = savingsAccounts.reduce((s, a) => s + computeEffectiveBalance(a, now), 0)
+  // ── Formue over tid (netto formue-serie) — ÉN kilde for vist formue ──
+  // dinSerie er ALLTID scope 'din' og brukes til hero + helsescore. fellesSerie brukes
+  // kun i grafen når toggelen står på 'felles'. Begge hooks kalles ubetinget (Rules of Hooks).
+  const [formueScope, setFormueScope] = useState<'din' | 'felles'>('din')
+  const dinSerie = useNetWorthSeries('din')
+  const fellesSerie = useNetWorthSeries('felles')
+  const formueSerie = formueScope === 'felles' ? fellesSerie : dinSerie
+
+  const formueHistory = formueSerie.filter((p) => !p.isProjected).map((p) => ({ m: MONTH_SHORT_FORMUE[p.month - 1], v: p.total }))
+  const formueProjected = formueSerie.filter((p) => p.isProjected).map((p) => ({ m: MONTH_SHORT_FORMUE[p.month - 1], v: p.total }))
+  const sisteFaktiske = [...dinSerie].reverse().find((p) => !p.isProjected)
+
+  // Formue-totaler hentes fra dinSerie sitt nå-punkt — samme kilde som grafen (scope 'din'),
+  // brukt av både HeroBand og helsescore for å unngå divergens.
+  // NB: ikke bytt dinSerie til formueScope her, ellers ville hero/score inkludert partnerformue.
+  const totalSparing = (sisteFaktiske?.sparing ?? 0) + (sisteFaktiske?.fond ?? 0) + (sisteFaktiske?.ivf ?? 0)
+  const totalGjeld = sisteFaktiske?.gjeld ?? 0
+  const nettoFormue = sisteFaktiske?.total ?? 0
+
+  // Hjelpeverdier med egne behov: ivfSaldo trenger fortegn (chips), fondVerdi til sparemål.
   const sortedFondSnapshots = [...(fondPortfolio?.snapshots ?? [])].sort((a, b) => b.date.localeCompare(a.date))
   const fondVerdi = sortedFondSnapshots[0]?.totalValue ?? 0
   const sharedIvfTxs = useSharedProjectStore((s) => s.transactions)
   const todayStr = now.toISOString().split('T')[0]
   const ivfSrcTxs = sharedIvfTxs.length > 0 ? sharedIvfTxs : ivfTransactions
   const ivfSaldo = ivfSrcTxs.filter(t => t.date <= todayStr).reduce((s, t) => s + t.amount, 0)
-  const totalSparing = sparingKontoer + fondVerdi + Math.max(0, ivfSaldo)
-  const totalGjeld = debts.filter(d => d.status !== 'nedbetalt').reduce((s, d) => s + d.currentBalance, 0)
-  const nettoFormue = totalSparing - totalGjeld
-
-  // ── Inntektstrend — siste 3 faktiske + 6 projiserte ─────
-  const sortedSlips = [...monthHistory]
-    .filter((m) => m.slipData != null && m.nettoUtbetalt > 0)
-    .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
-
-  const last3Slips = sortedSlips.slice(-3)
-  const trendData = last3Slips.map((m) => ({ m: MONTH_NAMES[m.month], v: m.nettoUtbetalt }))
 
   // ── Budsjett ──────────────────────────────────────────────
   const juneForecast = profile ? forecastJune(currentYear, monthHistory, profile, atfEntries) : null
@@ -197,25 +202,6 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
   const overskuddCell = allBudgetRows.find((r) => r.id === 'overskudd')?.cells[monthIdx]
   const nettoFraBudsjett = nettoCell ? (nettoCell.actual ?? nettoCell.budget) : 0
   const overskuddFraBudsjett = overskuddCell ? (overskuddCell.actual ?? overskuddCell.budget) : null
-
-  // ── Inntektstrend projeksjon — bruk budsjettabellens netto for fremtidige måneder ─────
-  const projectedTrend: { m: string; v: number }[] = (() => {
-    const MONTH_SHORT = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des']
-    const lastEntry = sortedSlips[sortedSlips.length - 1]
-    const startMonth = lastEntry ? lastEntry.month : currentMonth
-    const startYear = lastEntry ? lastEntry.year : currentYear
-    return Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(startYear, startMonth - 1 + i + 1, 1)
-      // Bruk budsjettabellens netto-celle for måneder i inneværende år, ellers siste kjente
-      const cellIdx = d.getMonth() // 0-based
-      const budgetNetto = nettoRow && d.getFullYear() === currentYear
-        ? (nettoRow.cells[cellIdx]?.budget ?? 0)
-        : 0
-      const v = budgetNetto > 0 ? budgetNetto : nettoFraBudsjett
-      if (v <= 0) return null
-      return { m: MONTH_SHORT[d.getMonth()], v }
-    }).filter((p): p is { m: string; v: number } => p !== null)
-  })()
 
   // ── Sparerate siste 12 mnd (faktisk sparevekst / total netto) ────
   const sparerate12m = (() => {
@@ -442,11 +428,25 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
           overskudd={overskuddFraBudsjett}
           avgNetto12m={avgNetto12m}
         />
-        <FormueChart
-          history={trendData}
-          projected={projectedTrend}
-          nettoFormue={nettoFormue}
-        />
+        <div className="flex flex-col gap-1">
+          {partnerVeikart.enabled && (
+            <div className="flex gap-1 self-end">
+              {(['din','felles'] as const).map((sc) => (
+                <button key={sc} onClick={() => setFormueScope(sc)}
+                  className={cn('rounded px-2 py-0.5 text-[10px] font-medium border',
+                    formueScope === sc ? 'border-primary text-primary' : 'border-border/40 text-muted-foreground')}>
+                  {sc === 'din' ? 'Din' : 'Felles'}
+                </button>
+              ))}
+            </div>
+          )}
+          <FormueChart
+            history={formueHistory}
+            projected={formueProjected}
+            nettoFormue={nettoFormue}
+            label="Netto formue"
+          />
+        </div>
         <PengePulsCard chips={chips} />
       </div>
 

@@ -1150,6 +1150,9 @@ export const useEconomyStore = create<EconomyState>()(
           if (prefs?.enabledTabs && !prefs.enabledTabs.includes('pension')) {
             prefs.enabledTabs = [...prefs.enabledTabs, 'pension']
           }
+          if (prefs?.enabledTabs && !prefs.enabledTabs.includes('formue')) {
+            prefs.enabledTabs = [...prefs.enabledTabs, 'formue']
+          }
           // Saniter profil fra sky/backup: OF11 (feriepenger) skal aldri ligge som
           // månedlig fast tillegg — eldre lagret data kan fortsatt ha den.
           let importedProfile = (data.profile ?? null) as EmploymentProfile | null
@@ -1232,7 +1235,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 22,
+      version: 23,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v20 → v21: migrer tieredRates (snapshot) til tieredRateHistory (tidsserie)
@@ -1253,6 +1256,13 @@ export const useEconomyStore = create<EconomyState>()(
           const prefs = state.userPreferences as { enabledTabs?: string[] }
           if (Array.isArray(prefs.enabledTabs) && !prefs.enabledTabs.includes('pension')) {
             prefs.enabledTabs = [...prefs.enabledTabs, 'pension']
+          }
+        }
+        // v22 → v23: legg til 'formue' i enabledTabs for eksisterende brukere
+        if (fromVersion < 23 && state.userPreferences) {
+          const prefs = state.userPreferences as { enabledTabs?: string[] }
+          if (Array.isArray(prefs.enabledTabs) && !prefs.enabledTabs.includes('formue')) {
+            prefs.enabledTabs = [...prefs.enabledTabs, 'formue']
           }
         }
         // v19 → v20: forventede lønnsoppgjør slås AV i prognosen som standard.

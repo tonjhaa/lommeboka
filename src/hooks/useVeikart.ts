@@ -3,6 +3,7 @@ import { useEconomyStore } from '@/application/useEconomyStore'
 import { computeEffectiveBalance, projectBalanceMonthly } from '@/domain/economy/savingsCalculator'
 import { calcMaxPurchaseSimple } from '@/utils/maxPurchase'
 import { defaultConfig } from '@/config/default.config'
+import { DEFAULT_FOND_RATE } from '@/config/economy.config'
 
 // ── Norsk boliglånsforskrift — satser fra boligkalkulatorens konfig ──
 const EK_KRAV = defaultConfig.lendingRules.minEquityPercent / 100
@@ -15,7 +16,7 @@ const STRESSTEST_MIN = defaultConfig.lendingRules.minStressTestRate / 100
 const STRESSTEST_PP = defaultConfig.lendingRules.stressTestAddition / 100
 const CURRENT_RATE = 0.0425    // 4.25% (norges bank 2026)
 const DEFAULT_SAVINGS_RATE = 3.5  // % per år, sparekonto
-const DEFAULT_FOND_RATE = 7.0     // % per år, indeksfond (historisk snitt)
+// DEFAULT_FOND_RATE importeres fra economy.config (delt med Formue-modulen)
 
 /** Delegerer til boligkalkulatorens motor (EK-grense med kjøpsgebyrer + gjeldsgrad)
  *  slik at «maks kjøpesum» betyr det samme i Veikart, Sparing og kalkulatoren. */

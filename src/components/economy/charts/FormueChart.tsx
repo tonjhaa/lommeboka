@@ -13,12 +13,16 @@ interface FormueChartProps {
 }
 
 export function FormueChart({ history, projected = [], nettoFormue, label = 'Nettoinntekt' }: FormueChartProps) {
+  // Hooks må kalles før enhver tidlig return (Rules of Hooks).
+  const svgRef = useRef<SVGSVGElement>(null)
+  const [hoverInfo, setHoverInfo] = useState<{ m: string; v: number; proj: boolean } | null>(null)
+
   const allPoints = [...history, ...projected]
 
   if (allPoints.length < 1) {
     return (
       <div className="rounded-xl border border-border/50 bg-card/60 flex flex-col items-center justify-center gap-1 p-4">
-        <p className="text-xs text-muted-foreground">Last opp lønnsslipper for å se trend</p>
+        <p className="text-xs text-muted-foreground">Ingen data å vise ennå</p>
       </div>
     )
   }
@@ -40,9 +44,6 @@ export function FormueChart({ history, projected = [], nettoFormue, label = 'Net
   const histPts = history.map((d, i) => ({ x: xOf(i), y: yOf(d.v), ...d }))
   const projOffset = history.length - 1
   const projPts = projected.map((d, i) => ({ x: xOf(projOffset + i + 1), y: yOf(d.v), ...d }))
-
-  const svgRef = useRef<SVGSVGElement>(null)
-  const [hoverInfo, setHoverInfo] = useState<{ m: string; v: number; proj: boolean } | null>(null)
 
   function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
     const svg = svgRef.current
@@ -130,13 +131,19 @@ export function FormueChart({ history, projected = [], nettoFormue, label = 'Net
             stroke="hsl(215 20.2% 28%)" strokeWidth="0.8" strokeDasharray="2 2" />
         )}
 
-        {/* X-labels */}
-        {[...histPts, ...projPts].map((p, i) => (
-          <text key={i} x={p.x} y={H - pad.bottom + 10} textAnchor="middle" fontSize="6"
-            fill={i >= histPts.length ? 'hsl(215 20.2% 38%)' : 'hsl(215 20.2% 50%)'}>
-            {p.m}
-          </text>
-        ))}
+        {/* X-labels — tynnes så de holder seg lesbare uansett antall punkter (maks ~8 synlige) */}
+        {(() => {
+          const all = [...histPts, ...projPts]
+          const step = Math.max(1, Math.ceil(all.length / 8))
+          return all.map((p, i) => (
+            (i % step === 0 || i === all.length - 1) ? (
+              <text key={i} x={p.x} y={H - pad.bottom + 10} textAnchor="middle" fontSize="6"
+                fill={i >= histPts.length ? 'hsl(215 20.2% 38%)' : 'hsl(215 20.2% 50%)'}>
+                {p.m}
+              </text>
+            ) : null
+          ))
+        })()}
 
         {/* Hover dot */}
         {hoverInfo && (() => {
