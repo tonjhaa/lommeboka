@@ -22,6 +22,7 @@ import {
   Landmark,
   LineChart,
   Target,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -76,6 +77,9 @@ const FormuePage = lazyWithRetry(() =>
 const ForecastAccuracyPage = lazyWithRetry(() =>
   import('./ForecastAccuracyPage').then((m) => ({ default: m.ForecastAccuracyPage }))
 )
+const ScenarioPage = lazyWithRetry(() =>
+  import('./ScenarioPage').then((m) => ({ default: m.ScenarioPage }))
+)
 
 interface NavItem {
   page: EconomySubPage
@@ -98,6 +102,7 @@ const NAV_ITEMS: NavItem[] = [
   { page: 'subscriptions', label: 'Abo & Fors.', Icon: RefreshCw },
   { page: 'vacation', label: 'Ferie', Icon: Umbrella },
   { page: 'veikart', label: 'Veikart', Icon: Map },
+  { page: 'scenario', label: 'Simulator', Icon: SlidersHorizontal },
   { page: 'pension', label: 'Pensjon', Icon: Landmark },
   { page: 'gaver', label: 'Gaver', Icon: Gift },
 ]
@@ -230,6 +235,7 @@ export function EconomyPage() {
           {currentPage === 'gaver' && <GiftPage />}
           {currentPage === 'formue' && <FormuePage />}
           {currentPage === 'calibration' && <ForecastAccuracyPage />}
+          {currentPage === 'scenario' && <ScenarioPage />}
           {currentPage === 'settings' && <EconomySettingsPage />}
         </Suspense>
         </PageErrorBoundary>
