@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   Shield, Briefcase, PiggyBank, BarChart2, CreditCard,
   FileText, TrendingUp, RefreshCw, HeartPulse, Umbrella,
-  Palmtree, CheckCircle2, ArrowRight, ChevronLeft, Map, Gift, Baby, Landmark, LineChart, Target,
+  Palmtree, CheckCircle2, ArrowRight, ChevronLeft, Map, Gift, Baby, Landmark, LineChart, Target, SlidersHorizontal,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -113,6 +113,13 @@ export const MODULES: ModuleOption[] = [
     label: 'Boligveikart',
     desc: 'Fremtidsplaner og kjøpekraftprognose',
     icon: Map,
+    defaultFor: ['forsvaret', 'custom'],
+  },
+  {
+    tab: 'scenario',
+    label: 'Simulator',
+    desc: 'Hva-skjer-hvis: lønn, rente, sparing, engangsbeløp',
+    icon: SlidersHorizontal,
     defaultFor: ['forsvaret', 'custom'],
   },
   {
