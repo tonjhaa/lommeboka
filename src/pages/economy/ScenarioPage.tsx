@@ -79,8 +79,9 @@ export function ScenarioPage() {
     scenario: result.scenario.series[i]?.total ?? p.total,
   }))
 
-  const figs: { label: string; base: number; scen: number }[] = [
+  const figs: { label: string; base: number; scen: number; pct?: boolean }[] = [
     { label: 'Netto/mnd', base: result.baseline.figures.nettoPerMonth, scen: result.scenario.figures.nettoPerMonth },
+    { label: 'Sparerate', base: result.baseline.figures.sparerate, scen: result.scenario.figures.sparerate, pct: true },
     { label: 'Formue om 5 år', base: result.baseline.figures.netWorth5y, scen: result.scenario.figures.netWorth5y },
     { label: 'Kjøpekraft', base: result.baseline.figures.purchasingPower, scen: result.scenario.figures.purchasingPower },
     { label: 'Pensjon v/67', base: result.baseline.figures.pensionAt67, scen: result.scenario.figures.pensionAt67 },
@@ -253,15 +254,16 @@ export function ScenarioPage() {
       </div>
 
       {/* SEKSJON 3: Nøkkeltall-delta */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {figs.map((f) => {
           const delta = f.scen - f.base
+          const fmt = (n: number) => f.pct ? `${Math.round(n)} %` : fmtNOK(n)
           return (
             <div key={f.label} className="rounded-lg border border-border/50 bg-card/60 p-3">
               <p className="text-[11px] text-muted-foreground">{f.label}</p>
-              <p className="text-sm font-mono font-semibold">{fmtNOK(f.scen)}</p>
+              <p className="text-sm font-mono font-semibold">{fmt(f.scen)}</p>
               <p className={cn('text-[10px] font-mono', delta > 0 ? 'text-green-400' : delta < 0 ? 'text-red-400' : 'text-muted-foreground')}>
-                {delta >= 0 ? '+' : ''}{fmtNOK(delta)}
+                {delta >= 0 ? '+' : ''}{fmt(delta)}
               </p>
             </div>
           )
