@@ -92,8 +92,11 @@ function baseline(): ScenarioBaseline {
     now: { year: 2026, month: 6 },
     historyMonths: 12, projectionMonths: 60,
     grossMonthly: 55_000,
-    baseMonthlyForPension: 50_000,
-    pensionBirthYear: 1995, pensionServiceStartYear: 2016, currentG: 136_549,
+    pensionBase: {
+      birthYear: 1995, serviceStartYear: 2016, currentYear: 2026, currentG: 136_549,
+      folketrygdAnnualIncome: 55_000 * 12 * 1.05, spkAnnualGrunnlag: 55_000 * 12,
+      salaryGrowthPct: 3, gGrowthPct: 3.5, afpEnabled: true, særalder: { enabled: false, age: 60 },
+    },
     equity: 200_000, existingDebt: 300_000,
     savingsAccounts: [konto({ openingBalance: 200_000, monthlyContribution: 5_000 })],
     fondPortfolio: { monthlyDeposit: 0, startDate: '2025-01-01', funds: [], snapshots: [] },

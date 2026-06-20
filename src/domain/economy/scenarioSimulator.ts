@@ -10,7 +10,7 @@ import type {
 } from '@/types/economy'
 import { beregnSkatt } from './norwegianTaxCalc'
 import { computeNetWorthSeries } from './netWorthCalculator'
-import { projectPension } from './pensionCalculator'
+import { projectPension, type PensionInput } from './pensionCalculator'
 import { calcMaxPurchaseSimple } from '@/utils/maxPurchase'
 import { defaultConfig } from '@/config/default.config'
 
@@ -101,10 +101,11 @@ export interface ScenarioBaseline {
   historyMonths: number
   projectionMonths: number
   grossMonthly: number
-  baseMonthlyForPension: number
-  pensionBirthYear: number
-  pensionServiceStartYear: number
-  currentG: number
+  /** Kanonisk pensjonsinput (fra buildPensionInputFromProfile) — gir baseline-pensjon
+   *  identisk med Pensjon-/Dashboard-siden. Skaleres med lønnsspak via grossRatio. */
+  pensionBase: Omit<PensionInput, 'uttaksalder'>
+  /** Total egenkapital (effektiv saldo, samme basis som Veikart) — gir baseline-kjøpekraft
+   *  identisk med Veikart. */
   equity: number
   existingDebt: number
   savingsAccounts: SavingsAccount[]
@@ -150,16 +151,14 @@ function runOnce(b: ScenarioBaseline, levers: ScenarioLevers): { series: NetWort
   series = applyOneTimeEvents(series, levers.oneTimeEvents)
 
   const annualIncome = grossMonthly * 12
-  // SPK-grunnlaget skaleres proporsjonalt med den faktiske brutto-endringen, så både
-  // salaryPct og flat salaryKr fordeles riktig (unngår dobbelttelling av salaryKr).
+  // Skaler den kanoniske pensjonsinputen proporsjonalt med brutto-endringen. grossRatio=1
+  // ved nøytrale spaker → baseline-pensjon IDENTISK med Pensjon-/Dashboard-siden.
   const grossRatio = b.grossMonthly > 0 ? grossMonthly / b.grossMonthly : 1
   const pension = projectPension({
-    birthYear: b.pensionBirthYear, serviceStartYear: b.pensionServiceStartYear,
-    currentYear: b.now.year, currentG: b.currentG,
-    folketrygdAnnualIncome: annualIncome,
-    spkAnnualGrunnlag: b.baseMonthlyForPension * grossRatio * 12,
-    uttaksalder: 67, salaryGrowthPct: 3, gGrowthPct: 3.5,
-    afpEnabled: true, særalder: { enabled: false, age: 60 },
+    ...b.pensionBase,
+    folketrygdAnnualIncome: b.pensionBase.folketrygdAnnualIncome * grossRatio,
+    spkAnnualGrunnlag: b.pensionBase.spkAnnualGrunnlag * grossRatio,
+    uttaksalder: 67,
   })
 
   // Total sparerate: all månedlig sparing (eksisterende kontoers bidrag + spak-delta) / netto.
@@ -169,7 +168,7 @@ function runOnce(b: ScenarioBaseline, levers: ScenarioLevers): { series: NetWort
   const netWorth5y = seriesValueAt(series, NETWORTH_5Y_MONTHS, b.now)
   const figures: ScenarioKeyFigures = {
     nettoPerMonth: scenarioNet,
-    sparerate: scenarioNet > 0 ? Math.round(totalMonthlySavings / scenarioNet * 100) : 0,
+    sparerate: scenarioNet > 0 ? Math.max(0, Math.min(100, Math.round(totalMonthlySavings / scenarioNet * 100))) : 0,
     netWorth5y,
     // Kjøpekraft «nå»: bruker dagens egenkapital (b.equity) — du kjøper ikke med fremtidig
     // sparing i dag. Varierer derfor med inntektsspaker, ikke med sparing/engangsbeløp.
