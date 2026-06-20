@@ -694,7 +694,7 @@ export type EconomyTab =
   | 'dashboard' | 'budget' | 'salary' | 'atf' | 'feriepenger'
   | 'savings' | 'fond' | 'debt' | 'absence' | 'tax'
   | 'subscriptions' | 'ivf' | 'vacation' | 'settings' | 'veikart' | 'gaver' | 'partner' | 'permisjon'
-  | 'pension' | 'formue'
+  | 'pension' | 'formue' | 'calibration'
 
 export interface UserPreferences {
   onboardingCompleted: boolean
@@ -868,4 +868,58 @@ export interface NetWorthInput {
   ivfTransactions: IVFTransaction[]
   debts: DebtAccount[]
   partnerVeikart: PartnerVeikart
+}
+
+// ------------------------------------------------------------
+// TREFFSIKKERHET / KALIBRERING
+// ------------------------------------------------------------
+
+export type CalibrationKey =
+  | 'skattetrekk' | 'tabelltrekkProsent' | 'baseMonthly'
+  | 'extraTaxWithholding' | 'housingDeduction' | 'unionFee'
+  | `atf:${string}`
+
+export interface CalibrationEntry {
+  key: CalibrationKey
+  label: string
+  previous: number
+  calibrated: number
+  sampleCount: number
+  asOf: string               // "YYYY-MM-DD"
+  locked: boolean
+}
+
+/** Kalibrerte verdier som storen merger inn i profilen. */
+export interface CalibratedValues {
+  baseMonthly: number
+  skattetrekk: number
+  extraTaxWithholding: number
+  housingDeduction: number
+  unionFee: number
+  tabelltrekkProsent: number | null
+  atfRates: Record<string, number>   // artskode → snittet sats
+}
+
+export interface CalibrationResult {
+  values: CalibratedValues
+  entries: CalibrationEntry[]
+}
+
+export interface AccuracyReport {
+  rows: {
+    key: string
+    label: string
+    avgBudget: number
+    avgActual: number
+    deviation: number
+    deviationPct: number
+    sampleCount: number
+  }[]
+  overallHitRate: number     // 0–100: andel innenfor toleranse
+  monthsWithData: number
+}
+
+export interface CalibrationSettings {
+  enabled: boolean
+  horizonSlips: number
 }
