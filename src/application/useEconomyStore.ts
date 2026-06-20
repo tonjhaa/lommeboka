@@ -40,6 +40,7 @@ import type {
 } from '@/types/economy'
 import { POLICY_RATE_HISTORY, LONNSVEKST_DEFAULT, GRUNNBELOP_VEKST_DEFAULT } from '@/config/economy.config'
 import { DEFAULT_BANK_PRESETS } from '@/config/bankPresets'
+import { calibrateProfile } from '@/domain/economy/forecastCalibration'
 
 // ------------------------------------------------------------
 // STATE INTERFACE
@@ -478,7 +479,7 @@ export const useEconomyStore = create<EconomyState>()(
             }
           }
 
-          // Oppdater profil med siste kjente tall fra slippen.
+          // Oppdater profil med kalibrerte verdier fra slippen.
           // Hvis ingen profil eksisterer ennå, opprett én automatisk fra slippen.
           const baseProfile: EmploymentProfile = profile ?? {
             employer: 'forsvaret',
@@ -491,15 +492,17 @@ export const useEconomyStore = create<EconomyState>()(
             unionFee: 0,
             atfEnabled: false,
           }
+          const { calibrationSettings, lockedCalibrationKeys } = get()
+          const cal = calibrateProfile(updated, baseProfile, calibrationSettings, lockedCalibrationKeys)
           let updatedProfile: EmploymentProfile = {
             ...baseProfile,
-            // Lønn og trekk settes kun fra den nyeste slippen
+            // Lønn og trekk settes kun fra den nyeste slippen (via kalibrering)
             ...(isLatestSlip ? {
-              baseMonthly: slip.maanedslonn || baseProfile.baseMonthly,
-              lastKnownTaxWithholding: slip.skattetrekk || baseProfile.lastKnownTaxWithholding,
-              extraTaxWithholding: slip.ekstraTrekk > 0 ? slip.ekstraTrekk : baseProfile.extraTaxWithholding,
-              housingDeduction: slip.husleietrekk > 0 ? slip.husleietrekk : baseProfile.housingDeduction,
-              unionFee: slip.fagforeningskontingent > 0 ? slip.fagforeningskontingent : baseProfile.unionFee,
+              baseMonthly: cal.values.baseMonthly || baseProfile.baseMonthly,
+              lastKnownTaxWithholding: cal.values.skattetrekk || baseProfile.lastKnownTaxWithholding,
+              extraTaxWithholding: cal.values.extraTaxWithholding || baseProfile.extraTaxWithholding,
+              housingDeduction: cal.values.housingDeduction || baseProfile.housingDeduction,
+              unionFee: cal.values.unionFee || baseProfile.unionFee,
               // Faste tillegg: merge med eksisterende — slipper mangler noen ganger tillegg
               // som ikke var aktive den måneden (f.eks. 1501 kun på visse slipper).
               // Ny slipp oppdaterer beløp der den har koden, eksisterende beholdes ellers.
@@ -516,13 +519,9 @@ export const useEconomyStore = create<EconomyState>()(
             // SPK-pensjon er alltid 2% — bruker ikke ratio-estimat (base inkluderer 1162/10P2 i tillegg til 1S01)
           }
 
-          // Beregn og lagre effektiv /440-trekkprosent.
-          // Juni-slipper har ferietrekk som drastisk reduserer tabelltrekk-grunnlaget —
-          // bruk ikke disse til %-beregning da de gir feil sats (typisk <10% mot normalt 25-35%).
-          const harFerietrekk = (slip.ferietrekk ?? 0) > 0
-          if (slip.tabelltrekkGrunnlag > 0 && slip.tabelltrekkBelop > 0 && !harFerietrekk) {
-            const pct = (slip.tabelltrekkBelop / slip.tabelltrekkGrunnlag) * 100
-            updatedProfile = { ...updatedProfile, lastKnownTableTaxPercent: Math.round(pct * 100) / 100 }
+          // Tabelltrekk-prosent fra kalibrering (ekskluderer allerede juni-slipper og ferietrekk)
+          if (cal.values.tabelltrekkProsent !== null) {
+            updatedProfile = { ...updatedProfile, lastKnownTableTaxPercent: cal.values.tabelltrekkProsent }
           }
 
           // Lagre tabellnummer fra slippen
@@ -530,23 +529,25 @@ export const useEconomyStore = create<EconomyState>()(
             updatedProfile = { ...updatedProfile, tabellnummer: slip.tabellnummer }
           }
 
-          // Merge ATF-satser fra slippen inn i profilen (behold siste kjente per artskode)
-          if (slip.atfRater) {
+          // Merge ATF-satser fra kalibrering inn i profilen (behold dato/fraAarslonn-strukturen)
+          if (Object.keys(cal.values.atfRates).length > 0) {
             const slipDato = `${slip.periode.year}-${String(slip.periode.month).padStart(2, '0')}`
-            const fraAarslonn = slip.maanedslonn * 12
+            const fraAarslonn = cal.values.baseMonthly * 12
             const mergedRates: Record<string, KnownATFRate> = { ...updatedProfile.knownATFRates }
-            for (const [artskode, sats] of Object.entries(slip.atfRater)) {
-              const existing = mergedRates[artskode]
-              if (!existing || slipDato >= existing.dato) {
-                mergedRates[artskode] = { sats, fraAarslonn, dato: slipDato }
-              }
+            for (const [artskode, sats] of Object.entries(cal.values.atfRates)) {
+              mergedRates[artskode] = { sats, fraAarslonn, dato: slipDato }
             }
             updatedProfile = { ...updatedProfile, knownATFRates: mergedRates }
           }
 
+          const newLog = cal.entries.length > 0
+            ? [...cal.entries, ...get().calibrationLog].slice(0, 50)
+            : get().calibrationLog
+
           return {
             monthHistory: updated,
             profile: updatedProfile,
+            calibrationLog: newLog,
           }
         })
 
