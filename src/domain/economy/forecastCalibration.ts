@@ -7,6 +7,7 @@ import type {
   MonthRecord, ParsetLonnsslipp,
   CalibrationSettings, CalibrationResult, CalibrationEntry,
   CalibratedValues, CalibrationKey, EmploymentProfile,
+  AccuracyReport,
 } from '@/types/economy'
 
 /** Siste n importerte slipper, ekskl. juni/desember og slipper med ferietrekk. */
@@ -103,4 +104,42 @@ export function calibrateProfile(
     tabelltrekkProsent, atfRates,
   }
   return { values, entries }
+}
+
+/** Toleranse for «treff» (innenfor ±5 %). */
+export const HIT_TOLERANCE_PCT = 5
+
+interface AccuracyRowInput {
+  id: string
+  label: string
+  cells: { budget: number; actual: number | null }[]
+}
+
+/** Måler hvor godt budsjettet traff faktiske tall (kun celler med actual ≠ null). */
+export function computeAccuracy(rows: AccuracyRowInput[]): AccuracyReport {
+  const monthsWithData = new Set<number>()
+  const out: AccuracyReport['rows'] = []
+  let hits = 0
+  let total = 0
+
+  for (const row of rows) {
+    const withActual = row.cells
+      .map((c, i) => ({ ...c, i }))
+      .filter((c) => c.actual !== null)
+    if (withActual.length === 0) continue
+    withActual.forEach((c) => monthsWithData.add(c.i))
+    const avgBudget = Math.round(withActual.reduce((s, c) => s + c.budget, 0) / withActual.length)
+    const avgActual = Math.round(withActual.reduce((s, c) => s + (c.actual ?? 0), 0) / withActual.length)
+    const deviation = avgActual - avgBudget
+    const deviationPct = avgBudget !== 0 ? (deviation / Math.abs(avgBudget)) * 100 : 0
+    out.push({ key: row.id, label: row.label, avgBudget, avgActual, deviation, deviationPct, sampleCount: withActual.length })
+    total++
+    if (Math.abs(deviationPct) <= HIT_TOLERANCE_PCT) hits++
+  }
+
+  return {
+    rows: out.sort((a, b) => Math.abs(b.deviation) - Math.abs(a.deviation)),
+    overallHitRate: total > 0 ? Math.round((hits / total) * 100) : 0,
+    monthsWithData: monthsWithData.size,
+  }
 }

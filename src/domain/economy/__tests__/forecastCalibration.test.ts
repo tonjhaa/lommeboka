@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { selectNormalSlips, trimmedMean, calibrateProfile } from '../forecastCalibration'
+import { selectNormalSlips, trimmedMean, calibrateProfile, computeAccuracy } from '../forecastCalibration'
 import type { MonthRecord, ParsetLonnsslipp, CalibrationSettings, EmploymentProfile } from '@/types/economy'
 
 function slip(over: Partial<ParsetLonnsslipp> = {}): ParsetLonnsslipp {
@@ -114,5 +114,33 @@ describe('calibrateProfile', () => {
     const res = calibrateProfile([], profile({ lastKnownTaxWithholding: 12_345 }), SETTINGS_ON, [])
     expect(res.values.skattetrekk).toBe(12_345)
     expect(res.entries).toHaveLength(0)
+  })
+})
+
+describe('computeAccuracy', () => {
+  // Minimal budsjettabell-lignende input: rader med budget/actual-celler.
+  const rows = [
+    { id: 'netto', label: 'Netto', cells: Array.from({ length: 12 }, (_, i) =>
+      ({ budget: 35_000, actual: i < 3 ? 36_000 : null })) },
+    { id: 'skatt', label: 'Skatt', cells: Array.from({ length: 12 }, (_, i) =>
+      ({ budget: 18_000, actual: i < 3 ? 18_100 : null })) },
+  ]
+
+  it('regner avvik per rad og treff-% kun for måneder med actual', () => {
+    const rep = computeAccuracy(rows)
+    const netto = rep.rows.find((r) => r.key === 'netto')!
+    expect(netto.avgActual).toBe(36_000)
+    expect(netto.avgBudget).toBe(35_000)
+    expect(netto.deviation).toBe(1_000)
+    expect(rep.monthsWithData).toBe(3)
+    // 36000 vs 35000 = +2.86 % → innenfor ±5 %; skatt 18100 vs 18000 = +0.56 % → begge treff
+    expect(rep.overallHitRate).toBe(100)
+  })
+
+  it('tom (ingen actual) → 0 treff, 0 måneder', () => {
+    const empty = [{ id: 'x', label: 'X', cells: Array.from({ length: 12 }, () => ({ budget: 100, actual: null })) }]
+    const rep = computeAccuracy(empty)
+    expect(rep.monthsWithData).toBe(0)
+    expect(rep.rows).toHaveLength(0)
   })
 })
