@@ -7,10 +7,12 @@ import type {
   DistributionPlan,
   AppConfig,
 } from '@/types'
+import type { ScenarioLevers } from '@/types/economy'
 import { defaultConfig } from '@/config/default.config'
+import { DEFAULT_SCENARIO_LEVERS } from '@/domain/economy/scenarioSimulator'
 
 export type AppView = 'calculator' | 'comparison' | 'settings' | 'economy' | 'skattekalkulator' | 'veikart' | 'partner' | 'ivf'
-export type EconomySubPage = 'dashboard' | 'budget' | 'salary' | 'atf' | 'savings' | 'debt' | 'absence' | 'tax' | 'subscriptions' | 'feriepenger' | 'fond' | 'ivf' | 'vacation' | 'settings' | 'veikart' | 'gaver' | 'partner' | 'permisjon' | 'pension' | 'formue' | 'calibration'
+export type EconomySubPage = 'dashboard' | 'budget' | 'salary' | 'atf' | 'savings' | 'debt' | 'absence' | 'tax' | 'subscriptions' | 'feriepenger' | 'fond' | 'ivf' | 'vacation' | 'settings' | 'veikart' | 'gaver' | 'partner' | 'permisjon' | 'pension' | 'formue' | 'calibration' | 'scenario'
 
 interface AppState {
   config: AppConfig
@@ -25,6 +27,9 @@ interface AppState {
   currentEconomyPage: EconomySubPage
   savingsTab: 'kontoer' | 'fond' | 'måneder' | 'råd'
   prosjektTab: 'behandling' | 'permisjon' | 'innkjøpsliste'
+
+  scenarioLevers: ScenarioLevers
+  setScenarioLevers: (levers: ScenarioLevers) => void
 
   setTheme: (theme: 'dark' | 'light' | 'system') => void
   setSidebarOpen: (open: boolean) => void
@@ -62,6 +67,7 @@ export const useAppStore = create<AppState>()(
       currentEconomyPage: 'dashboard',
       savingsTab: 'kontoer',
       prosjektTab: 'behandling',
+      scenarioLevers: DEFAULT_SCENARIO_LEVERS,
 
       setTheme: (theme) => set({ theme }),
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
@@ -69,6 +75,7 @@ export const useAppStore = create<AppState>()(
       setCurrentEconomyPage: (page) => set({ currentEconomyPage: page }),
       setSavingsTab: (tab) => set({ savingsTab: tab }),
       setProsjektTab: (tab) => set({ prosjektTab: tab }),
+      setScenarioLevers: (levers) => set({ scenarioLevers: levers }),
 
       addScenario: (scenario) =>
         set((state) => ({
@@ -164,6 +171,7 @@ export const useAppStore = create<AppState>()(
         currentEconomyPage: state.currentEconomyPage,
         savingsTab: state.savingsTab,
         prosjektTab: state.prosjektTab,
+        scenarioLevers: state.scenarioLevers,
       }),
     }
   )
