@@ -520,6 +520,8 @@ export const useEconomyStore = create<EconomyState>()(
           }
 
           // Tabelltrekk-prosent fra kalibrering (ekskluderer allerede juni-slipper og ferietrekk)
+          // tabelltrekkProsent oppdateres ubetinget (ikke isLatestSlip-gated): den er et
+          // snitt over horisonten, ikke en nyeste-slipp-verdi — bevisst asymmetri mot skalarene.
           if (cal.values.tabelltrekkProsent !== null) {
             updatedProfile = { ...updatedProfile, lastKnownTableTaxPercent: cal.values.tabelltrekkProsent }
           }
@@ -529,20 +531,24 @@ export const useEconomyStore = create<EconomyState>()(
             updatedProfile = { ...updatedProfile, tabellnummer: slip.tabellnummer }
           }
 
-          // Merge ATF-satser fra kalibrering inn i profilen (behold dato/fraAarslonn-strukturen)
+          // Merge ATF-satser fra kalibrering inn i profilen. Satsen er et order-uavhengig
+          // snitt og oppdateres alltid; dato holdes på nyeste kjente (aldri bakover) slik
+          // at ikke-kronologisk import ikke gir et misvisende eldre dato-stempel.
           if (Object.keys(cal.values.atfRates).length > 0) {
             const slipDato = `${slip.periode.year}-${String(slip.periode.month).padStart(2, '0')}`
             const fraAarslonn = cal.values.baseMonthly * 12
             const mergedRates: Record<string, KnownATFRate> = { ...updatedProfile.knownATFRates }
             for (const [artskode, sats] of Object.entries(cal.values.atfRates)) {
-              mergedRates[artskode] = { sats, fraAarslonn, dato: slipDato }
+              const existing = mergedRates[artskode]
+              const dato = existing && existing.dato > slipDato ? existing.dato : slipDato
+              mergedRates[artskode] = { sats, fraAarslonn, dato }
             }
             updatedProfile = { ...updatedProfile, knownATFRates: mergedRates }
           }
 
           const newLog = cal.entries.length > 0
-            ? [...cal.entries, ...get().calibrationLog].slice(0, 50)
-            : get().calibrationLog
+            ? [...cal.entries, ...s.calibrationLog].slice(0, 50)
+            : s.calibrationLog
 
           return {
             monthHistory: updated,
