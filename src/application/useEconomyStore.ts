@@ -37,6 +37,7 @@ import type {
   PensionSettings,
   CalibrationSettings,
   CalibrationEntry,
+  KeyFigureOverride,
 } from '@/types/economy'
 import { POLICY_RATE_HISTORY, LONNSVEKST_DEFAULT, GRUNNBELOP_VEKST_DEFAULT } from '@/config/economy.config'
 import { DEFAULT_BANK_PRESETS } from '@/config/bankPresets'
@@ -228,6 +229,10 @@ export interface EconomyState {
   pensionSettings: PensionSettings | null
   setPensionSettings: (settings: PensionSettings) => void
 
+  keyFigureOverrides: KeyFigureOverride[]
+  setKeyFigureOverride: (o: KeyFigureOverride) => void
+  removeKeyFigureOverride: (key: string, year: number) => void
+
   calibrationSettings: CalibrationSettings
   calibrationLog: CalibrationEntry[]
   lockedCalibrationKeys: string[]
@@ -376,6 +381,7 @@ export const useEconomyStore = create<EconomyState>()(
         set((s) => ({ bankPresets: s.bankPresets.filter((p) => p.id !== id) })),
 
       pensionSettings: null,
+      keyFigureOverrides: [],
       calibrationSettings: DEFAULT_CALIBRATION_SETTINGS,
       // calibrationLog kappes til maks 50 nyeste ved skriving i importSlip — vokser ikke ubegrenset.
       calibrationLog: [],
@@ -385,6 +391,15 @@ export const useEconomyStore = create<EconomyState>()(
       setProfile: (profile) => set({ profile }),
       setUserPreferences: (prefs) => set({ userPreferences: prefs }),
       setPensionSettings: (settings) => set({ pensionSettings: settings }),
+      setKeyFigureOverride: (o) => set((s) => ({
+        keyFigureOverrides: [
+          ...s.keyFigureOverrides.filter((x) => !(x.key === o.key && x.year === o.year)),
+          o,
+        ],
+      })),
+      removeKeyFigureOverride: (key, year) => set((s) => ({
+        keyFigureOverrides: s.keyFigureOverrides.filter((x) => !(x.key === key && x.year === year)),
+      })),
       setCalibrationSettings: (s) => set({ calibrationSettings: s }),
       lockCalibration: (key) => set((st) => ({
         lockedCalibrationKeys: st.lockedCalibrationKeys.includes(key)
@@ -1235,6 +1250,7 @@ export const useEconomyStore = create<EconomyState>()(
             savingsPlanTarget: data.savingsPlanTarget ?? 0,
             savingsPlanHorizon: data.savingsPlanHorizon ?? 48,
             pensionSettings: data.pensionSettings ?? null,
+            keyFigureOverrides: data.keyFigureOverrides ?? [],
             calibrationSettings: data.calibrationSettings ?? DEFAULT_CALIBRATION_SETTINGS,
             calibrationLog: data.calibrationLog ?? [],
             lockedCalibrationKeys: data.lockedCalibrationKeys ?? [],
@@ -1277,7 +1293,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 25,
+      version: 26,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v20 → v21: migrer tieredRates (snapshot) til tieredRateHistory (tidsserie)
@@ -1482,6 +1498,10 @@ export const useEconomyStore = create<EconomyState>()(
             r.htaTillegg > 10_000 ? { ...r, htaTillegg: Math.round(r.htaTillegg / 12) } : r
           )
         }
+        // v25 → v26: initialiser keyFigureOverrides for eksisterende brukere
+        if (fromVersion < 26 && !Array.isArray(state.keyFigureOverrides)) {
+          state.keyFigureOverrides = []
+        }
         return state
       },
       partialize: (state) => ({
@@ -1517,6 +1537,7 @@ export const useEconomyStore = create<EconomyState>()(
         priceAlerts: state.priceAlerts,
         lastGlobalPriceCheckAt: state.lastGlobalPriceCheckAt,
         pensionSettings: state.pensionSettings,
+        keyFigureOverrides: state.keyFigureOverrides,
         calibrationSettings: state.calibrationSettings,
         calibrationLog: state.calibrationLog,
         lockedCalibrationKeys: state.lockedCalibrationKeys,
