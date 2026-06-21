@@ -2,17 +2,26 @@ import { describe, it, expect } from 'vitest'
 import { resolveScalar, KEY_FIGURE_META, isStale } from '../keyFigureRegistry'
 import {
   GRUNNBELOP_NOK, FERIEPENGER_PROSENT, EGENMELDING_KVOTE,
-  FOLKETRYGD_OPPTJENINGSSATS, AFP_OPPTJENINGSSATS, TAK_FOLKETRYGD_G,
+  FOLKETRYGD_OPPTJENINGSSATS, SPK_PAASLAG_SATS_LAV, SPK_PAASLAG_SATS_HOY,
+  AFP_OPPTJENINGSSATS, TAK_FOLKETRYGD_G, TAK_SPK_G,
+  BSU_MAX_YEARLY, BSU_MAX_TOTAL,
 } from '@/config/economy.config'
 import type { KeyFigureOverride } from '@/types/economy'
 
+// Hele poenget med registeret: tom override-liste ⇒ resolver == dagens konstant for
+// HVERT skalar-nøkkeltall (også de read-only — de bindes også via SCALAR_DEFAULTS).
 describe('resolveScalar — konsistens-invariant (tom override ≡ kode-konstant)', () => {
   it('grunnbelop', () => { expect(resolveScalar('grunnbelop', [], 2026)).toBe(GRUNNBELOP_NOK) })
   it('feriepengerProsent', () => { expect(resolveScalar('feriepengerProsent', [], 2026)).toBe(FERIEPENGER_PROSENT) })
   it('egenmeldingKvote', () => { expect(resolveScalar('egenmeldingKvote', [], 2026)).toBe(EGENMELDING_KVOTE) })
   it('folketrygdOpptjeningssats', () => { expect(resolveScalar('folketrygdOpptjeningssats', [], 2026)).toBe(FOLKETRYGD_OPPTJENINGSSATS) })
+  it('spkPaaslagLav', () => { expect(resolveScalar('spkPaaslagLav', [], 2026)).toBe(SPK_PAASLAG_SATS_LAV) })
+  it('spkPaaslagHoy', () => { expect(resolveScalar('spkPaaslagHoy', [], 2026)).toBe(SPK_PAASLAG_SATS_HOY) })
   it('afpOpptjeningssats', () => { expect(resolveScalar('afpOpptjeningssats', [], 2026)).toBe(AFP_OPPTJENINGSSATS) })
   it('takFolketrygdG', () => { expect(resolveScalar('takFolketrygdG', [], 2026)).toBe(TAK_FOLKETRYGD_G) })
+  it('takSpkG', () => { expect(resolveScalar('takSpkG', [], 2026)).toBe(TAK_SPK_G) })
+  it('bsuMaxYearly', () => { expect(resolveScalar('bsuMaxYearly', [], 2026)).toBe(BSU_MAX_YEARLY) })
+  it('bsuMaxTotal', () => { expect(resolveScalar('bsuMaxTotal', [], 2026)).toBe(BSU_MAX_TOTAL) })
 })
 
 describe('resolveScalar — overrides', () => {
