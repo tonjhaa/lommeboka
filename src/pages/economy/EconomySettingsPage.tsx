@@ -524,13 +524,13 @@ function KeyFigureSection() {
   const [editVal, setEditVal] = useState('')
   const [fetching, setFetching] = useState<KeyFigureKey | null>(null)
   const [suggestion, setSuggestion] = useState<FetchedKeyFigure | null>(null)
-  const [fetchError, setFetchError] = useState<string | null>(null)
+  const [fetchError, setFetchError] = useState<{ key: KeyFigureKey; message: string } | null>(null)
 
   async function hentFraKilde(k: KeyFigureKey) {
     setFetching(k); setFetchError(null); setSuggestion(null)
     const r = await fetchKeyFigure(k)
     setFetching(null)
-    if ('error' in r) { setFetchError(r.error); return }
+    if ('error' in r) { setFetchError({ key: k, message: r.error }); return }
     setSuggestion(r)
   }
 
@@ -586,7 +586,7 @@ function KeyFigureSection() {
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 shrink-0">
-                      {hasOverride && <button onClick={() => removeOverride(k, year)} className="text-[11px] text-muted-foreground hover:text-red-400">Tilbakestill</button>}
+                      {hasOverride && <button onClick={() => { setSuggestion(null); removeOverride(k, year) }} className="text-[11px] text-muted-foreground hover:text-red-400">Tilbakestill</button>}
                       {isFetchable(k) && (
                         <button
                           onClick={() => hentFraKilde(k)}
@@ -596,7 +596,7 @@ function KeyFigureSection() {
                           {fetching === k ? 'Henter…' : 'Hent fra NAV'}
                         </button>
                       )}
-                      <button onClick={() => { setEditKey(k); setEditVal(meta.unit === 'pst' ? String(current * 100) : String(current)) }}
+                      <button onClick={() => { setSuggestion(null); setEditKey(k); setEditVal(meta.unit === 'pst' ? String(current * 100) : String(current)) }}
                         className="text-[11px] text-primary hover:underline">Endre</button>
                     </div>
                   )
@@ -633,8 +633,8 @@ function KeyFigureSection() {
                   )}
                 </div>
               )}
-              {fetchError && fetching === null && suggestion === null && isFetchable(k) && (
-                <p className="mt-2 text-[11px] text-yellow-400">{fetchError}</p>
+              {fetchError?.key === k && fetching === null && suggestion === null && (
+                <p className="mt-2 text-[11px] text-yellow-400">{fetchError.message}</p>
               )}
             </div>
           )
