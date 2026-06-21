@@ -542,42 +542,77 @@ function KeyFigureSection() {
           const current = resolveScalar(k, overrides, year)
           const hasOverride = overrides.some((o) => o.key === k && o.year === year)
           const stale = isStale(k, overrides)
+          // Historikk: alle skalar-overstyringer for nøkkeltallet, nyeste først, + kode-default som bunnlinje.
+          const history = overrides
+            .filter((o) => o.key === k && typeof o.value === 'number')
+            .sort((a, b) => b.year - a.year)
+          const codeDefault = resolveScalar(k, [], year)
           return (
-            <div key={k} className="flex items-center justify-between gap-2 rounded-lg border border-border/50 bg-card/60 px-3 py-2">
-              <div className="min-w-0">
-                <p className="text-sm">{meta.label} {!meta.editable && <span className="text-[10px] text-muted-foreground">(redigering kommer)</span>}</p>
-                <p className="text-[11px] text-muted-foreground">
-                  {fmtUnit(current, meta.unit)}
-                  {hasOverride ? <span className="text-blue-400"> · egendefinert {year}</span> : <span> · standard</span>}
-                  {stale && <a href={meta.sourceUrl} target="_blank" rel="noreferrer" className="text-yellow-400"> · kan være utdatert, sjekk kilde</a>}
-                </p>
+            <div key={k} className="rounded-lg border border-border/50 bg-card/60 px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm">{meta.label} {!meta.editable && <span className="text-[10px] text-muted-foreground">(redigering kommer)</span>}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {fmtUnit(current, meta.unit)}
+                    {hasOverride ? <span className="text-blue-400"> · egendefinert {year}</span> : <span> · standard</span>}
+                    {stale && <a href={meta.sourceUrl} target="_blank" rel="noreferrer" className="text-yellow-400"> · kan være utdatert, sjekk kilde</a>}
+                  </p>
+                </div>
+                {meta.editable && (
+                  editKey === k ? (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <input autoFocus value={editVal} onChange={(e) => setEditVal(e.target.value)}
+                        className="w-24 rounded-md border border-border/50 bg-background px-2 py-1 text-xs" aria-label={`Ny verdi for ${meta.label}`} />
+                      <button onClick={() => save(meta)} className="rounded bg-primary/20 px-2 py-1 text-xs text-primary">Lagre</button>
+                      <button onClick={() => { setEditKey(null); setEditVal('') }} className="text-xs text-muted-foreground">Avbryt</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 shrink-0">
+                      {hasOverride && <button onClick={() => removeOverride(k, year)} className="text-[11px] text-muted-foreground hover:text-red-400">Tilbakestill</button>}
+                      <button onClick={() => { setEditKey(k); setEditVal(meta.unit === 'pst' ? String(current * 100) : String(current)) }}
+                        className="text-[11px] text-primary hover:underline">Endre</button>
+                    </div>
+                  )
+                )}
               </div>
-              {meta.editable && (
-                editKey === k ? (
-                  <div className="flex items-center gap-1 shrink-0">
-                    <input autoFocus value={editVal} onChange={(e) => setEditVal(e.target.value)}
-                      className="w-24 rounded-md border border-border/50 bg-background px-2 py-1 text-xs" aria-label={`Ny verdi for ${meta.label}`} />
-                    <button onClick={() => save(meta)} className="rounded bg-primary/20 px-2 py-1 text-xs text-primary">Lagre</button>
-                    <button onClick={() => { setEditKey(null); setEditVal('') }} className="text-xs text-muted-foreground">Avbryt</button>
+              {history.length > 0 && (
+                <details className="mt-1">
+                  <summary className="text-[10px] text-muted-foreground cursor-pointer select-none hover:text-foreground">Historikk</summary>
+                  <div className="mt-1 space-y-0.5 pl-1">
+                    {history.map((o) => (
+                      <p key={o.year} className="text-[10px] text-muted-foreground">
+                        {o.year}: {fmtUnit(o.value as number, meta.unit)} <span className="text-muted-foreground/50">· verifisert {o.verifiedAt}</span>
+                      </p>
+                    ))}
+                    <p className="text-[10px] text-muted-foreground/50">standard (kode): {fmtUnit(codeDefault, meta.unit)}</p>
                   </div>
-                ) : (
-                  <div className="flex items-center gap-2 shrink-0">
-                    {hasOverride && <button onClick={() => removeOverride(k, year)} className="text-[11px] text-muted-foreground hover:text-red-400">Tilbakestill</button>}
-                    <button onClick={() => { setEditKey(k); setEditVal(meta.unit === 'pst' ? String(current * 100) : String(current)) }}
-                      className="text-[11px] text-primary hover:underline">Endre</button>
-                  </div>
-                )
+                </details>
               )}
             </div>
           )
         })}
-        {/* Tabeller (delingstall, taxRules) — read-only oppsummering */}
-        <div className="rounded-lg border border-border/50 bg-card/60 px-3 py-2">
-          <p className="text-sm">Delingstall (per uttaksalder)</p>
-          <p className="text-[11px] text-muted-foreground">
-            {Object.entries(resolveDelingstall(overrides, year)).map(([a, v]) => `${a}: ${v}`).join('  ·  ')}
-          </p>
-        </div>
+        {/* Tabeller (delingstall, skattetrinn) — read-only oppsummering */}
+        {(Object.keys(KEY_FIGURE_META) as KeyFigureKey[])
+          .filter((k) => KEY_FIGURE_META[k].kind === 'table')
+          .map((k) => {
+            const meta = KEY_FIGURE_META[k]
+            const stale = isStale(k, overrides)
+            return (
+              <div key={k} className="rounded-lg border border-border/50 bg-card/60 px-3 py-2">
+                <p className="text-sm">{meta.label} <span className="text-[10px] text-muted-foreground">(redigering kommer)</span></p>
+                {k === 'delingstall' ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    {Object.entries(resolveDelingstall(overrides, year)).map(([a, v]) => `${a}: ${v}`).join('  ·  ')}
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    Sist verifisert {meta.defaultVerifiedAt}
+                    {stale && <a href={meta.sourceUrl} target="_blank" rel="noreferrer" className="text-yellow-400"> · sjekk kilde</a>}
+                  </p>
+                )}
+              </div>
+            )
+          })}
         <p className="text-[10px] text-muted-foreground/60">
           Auto-hent fra nav.no/skatteetaten kommer i en senere versjon.
         </p>
