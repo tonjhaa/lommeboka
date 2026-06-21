@@ -5,6 +5,7 @@ import { simulateScenario, type ScenarioBaseline } from '@/domain/economy/scenar
 import { buildPensionInputFromProfile } from '@/domain/economy/pensionCalculator'
 import { DEFAULT_PENSION_SETTINGS } from '@/application/useEconomyStore'
 import { computeEffectiveBalance } from '@/domain/economy/savingsCalculator'
+import { useKeyFigures } from '@/hooks/useKeyFigures'
 import type { ScenarioResult } from '@/types/economy'
 
 export function useScenario(): ScenarioResult | null {
@@ -17,6 +18,7 @@ export function useScenario(): ScenarioResult | null {
   const userPreferences = useActiveEconomyStore((s) => s.userPreferences)
   const pensionSettings = useActiveEconomyStore((s) => s.pensionSettings)
   const levers = useAppStore((s) => s.scenarioLevers)
+  const kf = useKeyFigures()
 
   return useMemo(() => {
     if (!profile) return null
@@ -30,7 +32,19 @@ export function useScenario(): ScenarioResult | null {
       ...DEFAULT_PENSION_SETTINGS,
       birthYear: userPreferences?.birthYear ?? DEFAULT_PENSION_SETTINGS.birthYear,
     }
-    const pensionBase = buildPensionInputFromProfile(profile, settings, now.year)
+    const pensionBase = buildPensionInputFromProfile(
+      profile, settings, now.year,
+      kf.grunnbelop,
+      kf.delingstall,
+      {
+        folketrygd: kf.folketrygdOpptjeningssats,
+        spkLav: kf.spkPaaslagLav,
+        spkHoy: kf.spkPaaslagHoy,
+        afp: kf.afpOpptjeningssats,
+        takFolketrygdG: kf.takFolketrygdG,
+        takSpkG: kf.takSpkG,
+      },
+    )
 
     // Egenkapital med samme basis som Veikart: effektiv saldo (sparekonto + BSU) + fond.
     const equity =
@@ -58,5 +72,5 @@ export function useScenario(): ScenarioResult | null {
       partnerVeikart,
     }
     return simulateScenario(baseline, levers)
-  }, [profile, savingsAccounts, fondPortfolio, ivfTransactions, debts, partnerVeikart, userPreferences, pensionSettings, levers])
+  }, [profile, savingsAccounts, fondPortfolio, ivfTransactions, debts, partnerVeikart, userPreferences, pensionSettings, levers, kf])
 }

@@ -61,14 +61,16 @@ export function buildGProjection(p: GProjectionParams): Record<number, number> {
 export function accrueFolketrygdBeholdning(
   incomeByYear: Record<number, number>,
   gByYear: Record<number, number>,
+  opptjeningssats: number = FOLKETRYGD_OPPTJENINGSSATS,
+  takG: number = TAK_FOLKETRYGD_G,
 ): number {
   let beholdning = 0
   for (const [yearStr, income] of Object.entries(incomeByYear)) {
     const year = Number(yearStr)
     const g = gByYear[year]
     if (!g) continue
-    const tak = TAK_FOLKETRYGD_G * g
-    beholdning += Math.min(income, tak) * FOLKETRYGD_OPPTJENINGSSATS
+    const tak = takG * g
+    beholdning += Math.min(income, tak) * opptjeningssats
   }
   return beholdning
 }
@@ -82,35 +84,40 @@ export function annualFromBeholdning(beholdning: number, delingstall: number): n
 export function sumLivsinntektUnder7_1G(
   incomeByYear: Record<number, number>,
   gByYear: Record<number, number>,
+  takG: number = TAK_FOLKETRYGD_G,
 ): number {
   let sum = 0
   for (const [yearStr, income] of Object.entries(incomeByYear)) {
     const g = gByYear[Number(yearStr)]
     if (!g) continue
-    sum += Math.min(income, TAK_FOLKETRYGD_G * g)
+    sum += Math.min(income, takG * g)
   }
   return sum
 }
 
 /** Ny livsvarig offentlig AFP: livsinntekt ≤ 7,1G × 4,21 % / delingstall. */
-export function annualAfp(livsinntektUnder7_1G: number, delingstall: number): number {
-  return delingstall > 0 ? (livsinntektUnder7_1G * AFP_OPPTJENINGSSATS) / delingstall : 0
+export function annualAfp(livsinntektUnder7_1G: number, delingstall: number, afpSats: number = AFP_OPPTJENINGSSATS): number {
+  return delingstall > 0 ? (livsinntektUnder7_1G * afpSats) / delingstall : 0
 }
 
 /** SPK påslagsbeholdning: 5,7 % av grunnlag ≤ 12G + 18,1 % av båndet 7,1G–12G. */
 export function accrueSpkPaaslagBeholdning(
   grunnlagByYear: Record<number, number>,
   gByYear: Record<number, number>,
+  spkLav: number = SPK_PAASLAG_SATS_LAV,
+  spkHoy: number = SPK_PAASLAG_SATS_HOY,
+  takSpkG: number = TAK_SPK_G,
+  takFtG: number = TAK_FOLKETRYGD_G,
 ): number {
   let beholdning = 0
   for (const [yearStr, grunnlag] of Object.entries(grunnlagByYear)) {
     const year = Number(yearStr)
     const g = gByYear[year]
     if (!g) continue
-    const lavtGrunnlag = Math.min(grunnlag, TAK_SPK_G * g)
-    const baandStart = TAK_FOLKETRYGD_G * g
-    const baand = Math.max(0, Math.min(grunnlag, TAK_SPK_G * g) - baandStart)
-    beholdning += lavtGrunnlag * SPK_PAASLAG_SATS_LAV + baand * SPK_PAASLAG_SATS_HOY
+    const lavtGrunnlag = Math.min(grunnlag, takSpkG * g)
+    const baandStart = takFtG * g
+    const baand = Math.max(0, Math.min(grunnlag, takSpkG * g) - baandStart)
+    beholdning += lavtGrunnlag * spkLav + baand * spkHoy
   }
   return beholdning
 }
@@ -132,6 +139,13 @@ export interface PensionInput {
   gGrowthPct: number
   afpEnabled: boolean
   særalder: { enabled: boolean; age: 57 | 60 | 63 }
+  /** Valgfri delingstall-tabell (fra register). Default = DELINGSTALL_BASELINE via getDelingstall. */
+  delingstallTable?: Record<number, number>
+  /** Valgfrie satser (fra register). Default = kode-konstantene. */
+  rates?: {
+    folketrygd?: number; spkLav?: number; spkHoy?: number; afp?: number
+    takFolketrygdG?: number; takSpkG?: number
+  }
 }
 
 const MIN_BIRTH_YEAR_NY_MODELL = 1963
@@ -169,12 +183,20 @@ export function projectPension(input: PensionInput): PensionProjection {
     fromYear, toYear, growthPct: input.salaryGrowthPct,
   })
 
-  const delingstall = getDelingstall(input.uttaksalder)
+  const delingstall = getDelingstall(input.uttaksalder, input.delingstallTable)
 
-  const folketrygdAarlig = annualFromBeholdning(accrueFolketrygdBeholdning(ftIncome, gByYear), delingstall)
-  const spkAarlig = annualFromBeholdning(accrueSpkPaaslagBeholdning(spkGrunnlag, gByYear), delingstall)
+  const r = input.rates ?? {}
+  const ftSats = r.folketrygd ?? FOLKETRYGD_OPPTJENINGSSATS
+  const takFtG = r.takFolketrygdG ?? TAK_FOLKETRYGD_G
+  const spkLav = r.spkLav ?? SPK_PAASLAG_SATS_LAV
+  const spkHoy = r.spkHoy ?? SPK_PAASLAG_SATS_HOY
+  const takSpkG = r.takSpkG ?? TAK_SPK_G
+  const afpSats = r.afp ?? AFP_OPPTJENINGSSATS
+
+  const folketrygdAarlig = annualFromBeholdning(accrueFolketrygdBeholdning(ftIncome, gByYear, ftSats, takFtG), delingstall)
+  const spkAarlig = annualFromBeholdning(accrueSpkPaaslagBeholdning(spkGrunnlag, gByYear, spkLav, spkHoy, takSpkG, takFtG), delingstall)
   const afpAarlig = input.afpEnabled
-    ? annualAfp(sumLivsinntektUnder7_1G(ftIncome, gByYear), delingstall)
+    ? annualAfp(sumLivsinntektUnder7_1G(ftIncome, gByYear, takFtG), delingstall, afpSats)
     : 0
   const særalderAarlig = estimateSæralder(input, folketrygdAarlig)
 
@@ -211,6 +233,9 @@ export function buildPensionInputFromProfile(
   profile: EmploymentProfile,
   settings: PensionSettings,
   currentYear: number,
+  currentG: number = GRUNNBELOP_NOK,
+  delingstallTable?: Record<number, number>,
+  rates?: PensionInput['rates'],
 ): Omit<PensionInput, 'uttaksalder'> {
   const fasteTillegg = (profile.fixedAdditions ?? []).reduce((s, t) => s + t.amount, 0)
   const spkGrunnlag = (profile.baseMonthly + fasteTillegg) * 12
@@ -218,12 +243,14 @@ export function buildPensionInputFromProfile(
     birthYear: settings.birthYear,
     serviceStartYear: settings.serviceStartYear,
     currentYear,
-    currentG: GRUNNBELOP_NOK,
+    currentG,
     folketrygdAnnualIncome: spkGrunnlag * FOLKETRYGD_TILLEGG_FAKTOR,
     spkAnnualGrunnlag: spkGrunnlag,
     salaryGrowthPct: settings.assumptions.salaryGrowthPct,
     gGrowthPct: settings.assumptions.gGrowthPct,
     afpEnabled: settings.afpEnabled,
     særalder: settings.særalder,
+    delingstallTable,
+    rates,
   }
 }

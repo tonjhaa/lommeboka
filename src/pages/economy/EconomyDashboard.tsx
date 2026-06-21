@@ -9,6 +9,7 @@ import type { EconomyState } from '@/application/useEconomyStore'
 import { DEFAULT_PENSION_SETTINGS } from '@/application/useEconomyStore'
 import { calculateGoalProgress, computeEffectiveBalance, checkBSULimits } from '@/domain/economy/savingsCalculator'
 import { projectPension, buildPensionInputFromProfile } from '@/domain/economy/pensionCalculator'
+import { useKeyFigures } from '@/hooks/useKeyFigures'
 import { analyzeTaxSettlements } from '@/domain/economy/taxSettlementCalc'
 import { getDaysUsedLast12Months, getDaysUsedFromEvents, getAbsenceStatus, getAbsenceStatusFromEvents, getStatusColor } from '@/domain/economy/absenceCalculator'
 import type { AbsenceStatus } from '@/types/economy'
@@ -99,6 +100,8 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
     pensionSettings,
     calibrationLog,
   } = useActiveEconomyStore()
+
+  const kf = useKeyFigures()
 
   const now = useMemo(() => new Date(), [])
   const currentYear = now.getFullYear()
@@ -393,7 +396,19 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
     const ps = pensionSettings ?? { ...DEFAULT_PENSION_SETTINGS, birthYear: userPreferences.birthYear }
     try {
       const proj = projectPension({
-        ...buildPensionInputFromProfile(profile, ps, currentYear),
+        ...buildPensionInputFromProfile(
+          profile, ps, currentYear,
+          kf.grunnbelop,
+          kf.delingstall,
+          {
+            folketrygd: kf.folketrygdOpptjeningssats,
+            spkLav: kf.spkPaaslagLav,
+            spkHoy: kf.spkPaaslagHoy,
+            afp: kf.afpOpptjeningssats,
+            takFolketrygdG: kf.takFolketrygdG,
+            takSpkG: kf.takSpkG,
+          },
+        ),
         uttaksalder: 67,
       })
       chips.push({
