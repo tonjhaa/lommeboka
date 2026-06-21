@@ -39,7 +39,9 @@ export const KEY_FIGURE_META: Record<KeyFigureKey, KeyFigureMeta> = {
   afpOpptjeningssats: { key: 'afpOpptjeningssats', label: 'AFP opptjeningssats', group: 'pensjon', unit: 'pst', kind: 'scalar', editable: true, sourceUrl: 'https://www.nav.no/afp', defaultVerifiedAt: '2026-06-18' },
   takFolketrygdG: { key: 'takFolketrygdG', label: 'Inntektstak folketrygd (G)', group: 'pensjon', unit: 'G', kind: 'scalar', editable: true, sourceUrl: 'https://www.nav.no/alderspensjon', defaultVerifiedAt: '2026-06-18' },
   takSpkG: { key: 'takSpkG', label: 'Inntektstak SPK (G)', group: 'pensjon', unit: 'G', kind: 'scalar', editable: true, sourceUrl: 'https://www.spk.no', defaultVerifiedAt: '2026-06-18' },
-  delingstall: { key: 'delingstall', label: 'Delingstall (per uttaksalder)', group: 'pensjon', unit: 'tabell', kind: 'table', editable: true, sourceUrl: 'https://www.nav.no/alderspensjon', defaultVerifiedAt: '2026-06-19' },
+  // editable:false i v1 — tabell-redigering kommer i delprosjekt 2 (auto-hent). Tabeller rendres
+  // alltid read-only, så true ville vært villedende død metadata.
+  delingstall: { key: 'delingstall', label: 'Delingstall (per uttaksalder)', group: 'pensjon', unit: 'tabell', kind: 'table', editable: false, sourceUrl: 'https://www.nav.no/alderspensjon', defaultVerifiedAt: '2026-06-19' },
   bsuMaxYearly: { key: 'bsuMaxYearly', label: 'BSU maks/år', group: 'sparing', unit: 'kr', kind: 'scalar', editable: false, sourceUrl: 'https://www.skatteetaten.no', defaultVerifiedAt: '2026-06-16' },
   bsuMaxTotal: { key: 'bsuMaxTotal', label: 'BSU maks totalt', group: 'sparing', unit: 'kr', kind: 'scalar', editable: false, sourceUrl: 'https://www.skatteetaten.no', defaultVerifiedAt: '2026-06-16' },
   taxRules: { key: 'taxRules', label: 'Skattetrinn & satser', group: 'skatt', unit: 'tabell', kind: 'table', editable: false, sourceUrl: 'https://www.skatteetaten.no', defaultVerifiedAt: '2026-06-16' },
