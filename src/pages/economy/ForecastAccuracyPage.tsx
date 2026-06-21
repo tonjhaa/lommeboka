@@ -3,6 +3,7 @@ import { Target, Lock, Unlock } from 'lucide-react'
 // useEconomyStore direkte (ikke useActiveEconomyStore) — kalibrering er et personlig
 // verktøy mot egne slipper, ikke en partner-kontekst.
 import { useEconomyStore } from '@/application/useEconomyStore'
+import { useKeyFigures } from '@/hooks/useKeyFigures'
 import { computeAccuracy } from '@/domain/economy/forecastCalibration'
 import { computeBudgetTable } from '@/domain/economy/budgetTableComputer'
 import { forecastJune } from '@/domain/economy/holidayPayCalculator'
@@ -11,6 +12,7 @@ import { cn } from '@/lib/utils'
 function fmtNOK(n: number): string { return Math.round(n).toLocaleString('no-NO') + ' kr' }
 
 export function ForecastAccuracyPage() {
+  const kf = useKeyFigures()
   const profile = useEconomyStore((s) => s.profile)
   const monthHistory = useEconomyStore((s) => s.monthHistory)
   const budgetTemplate = useEconomyStore((s) => s.budgetTemplate)
@@ -45,7 +47,7 @@ export function ForecastAccuracyPage() {
         .filter(([k]) => k.startsWith(`${year}:`))
         .map(([k, v]) => [k.slice(String(year).length + 1), v])
     )
-    const juneForecast = forecastJune(year, monthHistory, profile, atfEntries)
+    const juneForecast = forecastJune(year, monthHistory, profile, atfEntries, undefined, kf.feriepengerProsent)
     const table = computeBudgetTable(
       year, profile, budgetTemplate, monthHistory, atfEntries,
       savingsAccounts, debts, subscriptions, insurances,
@@ -61,7 +63,7 @@ export function ForecastAccuracyPage() {
         id: r.id, label: r.label, cells: r.cells.map((c) => ({ budget: c.budget, actual: c.actual })),
       }))
     return computeAccuracy(rows)
-  }, [profile, budgetTemplate, monthHistory, atfEntries, savingsAccounts, debts, subscriptions, insurances, budgetOverrides, temporaryPayEntries, ivfTransactions, fondPortfolio])
+  }, [profile, budgetTemplate, monthHistory, atfEntries, savingsAccounts, debts, subscriptions, insurances, budgetOverrides, temporaryPayEntries, ivfTransactions, fondPortfolio, kf])
 
   if (!profile || slipCount < 2) {
     return (

@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useEconomyStore } from '@/application/useEconomyStore'
+import { useKeyFigures } from '@/hooks/useKeyFigures'
 import { computeEffectiveBalance } from '@/domain/economy/savingsCalculator'
 import { computeBudgetTable } from '@/domain/economy/budgetTableComputer'
 import { forecastJune } from '@/domain/economy/holidayPayCalculator'
@@ -59,6 +60,8 @@ const PROJECTION_MONTHS = 72  // 6 år
 // ── Hook ─────────────────────────────────────────────────────────
 
 export function useVeikartIntelligence() {
+  const kf = useKeyFigures()
+
   const {
     profile,
     userPreferences,
@@ -89,7 +92,7 @@ export function useVeikartIntelligence() {
     let budgetOverskuddCell: { budget: number; actual: number | null } | undefined
     if (profile) {
       const cy = now.getFullYear()
-      const juneFc = forecastJune(cy, monthHistory, profile, atfEntries)
+      const juneFc = forecastJune(cy, monthHistory, profile, atfEntries, undefined, kf.feriepengerProsent)
       const yearOv = Object.fromEntries(
         Object.entries(budgetOverrides)
           .filter(([k]) => k.startsWith(`${cy}:`))
@@ -491,5 +494,6 @@ export function useVeikartIntelligence() {
     profile, userPreferences, monthHistory, temporaryPayEntries,
     lonnsoppgjor, debts, savingsAccounts, atfEntries, taxSettlements,
     budgetTemplate, budgetOverrides, subscriptions, insurances, fondPortfolio,
+    kf,
   ])
 }

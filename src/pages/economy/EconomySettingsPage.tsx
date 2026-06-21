@@ -528,6 +528,7 @@ function KeyFigureSection() {
   function save(meta: KeyFigureMeta) {
     const raw = parseFloat(editVal.replace(/\s/g, '').replace(',', '.'))
     if (isNaN(raw) || raw < 0) return
+    if (meta.unit === 'pst' && raw > 100) return
     // prosent lagres som desimal (UI viser %, lagrer 0–1)
     const value = meta.unit === 'pst' ? raw / 100 : raw
     setOverride({ key: meta.key, year, value, verifiedAt: new Date().toISOString().split('T')[0], source: meta.sourceUrl })

@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
+import { useKeyFigures } from '@/hooks/useKeyFigures'
 import { PayslipImporter } from '@/features/payslip/PayslipImporter'
 import { computeBudgetTable } from '@/domain/economy/budgetTableComputer'
 import type { BudgetRow, MonthMeta } from '@/domain/economy/budgetTableComputer'
@@ -58,6 +59,8 @@ function amountClass(n: number, bold = false): string {
 // ----------------------------------------------------------------
 
 export function BudgetPage() {
+  const kf = useKeyFigures()
+
   const {
     profile,
     budgetTemplate,
@@ -148,7 +151,7 @@ export function BudgetPage() {
   }, [budgetOverrides, activeYear])
 
   const juneForecast = profile
-    ? forecastJune(activeYear, monthHistory, profile, atfEntries, temporaryPayEntries)
+    ? forecastJune(activeYear, monthHistory, profile, atfEntries, temporaryPayEntries, kf.feriepengerProsent)
     : undefined
 
   const tableData = computeBudgetTable(
