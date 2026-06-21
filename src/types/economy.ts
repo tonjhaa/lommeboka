@@ -956,3 +956,36 @@ export interface ScenarioResult {
   baseline: { series: NetWorthSeries; figures: ScenarioKeyFigures }
   scenario: { series: NetWorthSeries; figures: ScenarioKeyFigures }
 }
+
+// ------------------------------------------------------------
+// NØKKELTALL-REGISTER
+// ------------------------------------------------------------
+
+export type KeyFigureKey =
+  | 'grunnbelop' | 'feriepengerProsent' | 'egenmeldingKvote'
+  | 'folketrygdOpptjeningssats' | 'spkPaaslagLav' | 'spkPaaslagHoy' | 'afpOpptjeningssats'
+  | 'takFolketrygdG' | 'takSpkG'
+  | 'delingstall'
+  // vises read-only i v1 (wires senere)
+  | 'bsuMaxYearly' | 'bsuMaxTotal' | 'taxRules'
+
+export type KeyFigureKind = 'scalar' | 'table'
+
+export interface KeyFigureMeta {
+  key: KeyFigureKey
+  label: string
+  group: 'pensjon' | 'sparing' | 'feriepenger' | 'fravaer' | 'skatt'
+  unit: 'kr' | 'pst' | 'G' | 'antall' | 'tabell'
+  kind: KeyFigureKind
+  editable: boolean          // false = vises read-only i v1
+  sourceUrl: string
+  defaultVerifiedAt: string  // "YYYY-MM-DD"
+}
+
+export interface KeyFigureOverride {
+  key: KeyFigureKey
+  year: number               // gjelder fra dette året
+  value: number | Record<number, number>  // scalar = number; table = blob
+  verifiedAt: string         // "YYYY-MM-DD"
+  source?: string
+}
