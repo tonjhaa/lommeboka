@@ -11,8 +11,11 @@ import {
   BSU_MAX_YEARLY, BSU_MAX_TOTAL, DELINGSTALL_BASELINE,
 } from '@/config/economy.config'
 
-/** Kode-default per skalar nøkkeltall (samme verdi som resten av appen bruker i dag). */
-const SCALAR_DEFAULTS: Record<string, number> = {
+/**
+ * Kode-default per skalar nøkkeltall (samme verdi som resten av appen bruker i dag).
+ * Exclude av tabell-keys gir compile-feil hvis en ny skalar-key mangler her.
+ */
+const SCALAR_DEFAULTS: Record<Exclude<KeyFigureKey, 'delingstall' | 'taxRules'>, number> = {
   grunnbelop: GRUNNBELOP_NOK,
   feriepengerProsent: FERIEPENGER_PROSENT,
   egenmeldingKvote: EGENMELDING_KVOTE,
@@ -42,19 +45,23 @@ export const KEY_FIGURE_META: Record<KeyFigureKey, KeyFigureMeta> = {
   taxRules: { key: 'taxRules', label: 'Skattetrinn & satser', group: 'skatt', unit: 'tabell', kind: 'table', editable: false, sourceUrl: 'https://www.skatteetaten.no', defaultVerifiedAt: '2026-06-16' },
 }
 
-/** Nyeste override med year <= forespurt år, ellers kode-default. */
+/**
+ * Resolver én skalar: nyeste override med year <= forespurt år, ellers kode-default.
+ * `?? 0` er kun sikkerhetsnett om en tabell-key (delingstall/taxRules) feilaktig sendes hit.
+ */
 export function resolveScalar(key: KeyFigureKey, overrides: KeyFigureOverride[], year: number): number {
   const candidates = overrides
     .filter((o) => o.key === key && o.year <= year && typeof o.value === 'number')
     .sort((a, b) => b.year - a.year)
   if (candidates.length > 0) return candidates[0].value as number
-  return SCALAR_DEFAULTS[key] ?? 0
+  return SCALAR_DEFAULTS[key as keyof typeof SCALAR_DEFAULTS] ?? 0
 }
 
 /** Delingstall-tabell: nyeste override <= år, ellers kode-default. */
 export function resolveDelingstall(overrides: KeyFigureOverride[], year: number): Record<number, number> {
   const candidates = overrides
-    .filter((o) => o.key === 'delingstall' && o.year <= year && typeof o.value === 'object')
+    // null er `object` i JS — eksplisitt null-guard hindrer at en korrupt blob propagerer null.
+    .filter((o) => o.key === 'delingstall' && o.year <= year && o.value !== null && typeof o.value === 'object')
     .sort((a, b) => b.year - a.year)
   if (candidates.length > 0) return candidates[0].value as Record<number, number>
   return DELINGSTALL_BASELINE
@@ -62,7 +69,7 @@ export function resolveDelingstall(overrides: KeyFigureOverride[], year: number)
 
 const STALE_MONTHS = 12
 
-/** Utdatert: ingen override for inneværende år OG default eldre enn STALE_MONTHS. */
+/** Utdatert: ingen override for inneværende år OG default eldre enn STALE_MONTHS (grov ~30-dagers måneder). */
 export function isStale(key: KeyFigureKey, overrides: KeyFigureOverride[], now: Date = new Date()): boolean {
   const year = now.getFullYear()
   const hasCurrent = overrides.some((o) => o.key === key && o.year === year)

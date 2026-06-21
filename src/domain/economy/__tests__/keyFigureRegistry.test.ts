@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveScalar, KEY_FIGURE_META, isStale } from '../keyFigureRegistry'
+import { resolveScalar, resolveDelingstall, KEY_FIGURE_META, isStale } from '../keyFigureRegistry'
 import {
   GRUNNBELOP_NOK, FERIEPENGER_PROSENT, EGENMELDING_KVOTE,
   FOLKETRYGD_OPPTJENINGSSATS, SPK_PAASLAG_SATS_LAV, SPK_PAASLAG_SATS_HOY,
@@ -57,5 +57,19 @@ describe('isStale', () => {
   it('ikke utdatert når override for inneværende år finnes', () => {
     const ov: KeyFigureOverride[] = [{ key: 'grunnbelop', year: 2026, value: 140_000, verifiedAt: '2026-05-01' }]
     expect(isStale('grunnbelop', ov, new Date('2026-06-01'))).toBe(false)
+  })
+  it('override for FJORÅRET teller ikke — faller tilbake på default-alder', () => {
+    const ov: KeyFigureOverride[] = [{ key: 'grunnbelop', year: 2025, value: 130_160, verifiedAt: '2025-05-01' }]
+    // 2099: ingen override for inneværende år (2099) + gammel default → utdatert
+    expect(isStale('grunnbelop', ov, new Date('2099-06-01'))).toBe(true)
+  })
+})
+
+describe('resolveDelingstall — null-guard', () => {
+  it('ignorerer korrupt null-blob og faller tilbake på default', () => {
+    const ov = [{ key: 'delingstall', year: 2026, value: null, verifiedAt: '2026-05-01' } as unknown as KeyFigureOverride]
+    const res = resolveDelingstall(ov, 2026)
+    expect(res).not.toBeNull()
+    expect(typeof res).toBe('object')
   })
 })
