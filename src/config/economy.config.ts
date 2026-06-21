@@ -367,18 +367,18 @@ export const DELINGSTALL_BASELINE: Record<number, number> = {
 }
 
 /** Slår opp delingstall med lineær interpolasjon; klamrer til ytterpunktene. */
-export function getDelingstall(uttaksalder: number): number {
-  const aldre = Object.keys(DELINGSTALL_BASELINE).map(Number).sort((a, b) => a - b)
+export function getDelingstall(uttaksalder: number, table: Record<number, number> = DELINGSTALL_BASELINE): number {
+  const aldre = Object.keys(table).map(Number).sort((a, b) => a - b)
   const minA = aldre[0]
   const maxA = aldre[aldre.length - 1]
-  if (uttaksalder <= minA) return DELINGSTALL_BASELINE[minA]
-  if (uttaksalder >= maxA) return DELINGSTALL_BASELINE[maxA]
+  if (uttaksalder <= minA) return table[minA]
+  if (uttaksalder >= maxA) return table[maxA]
   const lav = Math.floor(uttaksalder)
   const hoy = Math.ceil(uttaksalder)
-  if (lav === hoy) return DELINGSTALL_BASELINE[lav]
+  if (lav === hoy) return table[lav]
   const frac = uttaksalder - lav
   // Defensiv mot hull i tabellen: fall tilbake på ytterpunktene om en alder mangler.
-  const lavVal = DELINGSTALL_BASELINE[lav] ?? DELINGSTALL_BASELINE[minA]
-  const hoyVal = DELINGSTALL_BASELINE[hoy] ?? DELINGSTALL_BASELINE[maxA]
+  const lavVal = table[lav] ?? table[minA]
+  const hoyVal = table[hoy] ?? table[maxA]
   return lavVal + (hoyVal - lavVal) * frac
 }

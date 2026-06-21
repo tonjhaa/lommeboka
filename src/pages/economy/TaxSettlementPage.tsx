@@ -10,6 +10,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Cell,
 } from 'recharts'
 import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
+import { useKeyFigures } from '@/hooks/useKeyFigures'
 import { analyzeTaxSettlements, settlementBalance, resolveProjectedWithholding } from '@/domain/economy/taxSettlementCalc'
 import { calcNorwegianTax, getTaxRules } from '@/domain/economy/norwegianTaxRules'
 import type { NorwegianTaxBreakdown } from '@/domain/economy/norwegianTaxRules'
@@ -24,6 +25,8 @@ function fmtNOK(n: number) {
 }
 
 export function TaxSettlementPage() {
+  const kf = useKeyFigures()
+
   const {
     taxSettlements,
     addTaxSettlement,
@@ -136,7 +139,7 @@ export function TaxSettlementPage() {
     : 0
 
   // Prognose: hent direkte fra budsjettabellen, identisk med hva budsjettfanen viser
-  const juneForecast = profile ? forecastJune(currentYear, monthHistory, profile, atfEntries) : null
+  const juneForecast = profile ? forecastJune(currentYear, monthHistory, profile, atfEntries, undefined, kf.feriepengerProsent) : null
   const yearOverrides: Record<string, number> = {}
   for (const [k, v] of Object.entries(budgetOverrides)) {
     const prefix = `${currentYear}:`

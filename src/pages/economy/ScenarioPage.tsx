@@ -4,6 +4,7 @@ import { SlidersHorizontal, Target, Plus, Trash2 } from 'lucide-react'
 import { useScenario } from '@/hooks/useScenario'
 import { useAppStore } from '@/store/useAppStore'
 import { useEconomyStore } from '@/application/useEconomyStore'
+import { useKeyFigures } from '@/hooks/useKeyFigures'
 import { DEFAULT_SCENARIO_LEVERS } from '@/domain/economy/scenarioSimulator'
 import { computeAccuracy } from '@/domain/economy/forecastCalibration'
 import { computeBudgetTable } from '@/domain/economy/budgetTableComputer'
@@ -15,6 +16,7 @@ function fmtNOK(n: number): string { return Math.round(n).toLocaleString('no-NO'
 
 export function ScenarioPage() {
   // ── Alle hooks FØR tidlig return (Rules of Hooks) ──────────────────────────
+  const kf = useKeyFigures()
   const result = useScenario()
   const levers = useAppStore((s) => s.scenarioLevers)
   const setLevers = useAppStore((s) => s.setScenarioLevers)
@@ -42,7 +44,7 @@ export function ScenarioPage() {
         .filter(([k]) => k.startsWith(`${year}:`))
         .map(([k, v]) => [k.slice(String(year).length + 1), v])
     )
-    const juneForecast = forecastJune(year, monthHistory, profile, atfEntries)
+    const juneForecast = forecastJune(year, monthHistory, profile, atfEntries, undefined, kf.feriepengerProsent)
     const table = computeBudgetTable(
       year, profile, budgetTemplate, monthHistory, atfEntries,
       savingsAccounts, debts, subscriptions, insurances,
@@ -57,7 +59,7 @@ export function ScenarioPage() {
       }))
     const accuracy = computeAccuracy(rows)
     return accuracy.monthsWithData > 0 ? accuracy.overallHitRate : null
-  }, [profile, budgetTemplate, monthHistory, atfEntries, savingsAccounts, debts, subscriptions, insurances, budgetOverrides, temporaryPayEntries, ivfTransactions, fondPortfolio])
+  }, [profile, budgetTemplate, monthHistory, atfEntries, savingsAccounts, debts, subscriptions, insurances, budgetOverrides, temporaryPayEntries, ivfTransactions, fondPortfolio, kf])
 
   // Lokal state for engangshendelse-skjema
   const [newLabel, setNewLabel] = useState('')

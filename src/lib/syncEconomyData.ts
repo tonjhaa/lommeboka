@@ -162,6 +162,7 @@ export async function saveToSupabase(): Promise<void> {
     savingsPlanTarget: state.savingsPlanTarget,
     savingsPlanHorizon: state.savingsPlanHorizon,
     pensionSettings: state.pensionSettings,
+    keyFigureOverrides: state.keyFigureOverrides,
     calibrationSettings: state.calibrationSettings,
     calibrationLog: state.calibrationLog,
     lockedCalibrationKeys: state.lockedCalibrationKeys,

@@ -99,6 +99,9 @@ export function forecastJune(
   profile: EmploymentProfile,
   atfEntries: ATFEntry[] = [],
   temporaryPayEntries: TemporaryPayEntry[] = [],
+  feriepengerProsent: number = FERIEPENGER_PROSENT,
+  feriedagerTrekk: number = FERIEDAGER_TREKK,
+  ferietrekkDivisor: number = FERIETREKK_DIVISOR,
 ): JuneForecast {
   // --- FERIEPENGEGRUNNLAG (opptjent forrige år) ---
   const prevDecRecord = monthHistory.find(
@@ -120,7 +123,7 @@ export function forecastJune(
     grunnlagKilde = `Estimert (${prevBase.monthsWithSlip}/12 slipper)`
   }
 
-  const feriepenger = Math.round(feriepengegrunnlag * FERIEPENGER_PROSENT)
+  const feriepenger = Math.round(feriepengegrunnlag * feriepengerProsent)
 
   // --- ÅRSLØNN I JUNI ---
   const juneSlip = monthHistory.find(
@@ -134,8 +137,8 @@ export function forecastJune(
   const juneArslonn = juneMaanedslonn * 12
   const juneFasteTilleggAar = juneFixedTillegg * 12
 
-  const ferietrekkDagsats = Math.round((juneArslonn + juneFasteTilleggAar) / FERIETREKK_DIVISOR)
-  const ferietrekk = ferietrekkDagsats * FERIEDAGER_TREKK
+  const ferietrekkDagsats = Math.round((juneArslonn + juneFasteTilleggAar) / ferietrekkDivisor)
+  const ferietrekk = ferietrekkDagsats * feriedagerTrekk
 
   // --- SKATTEPLIKTIG OG SKATTEGRUNNLAG ---
   // Regel: feriepenger er unntatt forskuddstrekk (skattebetalingsloven § 5-4 (3)),

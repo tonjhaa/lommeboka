@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { NumberInput } from '@/components/ui/number-input'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { useAppStore } from '@/store/useAppStore'
+import { useKeyFigures } from '@/hooks/useKeyFigures'
 import { computeBudgetTable } from '@/domain/economy/budgetTableComputer'
 import { forecastJune } from '@/domain/economy/holidayPayCalculator'
 import { beregnSkatt, CURRENT_RATES, type TaxInput } from '@/domain/economy/norwegianTaxCalc'
@@ -64,10 +65,11 @@ export function TaxCalculatorPage() {
     setProfile,
   } = useEconomyStore()
   const setCurrentView = useAppStore((s) => s.setCurrentView)
+  const kf = useKeyFigures()
 
   // Hent prognose-inntekt fra budsjettabellen
   const currentYear = new Date().getFullYear()
-  const juneForecast = profile ? forecastJune(currentYear, monthHistory, profile, atfEntries) : null
+  const juneForecast = profile ? forecastJune(currentYear, monthHistory, profile, atfEntries, undefined, kf.feriepengerProsent) : null
   const yearOverrides: Record<string, number> = {}
   for (const [k, v] of Object.entries(budgetOverrides)) {
     if (k.startsWith(`${currentYear}:`)) yearOverrides[k.slice(`${currentYear}:`.length)] = v

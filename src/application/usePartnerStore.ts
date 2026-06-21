@@ -506,6 +506,10 @@ export const usePartnerStore = create<EconomyState>()(
       pensionSettings: null,
       setPensionSettings: () => {},
 
+      keyFigureOverrides: [],
+      setKeyFigureOverride: () => {},
+      removeKeyFigureOverride: () => {},
+
       calibrationSettings: DEFAULT_CALIBRATION_SETTINGS,
       calibrationLog: [],
       lockedCalibrationKeys: [],
