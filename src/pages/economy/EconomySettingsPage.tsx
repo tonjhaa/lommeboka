@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 import type { EconomyTab, KeyFigureKey, KeyFigureMeta } from '@/types/economy'
 import { PartnerLinkSection } from '@/components/PartnerLinkSection'
 import { KEY_FIGURE_META, resolveScalar, resolveDelingstall, isStale } from '@/domain/economy/keyFigureRegistry'
+import { fetchKeyFigure, isFetchable, type FetchedKeyFigure } from '@/domain/economy/keyFigureFetchService'
 
 const LAST_EXPORT_KEY = 'min-okonomi-last-export'
 
@@ -521,6 +522,22 @@ function KeyFigureSection() {
   const year = new Date().getFullYear()
   const [editKey, setEditKey] = useState<KeyFigureKey | null>(null)
   const [editVal, setEditVal] = useState('')
+  const [fetching, setFetching] = useState<KeyFigureKey | null>(null)
+  const [suggestion, setSuggestion] = useState<FetchedKeyFigure | null>(null)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+
+  async function hentFraKilde(k: KeyFigureKey) {
+    setFetching(k); setFetchError(null); setSuggestion(null)
+    const r = await fetchKeyFigure(k)
+    setFetching(null)
+    if ('error' in r) { setFetchError(r.error); return }
+    setSuggestion(r)
+  }
+
+  function bekreftForslag(s: FetchedKeyFigure) {
+    setOverride({ key: s.key, year: s.effectiveYear, value: s.value, verifiedAt: new Date().toISOString().split('T')[0], source: s.source })
+    setSuggestion(null)
+  }
 
   const scalarKeys = (Object.keys(KEY_FIGURE_META) as KeyFigureKey[])
     .filter((k) => KEY_FIGURE_META[k].kind === 'scalar')
@@ -570,6 +587,15 @@ function KeyFigureSection() {
                   ) : (
                     <div className="flex items-center gap-2 shrink-0">
                       {hasOverride && <button onClick={() => removeOverride(k, year)} className="text-[11px] text-muted-foreground hover:text-red-400">Tilbakestill</button>}
+                      {isFetchable(k) && (
+                        <button
+                          onClick={() => hentFraKilde(k)}
+                          disabled={fetching === k}
+                          className="text-[11px] text-primary hover:underline disabled:opacity-50"
+                        >
+                          {fetching === k ? 'Henter…' : 'Hent fra NAV'}
+                        </button>
+                      )}
                       <button onClick={() => { setEditKey(k); setEditVal(meta.unit === 'pst' ? String(current * 100) : String(current)) }}
                         className="text-[11px] text-primary hover:underline">Endre</button>
                     </div>
@@ -588,6 +614,27 @@ function KeyFigureSection() {
                     <p className="text-[10px] text-muted-foreground/50">standard (kode): {fmtUnit(codeDefault, meta.unit)}</p>
                   </div>
                 </details>
+              )}
+              {suggestion?.key === k && (
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-primary/30 bg-primary/5 px-2 py-1.5">
+                  <span className="text-[11px] text-foreground">
+                    NAV: <span className="font-mono">{fmtUnit(suggestion.value, meta.unit)}</span> (gjelder fra {suggestion.effectiveDate}) · din verdi: <span className="font-mono">{fmtUnit(current, meta.unit)}</span>
+                  </span>
+                  {suggestion.value === current ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-muted-foreground">Du har allerede siste verdi</span>
+                      <button onClick={() => setSuggestion(null)} className="text-[11px] text-muted-foreground hover:text-foreground">Lukk</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => bekreftForslag(suggestion)} className="rounded bg-primary/20 px-2 py-1 text-[11px] text-primary">Bruk</button>
+                      <button onClick={() => setSuggestion(null)} className="text-[11px] text-muted-foreground hover:text-foreground">Avbryt</button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {fetchError && fetching === null && suggestion === null && isFetchable(k) && (
+                <p className="mt-2 text-[11px] text-yellow-400">{fetchError}</p>
               )}
             </div>
           )
@@ -615,7 +662,7 @@ function KeyFigureSection() {
             )
           })}
         <p className="text-[10px] text-muted-foreground/60">
-          Auto-hent fra nav.no/skatteetaten kommer i en senere versjon.
+          «Hent fra NAV» henter offisielt grunnbeløp fra g.nav.no. Flere kilder kommer senere.
         </p>
       </div>
     </Section>
