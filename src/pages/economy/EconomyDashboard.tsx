@@ -183,7 +183,7 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
   const ivfSaldo = ivfSrcTxs.filter(t => t.date <= todayStr).reduce((s, t) => s + t.amount, 0)
 
   // ── Budsjett ──────────────────────────────────────────────
-  const juneForecast = profile ? forecastJune(currentYear, monthHistory, profile, atfEntries) : null
+  const juneForecast = profile ? forecastJune(currentYear, monthHistory, profile, atfEntries, [], kf.feriepengerProsent) : null
 
   const yearOverrides = Object.fromEntries(
     Object.entries(budgetOverrides)

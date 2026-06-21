@@ -293,29 +293,42 @@ export function getDaysUsedLast12Months(
 
 export function getAbsenceStatus(
   records: AbsenceRecord[],
-  referenceDate: Date = new Date()
+  referenceDate: Date = new Date(),
+  kvote: number = EGENMELDING_KVOTE,
 ): AbsenceStatus {
-  return daysToStatus(getDaysUsedLast12Months(records, referenceDate))
+  return daysToStatus(getDaysUsedLast12Months(records, referenceDate), kvote)
 }
 
-export function getAbsenceStatusFromEvents(events: AbsenceEvent[], referenceDate: Date = new Date()): AbsenceStatus {
-  return daysToStatus(getDaysUsedFromEvents(events, referenceDate))
+export function getAbsenceStatusFromEvents(
+  events: AbsenceEvent[],
+  referenceDate: Date = new Date(),
+  kvote: number = EGENMELDING_KVOTE,
+): AbsenceStatus {
+  return daysToStatus(getDaysUsedFromEvents(events, referenceDate), kvote)
 }
 
 export function forecastAbsenceStatus(records: AbsenceRecord[], toDate: Date): AbsenceStatus {
   return getAbsenceStatus(records, toDate)
 }
 
-export function getRemainingQuota(records: AbsenceRecord[], referenceDate: Date = new Date()): number {
-  return Math.max(0, EGENMELDING_KVOTE - getDaysUsedLast12Months(records, referenceDate))
+export function getRemainingQuota(
+  records: AbsenceRecord[],
+  referenceDate: Date = new Date(),
+  kvote: number = EGENMELDING_KVOTE,
+): number {
+  return Math.max(0, kvote - getDaysUsedLast12Months(records, referenceDate))
 }
 
-export function getRemainingQuotaFromEvents(events: AbsenceEvent[], referenceDate: Date = new Date()): number {
-  return Math.max(0, EGENMELDING_KVOTE - getDaysUsedFromEvents(events, referenceDate))
+export function getRemainingQuotaFromEvents(
+  events: AbsenceEvent[],
+  referenceDate: Date = new Date(),
+  kvote: number = EGENMELDING_KVOTE,
+): number {
+  return Math.max(0, kvote - getDaysUsedFromEvents(events, referenceDate))
 }
 
-function daysToStatus(days: number): AbsenceStatus {
-  if (days >= EGENMELDING_KVOTE + 1) return 'over'
+function daysToStatus(days: number, kvote: number = EGENMELDING_KVOTE): AbsenceStatus {
+  if (days >= kvote + 1) return 'over'
   if (days >= ABSENCE_CRITICAL_THRESHOLD) return 'critical'
   if (days >= ABSENCE_WARNING_THRESHOLD) return 'warning'
   return 'ok'

@@ -385,10 +385,13 @@ export function parseForsvarsSlipp(pdfText: string): ParsetLonnsslipp {
  */
 export function calculateHolidayPay(
   basis: number,
-  annualSalaryJune: number
+  annualSalaryJune: number,
+  feriepengerProsent: number = FERIEPENGER_PROSENT,
+  feriedagerTrekk: number = FERIEDAGER_TREKK,
+  ferietrekkDivisor: number = FERIETREKK_DIVISOR,
 ): HolidayPayResult {
-  const holidayPay = basis * FERIEPENGER_PROSENT
-  const holidayLeaveDeduction = (annualSalaryJune / FERIETREKK_DIVISOR) * FERIEDAGER_TREKK
+  const holidayPay = basis * feriepengerProsent
+  const holidayLeaveDeduction = (annualSalaryJune / ferietrekkDivisor) * feriedagerTrekk
   const netJune = annualSalaryJune / 12 + holidayPay - holidayLeaveDeduction
   return { holidayPay, holidayLeaveDeduction, netJune }
 }

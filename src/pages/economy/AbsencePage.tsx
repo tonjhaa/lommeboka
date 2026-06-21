@@ -18,7 +18,7 @@ import {
   getRemainingQuota,
   evaluateEligibility,
 } from '@/domain/economy/absenceCalculator'
-import { EGENMELDING_KVOTE } from '@/config/economy.config'
+import { useKeyFigures } from '@/hooks/useKeyFigures'
 import type { AbsenceEvent, AbsenceRecord } from '@/types/economy'
 import { cn } from '@/lib/utils'
 
@@ -37,6 +37,7 @@ function formatNO(iso: string): string {
 }
 
 export function AbsencePage() {
+  const kf = useKeyFigures()
   const {
     absenceRecords, addAbsenceRecord, removeAbsenceRecord,
     absenceEvents, addAbsenceEvent, removeAbsenceEvent,
@@ -76,8 +77,8 @@ export function AbsencePage() {
   const now = new Date()
   const useEvents = absenceEvents.length > 0
   const daysUsed = useEvents ? getDaysUsedFromEvents(absenceEvents, now) : getDaysUsedLast12Months(absenceRecords, now)
-  const status = useEvents ? getAbsenceStatusFromEvents(absenceEvents, now) : getAbsenceStatus(absenceRecords, now)
-  const remaining = useEvents ? getRemainingQuotaFromEvents(absenceEvents, now) : getRemainingQuota(absenceRecords, now)
+  const status = useEvents ? getAbsenceStatusFromEvents(absenceEvents, now, kf.egenmeldingKvote) : getAbsenceStatus(absenceRecords, now, kf.egenmeldingKvote)
+  const remaining = useEvents ? getRemainingQuotaFromEvents(absenceEvents, now, kf.egenmeldingKvote) : getRemainingQuota(absenceRecords, now, kf.egenmeldingKvote)
 
   // Eligibility check
   const hireDateStr = absenceHireDate ?? ''
@@ -135,7 +136,7 @@ export function AbsencePage() {
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">Egenmeldingsdager siste 12 mnd</span>
             <span className={cn('text-sm font-semibold', getStatusColor(status))}>
-              {daysUsed} / {EGENMELDING_KVOTE} dager
+              {daysUsed} / {kf.egenmeldingKvote} dager
             </span>
           </div>
           <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -143,7 +144,7 @@ export function AbsencePage() {
               className={cn('h-full rounded-full transition-all',
                 status === 'ok' ? 'bg-green-500' : status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
               )}
-              style={{ width: `${Math.min(100, (daysUsed / EGENMELDING_KVOTE) * 100)}%` }}
+              style={{ width: `${Math.min(100, (daysUsed / kf.egenmeldingKvote) * 100)}%` }}
             />
           </div>
           <div className="flex justify-between text-xs text-muted-foreground">
@@ -213,7 +214,7 @@ export function AbsencePage() {
 
                 {/* KPI-er */}
                 <div className="grid grid-cols-2 gap-2">
-                  <KpiBox label="Egenmelding siste 12 mnd" value={`${eligibility.kpiEgen12m} / ${EGENMELDING_KVOTE}`} />
+                  <KpiBox label="Egenmelding siste 12 mnd" value={`${eligibility.kpiEgen12m} / ${kf.egenmeldingKvote}`} />
                   <KpiBox label="Egenmelding siste 16 dager" value={String(eligibility.kpiEgen16d)} warn={eligibility.kpiEgen16d >= 8} />
                   <KpiBox label="Sykedager i siste periode" value={String(eligibility.lastPeriodSickDays)} warn={eligibility.lastPeriodSickDays >= 16} />
                   <KpiBox label="Arbeidsgiverperiode igjen" value={`${eligibility.employerLeft} / 16`} warn={eligibility.employerLeft === 0} />
