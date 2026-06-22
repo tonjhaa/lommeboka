@@ -59,13 +59,29 @@ export function seedCategoryRules(): CategoryRule[] {
 
 export interface CategorizeResult { category: BudgetCategory | null; source: 'learned' | 'seed' | 'none' }
 
-/** Lært (eksakt key-match) vinner over seed (substring). Tom liste ⇒ null. */
+/**
+ * Ord-grense-bevisst seed-match: seed-nøkkelen må forekomme som et helt ord eller
+ * ord-prefiks i den normaliserte motparten — ikke vilkårlig substring. Hindrer at
+ * f.eks. «datasats» treffer seed 'sats' (Datasats AS) eller «matbutikk» treffer 'atb'.
+ * Seed-nøkkelen normaliseres med samme funksjon så «uno-x» → «uno x» matcher korrekt.
+ */
+function seedMatches(key: string, rawSeed: string): boolean {
+  const seed = normalizeCounterparty(rawSeed)
+  if (!seed) return false
+  // Ord-grenser rundt seed; tillat at siste seed-ord er et prefiks av et lengre ord
+  // (f.eks. 'rema' matcher 'rema 1000', 'apotek' matcher 'apotek 1 oslo').
+  const escaped = seed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(^|\\s)${escaped}(\\s|$)`).test(key) ||
+         new RegExp(`(^|\\s)${escaped}\\b`).test(key)
+}
+
+/** Lært (eksakt key-match) vinner over seed (ord-grense-match). Tom liste ⇒ null. */
 export function categorize(key: string, rules: CategoryRule[]): CategorizeResult {
   for (const r of rules) {
     if (r.source === 'learned' && key === r.merchantKey) return { category: r.category, source: 'learned' }
   }
   for (const r of rules) {
-    if (r.source === 'seed' && key.includes(r.merchantKey)) return { category: r.category, source: 'seed' }
+    if (r.source === 'seed' && seedMatches(key, r.merchantKey)) return { category: r.category, source: 'seed' }
   }
   return { category: null, source: 'none' }
 }

@@ -40,6 +40,13 @@ describe('categorize — presedens', () => {
   it('ukjent motpart uten treff ⇒ null', () => {
     expect(categorize('ukjent butikk xyz', seedCategoryRules()).category).toBeNull()
   })
+  it('uno-x matcher (seed-nøkkel normaliseres til "uno x")', () => {
+    const key = normalizeCounterparty('UNO-X BERGEN')
+    expect(categorize(key, seedCategoryRules()).category).toBe('transport')
+  })
+  it('ord-grense: «datasats» treffer IKKE seed «sats» (falsk-positiv-vern)', () => {
+    expect(categorize(normalizeCounterparty('DATASATS AS'), seedCategoryRules()).category).toBeNull()
+  })
 })
 
 describe('applyCategories', () => {
