@@ -252,6 +252,12 @@ export interface MaxPurchaseAnalysis {
   limitingFactor: 'equity' | 'debtRatio' | 'affordability'
   /** Tilhørende maksimalt lånebeløp */
   maxLoanAmount: number
+  /** Kausjon (realkausjon) brukt som egenkapital-ekvivalent i EK-regelen. 0 = ingen. */
+  kausjonApplied: number
+  /** Maks kjøpspris UTEN kausjon (samme tre grenser, kausjon=0) — for å vise løftet. */
+  maxPriceWithoutKausjon: number
+  /** Taket kausjon ikke kommer forbi = min(gjeldsgrad, betjeningsevne). */
+  kausjonCeiling: number
 }
 
 /** Regelmelding fra vurderingen */

@@ -143,6 +143,7 @@ export function calcMaxPurchaseSimple(
 
 /**
  * Beregner maksimalt kjøpsbeløp fra alle tre regelperspektiver.
+ * @param kausjon - Realkausjon i NOK som løfter KUN EK-grensen (default 0).
  */
 export function analyzeMaxPurchase(
   equity: number,
@@ -156,7 +157,8 @@ export function analyzeMaxPurchase(
   interestRate: number = config.loanDefaults.defaultInterestRate,
   loanTermYears: number = config.loanDefaults.defaultLoanTermYears,
   ownershipType: OwnershipType = 'selveier',
-  financeAllFees = false
+  financeAllFees = false,
+  kausjon = 0,
 ): MaxPurchaseAnalysis {
   const totalAnnualIncome = calcTotalAnnualIncome(
     household.primaryApplicant.grossIncome,
@@ -165,7 +167,11 @@ export function analyzeMaxPurchase(
     household.coApplicant?.otherIncome
   )
 
-  const maxByEquity = maxPriceByEquity(equity, sharedDebt, config, ownershipType, financeAllFees)
+  // EK-grensen bruker equity + kausjon; beholder også uten-kausjon-variant for diff-visning
+  const maxByEquity = maxPriceByEquity(equity + kausjon, sharedDebt, config, ownershipType, financeAllFees)
+  const maxByEquityNoKausjon = maxPriceByEquity(equity, sharedDebt, config, ownershipType, financeAllFees)
+
+  // Gjeldsgrad og betjeningsevne er UENDRET — bruker kun equity (ikke kausjon)
   const maxByDebtRatio = maxPriceByDebtRatio(
     equity,
     sharedDebt,
@@ -205,6 +211,9 @@ export function analyzeMaxPurchase(
   const effEq = calcEffectiveEquity(equity, feeBreakdown.totalFees)
   const maxLoanAmount = Math.max(0, maxPurchasePrice + sharedDebt - effEq + feeBreakdown.financedFees)
 
+  const kausjonCeiling = Math.min(maxByDebtRatio, maxByAffordability)
+  const maxPriceWithoutKausjon = Math.min(maxByEquityNoKausjon, maxByDebtRatio, maxByAffordability)
+
   return {
     maxByEquity,
     maxByDebtRatio,
@@ -212,5 +221,44 @@ export function analyzeMaxPurchase(
     maxPurchasePrice,
     limitingFactor,
     maxLoanAmount: Math.round(maxLoanAmount),
+    kausjonApplied: kausjon,
+    maxPriceWithoutKausjon,
+    kausjonCeiling,
   }
+}
+
+/**
+ * Revers: hvor mye kausjon (realkausjon) trengs for å nå en målpris, gitt EK og inntekt.
+ * Kausjon dekker EK-mangelen, men kommer ALDRI forbi gjeldsgrad/betjeningsevne-taket.
+ */
+export function kausjonNeededForPrice(
+  targetPrice: number,
+  equity: number,
+  existingDebt: number,
+  household: HouseholdInput,
+  config: AppConfig,
+  interestRate: number = config.loanDefaults.defaultInterestRate,
+  loanTermYears: number = config.loanDefaults.defaultLoanTermYears,
+  ownershipType: OwnershipType = 'selveier',
+  financeAllFees = false,
+): { kausjonNeeded: number; reachable: boolean; ceiling: number } {
+  const minEqPct = config.lendingRules.minEquityPercent / 100
+  const feeBreakdown = calcAcquisitionFees(targetPrice, config.fees, ownershipType, financeAllFees)
+  const effEq = calcEffectiveEquity(equity, feeBreakdown.totalFees)
+  // Påkrevd egenkapital ved målpris (samme EK-regel som maxPriceByEquity bruker)
+  const requiredEquity = targetPrice * minEqPct
+  const kausjonNeeded = Math.max(0, Math.round(requiredEquity - effEq))
+
+  // Taket: gjeldsgrad + betjeningsevne (kausjon hjelper ikke forbi dette)
+  const a = analyzeMaxPurchase(
+    equity, 0, existingDebt, household, 0, 0, 0, config,
+    interestRate, loanTermYears, ownershipType, financeAllFees,
+  )
+  const ceiling = a.kausjonCeiling
+  return { kausjonNeeded, reachable: targetPrice <= ceiling, ceiling }
+}
+
+/** Kausjonistens ledige pantesikkerhet i egen bolig: verdi×maxLTV − restgjeld (gulv 0). */
+export function guarantorFreeCollateral(homeValue: number, mortgage: number, maxLTV = 0.90): number {
+  return Math.max(0, Math.round(homeValue * maxLTV - mortgage))
 }
