@@ -64,15 +64,19 @@ export interface CategorizeResult { category: BudgetCategory | null; source: 'le
  * ord-prefiks i den normaliserte motparten — ikke vilkårlig substring. Hindrer at
  * f.eks. «datasats» treffer seed 'sats' (Datasats AS) eller «matbutikk» treffer 'atb'.
  * Seed-nøkkelen normaliseres med samme funksjon så «uno-x» → «uno x» matcher korrekt.
+ * `\b` etter seed dekker mellomrom, slutt, siffer og tegnsetting i ett.
+ * Regex prekompileres per seed (modul-cache) — unngår O(N×M)-kompilering per batch.
  */
+const seedRegexCache = new Map<string, RegExp | null>()
 function seedMatches(key: string, rawSeed: string): boolean {
-  const seed = normalizeCounterparty(rawSeed)
-  if (!seed) return false
-  // Ord-grenser rundt seed; tillat at siste seed-ord er et prefiks av et lengre ord
-  // (f.eks. 'rema' matcher 'rema 1000', 'apotek' matcher 'apotek 1 oslo').
-  const escaped = seed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(`(^|\\s)${escaped}(\\s|$)`).test(key) ||
-         new RegExp(`(^|\\s)${escaped}\\b`).test(key)
+  let rx = seedRegexCache.get(rawSeed)
+  if (rx === undefined) {
+    const seed = normalizeCounterparty(rawSeed)
+    const escaped = seed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    rx = seed ? new RegExp(`(^|\\s)${escaped}\\b`) : null
+    seedRegexCache.set(rawSeed, rx)
+  }
+  return rx !== null && rx.test(key)
 }
 
 /** Lært (eksakt key-match) vinner over seed (ord-grense-match). Tom liste ⇒ null. */
@@ -102,8 +106,9 @@ export function aggregateByCategory(
   const out: Partial<Record<BudgetCategory, number>> = {}
   for (const t of txs) {
     if (t.amount >= 0 || !t.category) continue
-    const d = new Date(t.date)
-    if (d.getFullYear() !== year || d.getMonth() + 1 !== month) continue
+    // String-parsing (ikke new Date) — tidssone-trygt. ISO "YYYY-MM-DD".
+    const [y, m] = t.date.split('-').map(Number)
+    if (y !== year || m !== month) continue
     out[t.category] = (out[t.category] ?? 0) + Math.abs(t.amount)
   }
   return out
