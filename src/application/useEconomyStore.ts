@@ -38,10 +38,13 @@ import type {
   CalibrationSettings,
   CalibrationEntry,
   KeyFigureOverride,
+  BankSpendingTransaction,
+  CategoryRule,
 } from '@/types/economy'
 import { POLICY_RATE_HISTORY, LONNSVEKST_DEFAULT, GRUNNBELOP_VEKST_DEFAULT } from '@/config/economy.config'
 import { DEFAULT_BANK_PRESETS } from '@/config/bankPresets'
 import { calibrateProfile } from '@/domain/economy/forecastCalibration'
+import { applyCategories, seedCategoryRules } from '@/domain/economy/spendingCategorizer'
 
 // ------------------------------------------------------------
 // STATE INTERFACE
@@ -233,6 +236,13 @@ export interface EconomyState {
   setKeyFigureOverride: (o: KeyFigureOverride) => void
   removeKeyFigureOverride: (key: string, year: number) => void
 
+  spendingTransactions: BankSpendingTransaction[]
+  categoryRules: CategoryRule[]
+  addSpendingTransactions: (txs: BankSpendingTransaction[]) => void
+  setSpendingTransactions: (txs: BankSpendingTransaction[]) => void
+  setCategoryRule: (rule: CategoryRule) => void
+  removeCategoryRule: (merchantKey: string) => void
+
   calibrationSettings: CalibrationSettings
   calibrationLog: CalibrationEntry[]
   lockedCalibrationKeys: string[]
@@ -382,6 +392,8 @@ export const useEconomyStore = create<EconomyState>()(
 
       pensionSettings: null,
       keyFigureOverrides: [],
+      spendingTransactions: [],
+      categoryRules: [],
       calibrationSettings: DEFAULT_CALIBRATION_SETTINGS,
       // calibrationLog kappes til maks 50 nyeste ved skriving i importSlip — vokser ikke ubegrenset.
       calibrationLog: [],
@@ -400,6 +412,26 @@ export const useEconomyStore = create<EconomyState>()(
       removeKeyFigureOverride: (key, year) => set((s) => ({
         keyFigureOverrides: s.keyFigureOverrides.filter((x) => !(x.key === key && x.year === year)),
       })),
+      // Dedup mot EKSISTERENDE transaksjoner på (dato|motpart|beløp) — hindrer at re-import
+      // av samme CSV lager duplikater. Banken gir ingen transaksjons-ID, så to genuint ulike
+      // kjøp med identisk dato/motpart/beløp i SEPARATE importøkter kan ikke skilles; den andre
+      // suppresses (sjelden, akseptert trade-off). Identiske kjøp i SAMME CSV importeres begge.
+      addSpendingTransactions: (txs) => set((s) => {
+        const seen = new Set(s.spendingTransactions.map((t) => `${t.date}|${t.counterpartyKey}|${t.amount}`))
+        const fresh = txs.filter((t) => !seen.has(`${t.date}|${t.counterpartyKey}|${t.amount}`))
+        return { spendingTransactions: [...s.spendingTransactions, ...fresh] }
+      }),
+      setSpendingTransactions: (txs) => set({ spendingTransactions: txs }),
+      // Endring/fjerning av en regel re-appliseres på ALLE lagrede transaksjoner (bevarer
+      // 'manual'-rader), så en feillært regel faktisk retter historikk — ikke bare nye importer.
+      setCategoryRule: (rule) => set((s) => {
+        const categoryRules = [...s.categoryRules.filter((r) => r.merchantKey !== rule.merchantKey), rule]
+        return { categoryRules, spendingTransactions: applyCategories(s.spendingTransactions, [...categoryRules, ...seedCategoryRules()]) }
+      }),
+      removeCategoryRule: (merchantKey) => set((s) => {
+        const categoryRules = s.categoryRules.filter((r) => r.merchantKey !== merchantKey)
+        return { categoryRules, spendingTransactions: applyCategories(s.spendingTransactions, [...categoryRules, ...seedCategoryRules()]) }
+      }),
       setCalibrationSettings: (s) => set({ calibrationSettings: s }),
       lockCalibration: (key) => set((st) => ({
         lockedCalibrationKeys: st.lockedCalibrationKeys.includes(key)
@@ -1207,6 +1239,9 @@ export const useEconomyStore = create<EconomyState>()(
           if (prefs?.enabledTabs && !prefs.enabledTabs.includes('scenario')) {
             prefs.enabledTabs = [...prefs.enabledTabs, 'scenario']
           }
+          if (prefs?.enabledTabs && !prefs.enabledTabs.includes('forbruk')) {
+            prefs.enabledTabs = [...prefs.enabledTabs, 'forbruk']
+          }
           // Saniter profil fra sky/backup: OF11 (feriepenger) skal aldri ligge som
           // månedlig fast tillegg — eldre lagret data kan fortsatt ha den.
           let importedProfile = (data.profile ?? null) as EmploymentProfile | null
@@ -1251,6 +1286,8 @@ export const useEconomyStore = create<EconomyState>()(
             savingsPlanHorizon: data.savingsPlanHorizon ?? 48,
             pensionSettings: data.pensionSettings ?? null,
             keyFigureOverrides: data.keyFigureOverrides ?? [],
+            spendingTransactions: data.spendingTransactions ?? [],
+            categoryRules: data.categoryRules ?? [],
             calibrationSettings: data.calibrationSettings ?? DEFAULT_CALIBRATION_SETTINGS,
             calibrationLog: data.calibrationLog ?? [],
             lockedCalibrationKeys: data.lockedCalibrationKeys ?? [],
@@ -1293,7 +1330,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 26,
+      version: 27,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v20 → v21: migrer tieredRates (snapshot) til tieredRateHistory (tidsserie)
@@ -1335,6 +1372,13 @@ export const useEconomyStore = create<EconomyState>()(
           const prefs = state.userPreferences as { enabledTabs?: string[] }
           if (Array.isArray(prefs.enabledTabs) && !prefs.enabledTabs.includes('scenario')) {
             prefs.enabledTabs = [...prefs.enabledTabs, 'scenario']
+          }
+        }
+        // v26 → v27: legg til 'forbruk' i enabledTabs for eksisterende brukere
+        if (fromVersion < 27 && state.userPreferences) {
+          const prefs = state.userPreferences as { enabledTabs?: string[] }
+          if (Array.isArray(prefs.enabledTabs) && !prefs.enabledTabs.includes('forbruk')) {
+            prefs.enabledTabs = [...prefs.enabledTabs, 'forbruk']
           }
         }
         // v19 → v20: forventede lønnsoppgjør slås AV i prognosen som standard.
@@ -1502,6 +1546,11 @@ export const useEconomyStore = create<EconomyState>()(
         if (fromVersion < 26 && !Array.isArray(state.keyFigureOverrides)) {
           state.keyFigureOverrides = []
         }
+        // v26 → v27: initialiser spendingTransactions og categoryRules for eksisterende brukere
+        if (fromVersion < 27) {
+          if (!Array.isArray(state.spendingTransactions)) state.spendingTransactions = []
+          if (!Array.isArray(state.categoryRules)) state.categoryRules = []
+        }
         return state
       },
       partialize: (state) => ({
@@ -1538,6 +1587,8 @@ export const useEconomyStore = create<EconomyState>()(
         lastGlobalPriceCheckAt: state.lastGlobalPriceCheckAt,
         pensionSettings: state.pensionSettings,
         keyFigureOverrides: state.keyFigureOverrides,
+        spendingTransactions: state.spendingTransactions,
+        categoryRules: state.categoryRules,
         calibrationSettings: state.calibrationSettings,
         calibrationLog: state.calibrationLog,
         lockedCalibrationKeys: state.lockedCalibrationKeys,

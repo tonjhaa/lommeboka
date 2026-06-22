@@ -127,7 +127,7 @@ function insMonthAmount(ins: InsuranceEntry, year: number, month: number): numbe
 
 /** Returnerer effektivt beløp for en budsjettlinje i en gitt måned.
  *  Bruker periodOverride.amount hvis måneden er innenfor perioden, ellers line.amount. */
-function lineAmt(line: { amount: number; periodOverride?: { amount: number; from: string; to: string } }, year: number, m: number): number {
+export function lineAmt(line: { amount: number; periodOverride?: { amount: number; from: string; to: string } }, year: number, m: number): number {
   const po = line.periodOverride
   if (!po) return line.amount
   const key = `${year}-${String(m).padStart(2, '0')}`
@@ -135,7 +135,7 @@ function lineAmt(line: { amount: number; periodOverride?: { amount: number; from
 }
 
 /** Sjekker om en gitt måned (1–12) i et gitt år faller innenfor en valgfri datoavgrensing. */
-function monthInDateRange(year: number, month: number, fromDate?: string, toDate?: string): boolean {
+export function monthInDateRange(year: number, month: number, fromDate?: string, toDate?: string): boolean {
   if (!fromDate && !toDate) return true
   const monthStart = new Date(year, month - 1, 1)
   const monthEnd = new Date(year, month, 0)

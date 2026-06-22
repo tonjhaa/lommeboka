@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   Shield, Briefcase, PiggyBank, BarChart2, CreditCard,
   FileText, TrendingUp, RefreshCw, HeartPulse, Umbrella,
-  Palmtree, CheckCircle2, ArrowRight, ChevronLeft, Map, Gift, Baby, Landmark, LineChart, Target, SlidersHorizontal,
+  Palmtree, CheckCircle2, ArrowRight, ChevronLeft, Map, Gift, Baby, Landmark, LineChart, Target, SlidersHorizontal, Wallet,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -127,6 +127,13 @@ export const MODULES: ModuleOption[] = [
     label: 'Gaveplanlegger',
     desc: 'Planlegg og fordel gaveutgifter gjennom året',
     icon: Gift,
+    defaultFor: ['forsvaret', 'custom'],
+  },
+  {
+    tab: 'forbruk',
+    label: 'Forbruk',
+    desc: 'Importer brukskonto, auto-kategoriser, se forbruk vs budsjett',
+    icon: Wallet,
     defaultFor: ['forsvaret', 'custom'],
   },
   {
