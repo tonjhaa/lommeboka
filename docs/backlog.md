@@ -13,13 +13,14 @@ Alle i prod på lommeboka.com. Specs i `docs/superpowers/specs/`.
 
 ## 1. Datakvalitet & integrasjoner
 
-### 1.1 Auto-kategorisering av bankimport — **M/L** ⭐ anbefalt neste
-Bankimporten kategoriserer ikke transaksjoner i dag, så Treffsikkerhet (#6) kan kun
-kalibrere inntekt/trekk/sparing/gjeld — **ikke forbruksutgifter**. En regel-/mønsterbasert
-kategorisering (motpart → budsjettkategori, med brukerlærte overstyringer) **låser opp
-utgiftskalibrering** og gjør budsjett-treff langt mer presist.
-- **Låser opp:** utgiftsdelen av Treffsikkerhet; bedre budsjett-prognose.
-- **Avhenger av:** eksisterende bankimport-format (verifiser i koden før design).
+### 1.1 Auto-kategorisering av bankimport — ✅ A+B LEVERT (2026-06-22) · C gjenstår — **M**
+**A+B levert** (`feat/forbruk-import-kategorisering`, PR #11): forbruks-import av brukskonto-CSV,
+auto-kategorisering (seed + brukerlærte regler, helord-match), «forbruk vs budsjett»-oversikt.
+Spec: `2026-06-22-forbruk-import-kategorisering-design.md`.
+- **C gjenstår — wire kategorisert forbruk inn i Treffsikkerhet-kalibreringen:** bruk
+  `aggregateByCategory(txs, år, mnd)` som «faktisk» for utgiftsrader i `budgetTableComputer`/
+  `computeAccuracy`. **Dette låser endelig opp utgiftskalibrering i #6** — selve sluttgevinsten.
+  Motoren er allerede klar (egen oppfølging, bygger rett på aggregateByCategory).
 
 ### 1.2 Excel-/CSV-eksport av økonomidata — **S/M**
 `xlsx ^0.18.5` er allerede en avhengighet (brukes i `absenceImporter.ts` til *import*).
