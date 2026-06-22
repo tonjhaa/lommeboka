@@ -200,6 +200,42 @@ describe('betjeningsevne — eksisterende gjeld stresstestes', () => {
   })
 })
 
+describe('calculateScenario — guarantorFreeCollateral i maxPurchase', () => {
+  it('ingen kausjonist-bolig ⇒ guarantorFreeCollateral er undefined', () => {
+    const analysis = calculateScenario(baseScenario, defaultConfig)
+    expect(analysis.maxPurchase.guarantorFreeCollateral).toBeUndefined()
+  })
+
+  it('kausjonist-bolig oppgitt ⇒ guarantorFreeCollateral satt korrekt (homeValue×0.9 − mortgage)', () => {
+    const scenarioWithGuarantor: ScenarioInput = {
+      ...baseScenario,
+      loanParameters: {
+        ...baseScenario.loanParameters,
+        kausjon: 500_000,
+        guarantorHomeValue: 4_000_000,
+        guarantorMortgage: 1_000_000,
+      },
+    }
+    const analysis = calculateScenario(scenarioWithGuarantor, defaultConfig)
+    // 4_000_000 × 0.9 − 1_000_000 = 2_600_000
+    expect(analysis.maxPurchase.guarantorFreeCollateral).toBe(2_600_000)
+  })
+
+  it('kausjonist-bolig uten restgjeld ⇒ guarantorFreeCollateral = homeValue × 0.9', () => {
+    const scenarioWithGuarantor: ScenarioInput = {
+      ...baseScenario,
+      loanParameters: {
+        ...baseScenario.loanParameters,
+        kausjon: 300_000,
+        guarantorHomeValue: 3_000_000,
+      },
+    }
+    const analysis = calculateScenario(scenarioWithGuarantor, defaultConfig)
+    // 3_000_000 × 0.9 − 0 = 2_700_000
+    expect(analysis.maxPurchase.guarantorFreeCollateral).toBe(2_700_000)
+  })
+})
+
 describe('amortisering — nye simulatorer', () => {
   it('avdragsfrihet gir null avdrag i perioden og samme totale løpetid', () => {
     const plan = buildAmortizationPlanWithSimulator(

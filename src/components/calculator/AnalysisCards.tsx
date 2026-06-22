@@ -253,11 +253,15 @@ export function AffordabilityCard({ analysis }: CardProps) {
 export function MaxPurchaseCard({ analysis }: CardProps) {
   const { maxPurchase } = analysis
 
-  const limitLabels: Record<typeof maxPurchase.limitingFactor, string> = {
-    equity: 'Begrenset av egenkapital',
-    debtRatio: 'Begrenset av gjeldsgrad',
-    affordability: 'Begrenset av betjeningsevne',
+  // Ett record for begge label-variantene → en ny limitingFactor må kun legges til ett sted.
+  const limitFactorMeta: Record<typeof maxPurchase.limitingFactor, { label: string; ceiling: string }> = {
+    equity: { label: 'Begrenset av egenkapital', ceiling: 'egenkapitalkravet' },
+    debtRatio: { label: 'Begrenset av gjeldsgrad', ceiling: 'gjeldsgradsregelen' },
+    affordability: { label: 'Begrenset av betjeningsevne', ceiling: 'betjeningsevnen' },
   }
+
+  const kausjonApplied = maxPurchase.kausjonApplied
+  const gfc = maxPurchase.guarantorFreeCollateral
 
   return (
     <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
@@ -274,7 +278,7 @@ export function MaxPurchaseCard({ analysis }: CardProps) {
           {formatCurrency(maxPurchase.maxPurchasePrice)}
         </p>
         <p className="text-xs text-muted-foreground mt-1">
-          {limitLabels[maxPurchase.limitingFactor]}
+          {limitFactorMeta[maxPurchase.limitingFactor].label}
         </p>
       </div>
 
@@ -302,6 +306,66 @@ export function MaxPurchaseCard({ analysis }: CardProps) {
           <span className="font-medium">{formatCurrency(maxPurchase.maxLoanAmount)}</span>
         </div>
       </div>
+
+      {kausjonApplied > 0 && (
+        <div className="space-y-1.5 border-t border-border pt-2 text-xs">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Kausjon brukt</span>
+            <span className="font-medium text-foreground">{formatCurrency(kausjonApplied)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Uten kausjon</span>
+            <span className="text-foreground">
+              {formatCurrency(maxPurchase.maxPriceWithoutKausjon)}
+              {' → '}
+              <span className="font-medium text-primary">{formatCurrency(maxPurchase.maxPurchasePrice)}</span>
+            </span>
+          </div>
+          {maxPurchase.maxPurchasePrice === maxPurchase.kausjonCeiling && (
+            <p className="text-muted-foreground italic">
+              Begrenset av {limitFactorMeta[maxPurchase.limitingFactor].ceiling} — mer kausjon hjelper ikke.
+            </p>
+          )}
+          {gfc != null && (
+            <>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Kausjonistens frie sikkerhet</span>
+                <span className="font-medium text-foreground">{formatCurrency(gfc)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Dekker kausjonen?</span>
+                {gfc >= kausjonApplied ? (
+                  <span className="text-green-400 font-medium">✓ dekker kausjonen</span>
+                ) : (
+                  <span className="text-red-400 font-medium">
+                    mangler {formatCurrency(kausjonApplied - gfc)}
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {maxPurchase.kausjonForTarget && (
+        <div className="space-y-1 border-t border-border pt-2 text-xs">
+          {maxPurchase.kausjonForTarget.reachable ? (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">
+                For å nå {formatCurrency(maxPurchase.kausjonForTarget.targetPrice)}
+              </span>
+              <span className="font-medium text-foreground">
+                trenger {formatCurrency(maxPurchase.kausjonForTarget.kausjonNeeded)} kausjon
+              </span>
+            </div>
+          ) : (
+            <p className="text-amber-400">
+              Kausjon hjelper opp til {formatCurrency(maxPurchase.kausjonForTarget.ceiling)}. For å nå{' '}
+              {formatCurrency(maxPurchase.kausjonForTarget.targetPrice)} må inntekt øke eller annen gjeld ned.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

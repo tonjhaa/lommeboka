@@ -78,6 +78,14 @@ export interface LoanParametersInput {
   stressTestRate?: number
   /** Ekstra månedlige kostnader husstanden har (barnehage, bilkostnader, etc.) */
   extraMonthlyExpenses?: number
+  /** Kausjon (realkausjon) i NOK — løfter egenkapitalkravet i kalkulatoren. */
+  kausjon?: number
+  /** Kausjonistens boligverdi i NOK (for sjekk av fri pantesikkerhet). */
+  guarantorHomeValue?: number
+  /** Kausjonistens restgjeld på egen bolig i NOK. */
+  guarantorMortgage?: number
+  /** Valgfri målpris (NOK): regn ut hvor mye kausjon som trengs for å nå denne. */
+  kausjonTargetPrice?: number
   /** Finansier alle kjøpsgebyrer i lånets saldo (true) eller betal kontant av EK (false) */
   financeAllFees?: boolean
   /** Renteendring i nedbetalingsplanen (simulering) */
@@ -252,6 +260,16 @@ export interface MaxPurchaseAnalysis {
   limitingFactor: 'equity' | 'debtRatio' | 'affordability'
   /** Tilhørende maksimalt lånebeløp */
   maxLoanAmount: number
+  /** Kausjon (realkausjon) brukt som egenkapital-ekvivalent i EK-regelen. 0 = ingen. */
+  kausjonApplied: number
+  /** Maks kjøpspris UTEN kausjon (samme tre grenser, kausjon=0) — for å vise løftet. */
+  maxPriceWithoutKausjon: number
+  /** Taket kausjon ikke kommer forbi = min(gjeldsgrad, betjeningsevne). */
+  kausjonCeiling: number
+  /** Kausjonistens frie pantesikkerhet (homeValue×0.9 − restgjeld). Kun satt når kausjonist-bolig er oppgitt. */
+  guarantorFreeCollateral?: number
+  /** Revers: hvor mye kausjon trengs for en målpris. Kun satt når målpris er oppgitt. */
+  kausjonForTarget?: { targetPrice: number; kausjonNeeded: number; reachable: boolean; ceiling: number }
 }
 
 /** Regelmelding fra vurderingen */

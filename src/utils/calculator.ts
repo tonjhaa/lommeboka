@@ -3,7 +3,7 @@ import { analyzeProperty } from './property'
 import { analyzeEquity } from './equity'
 import { analyzeDebtRatio } from './debtRatio'
 import { analyzeAffordability } from './affordability'
-import { analyzeMaxPurchase } from './maxPurchase'
+import { analyzeMaxPurchase, guarantorFreeCollateral as calcGuarantorFreeCollateral, kausjonNeededForPrice } from './maxPurchase'
 import { buildScenarioStatus } from './rules'
 import { buildAmortizationPlanWithSimulator } from './amortization'
 import { buildDistributionPlan } from './distribution'
@@ -96,7 +96,7 @@ export function calculateScenario(
   )
 
   // 5. Maks kjopsbeloep — samme forutsetninger som scenarioet (rente, lopetid, eierform)
-  const maxPurchaseAnalysis = analyzeMaxPurchase(
+  const maxPurchaseBase = analyzeMaxPurchase(
     equity,
     property.sharedDebt ?? 0,
     existingDebt,
@@ -108,8 +108,28 @@ export function calculateScenario(
     loanParameters.interestRate,
     loanParameters.loanTermYears,
     property.ownershipType,
-    financeEstFee
+    financeEstFee,
+    loanParameters.kausjon ?? 0,
   )
+  // Belåningsgrad-tak (samme som EK-kravet) for kausjonistens frie sikkerhet — forankret i config.
+  const maxLTV = (100 - config.lendingRules.minEquityPercent) / 100
+  const maxPurchaseAnalysis = {
+    ...maxPurchaseBase,
+    guarantorFreeCollateral: loanParameters.guarantorHomeValue != null
+      ? calcGuarantorFreeCollateral(loanParameters.guarantorHomeValue, loanParameters.guarantorMortgage ?? 0, maxLTV)
+      : undefined,
+    // Revers: hvor mye kausjon trengs for en valgfri målpris (samme tre grenser som forward).
+    kausjonForTarget: loanParameters.kausjonTargetPrice
+      ? (() => {
+          const r = kausjonNeededForPrice(
+            loanParameters.kausjonTargetPrice, equity, existingDebt, household, config,
+            loanParameters.interestRate, loanParameters.loanTermYears,
+            property.ownershipType, financeEstFee, property.sharedDebt ?? 0,
+          )
+          return { targetPrice: loanParameters.kausjonTargetPrice, ...r }
+        })()
+      : undefined,
+  }
 
   // 6. Regelstatus
   const status = buildScenarioStatus(
