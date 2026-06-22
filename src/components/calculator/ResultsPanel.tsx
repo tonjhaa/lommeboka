@@ -133,17 +133,20 @@ export function ResultsPanel({ scenarioId }: Props) {
       {/* 2. Maks kjøpsbeløp */}
       <MaxPurchaseCard analysis={analysis} />
 
-      {/* 3. Stresstest (fremtredende) */}
-      <AffordabilityCard analysis={analysis} />
-
-      {/* 4. EK + Gjeldsgrad */}
-      <div className="grid grid-cols-2 gap-3">
-        <EquityCard analysis={analysis} />
-        <DebtRatioCard analysis={analysis} />
-      </div>
-
-      {/* 5. Sparemål (kun når EK er utilstrekkelig) */}
-      <SavingsGoalCard analysis={analysis} />
+      {/* 3–5. Detaljkort (kollapsede) */}
+      <details className="rounded-lg border border-border/50 bg-card/40">
+        <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium hover:bg-muted/30">
+          Vis detaljer
+        </summary>
+        <div className="space-y-3 px-3 pb-3 pt-1">
+          <AffordabilityCard analysis={analysis} />
+          <div className="grid grid-cols-2 gap-3">
+            <EquityCard analysis={analysis} />
+            <DebtRatioCard analysis={analysis} />
+          </div>
+          <SavingsGoalCard analysis={analysis} />
+        </div>
+      </details>
 
       {/* 6. Fordelingsplan (bare ved medsøker) */}
       {distribution && <DistributionPlanSection plan={distribution} />}
