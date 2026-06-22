@@ -75,7 +75,7 @@ export function SpendingImporter({ onDone }: { onDone?: () => void }) {
       </div>
       <div className="max-h-96 space-y-1 overflow-y-auto">
         {sorted.map((r) => {
-          const idx = rows.indexOf(r)
+          const idx = rows.findIndex((x) => x.id === r.id)
           return (
             <div key={r.id} className="flex items-center gap-2 rounded-md border border-border/40 px-2 py-1 text-[11px]">
               <span className="w-20 shrink-0 text-muted-foreground">{r.date}</span>

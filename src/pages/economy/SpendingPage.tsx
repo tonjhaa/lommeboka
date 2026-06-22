@@ -1,27 +1,34 @@
 import { useState, useMemo } from 'react'
-import { useEconomyStore } from '@/application/useEconomyStore'
+import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
 import { aggregateByCategory } from '@/domain/economy/spendingCategorizer'
+import { lineAmt, monthInDateRange } from '@/domain/economy/budgetTableComputer'
 import { SpendingImporter } from '@/features/spending/SpendingImporter'
 import type { BudgetCategory } from '@/types/economy'
 
 const SPENDING_CATEGORIES: BudgetCategory[] = ['mat', 'transport', 'bolig', 'helse', 'abonnement', 'forsikring', 'klær', 'fritid', 'annet_forbruk']
 const fmt = (n: number) => Math.round(n).toLocaleString('no-NO') + ' kr'
+const nowYear = new Date().getFullYear()
 
 export function SpendingPage() {
-  const txs = useEconomyStore((s) => s.spendingTransactions)
-  const budgetTemplate = useEconomyStore((s) => s.budgetTemplate)
-  const now = new Date()
-  const [year, setYear] = useState(now.getFullYear())
-  const [month, setMonth] = useState(now.getMonth() + 1)
+  const txs = useActiveEconomyStore((s) => s.spendingTransactions)
+  const budgetLines = useActiveEconomyStore((s) => s.budgetTemplate.lines)
+  const [year, setYear] = useState(nowYear)
+  const [month, setMonth] = useState(new Date().getMonth() + 1)
 
   const actual = useMemo(() => aggregateByCategory(txs, year, month), [txs, year, month])
+  // Budsjett per kategori for VALGT måned — samme aktiveringslogikk som budsjettabellen
+  // (isRecurring/specificMonth/temporary-periode/periodOverride), ellers blir sammenligningen feil.
   const budgetByCat = useMemo(() => {
     const out: Partial<Record<BudgetCategory, number>> = {}
-    for (const l of budgetTemplate.lines) {
-      if (l.amount < 0) out[l.category] = (out[l.category] ?? 0) + Math.abs(l.amount)
+    for (const l of budgetLines) {
+      const active = l.isRecurring || (l.specificMonth === month && (!l.specificYear || l.specificYear === year))
+      if (!active) continue
+      if (!monthInDateRange(year, month, l.temporaryFromDate, l.temporaryToDate)) continue
+      const amt = lineAmt(l, year, month)
+      if (amt < 0) out[l.category] = (out[l.category] ?? 0) + Math.abs(amt)
     }
     return out
-  }, [budgetTemplate])
+  }, [budgetLines, year, month])
 
   return (
     <div className="h-full overflow-y-auto p-4 md:p-6 space-y-4">
@@ -32,7 +39,7 @@ export function SpendingPage() {
             {Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
           </select>
           <select value={year} onChange={(e) => setYear(parseInt(e.target.value, 10))} className="rounded border border-border/50 bg-background px-2 py-1" aria-label="År">
-            {[now.getFullYear(), now.getFullYear() - 1].map((y) => <option key={y} value={y}>{y}</option>)}
+            {[nowYear, nowYear - 1].map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
       </div>
