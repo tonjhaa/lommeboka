@@ -259,6 +259,15 @@ export function MaxPurchaseCard({ analysis }: CardProps) {
     affordability: 'Begrenset av betjeningsevne',
   }
 
+  const limitCeilingLabels: Record<typeof maxPurchase.limitingFactor, string> = {
+    equity: 'egenkapitalkravet',
+    debtRatio: 'gjeldsgradsregelen',
+    affordability: 'betjeningsevnen',
+  }
+
+  const kausjonApplied = maxPurchase.kausjonApplied
+  const gfc = maxPurchase.guarantorFreeCollateral
+
   return (
     <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
       <div className="flex items-center gap-2">
@@ -302,6 +311,46 @@ export function MaxPurchaseCard({ analysis }: CardProps) {
           <span className="font-medium">{formatCurrency(maxPurchase.maxLoanAmount)}</span>
         </div>
       </div>
+
+      {kausjonApplied > 0 && (
+        <div className="space-y-1.5 border-t border-border pt-2 text-xs">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Kausjon brukt</span>
+            <span className="font-medium text-foreground">{formatCurrency(kausjonApplied)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Uten kausjon</span>
+            <span className="text-foreground">
+              {formatCurrency(maxPurchase.maxPriceWithoutKausjon)}
+              {' → '}
+              <span className="font-medium text-primary">{formatCurrency(maxPurchase.maxPurchasePrice)}</span>
+            </span>
+          </div>
+          {maxPurchase.maxPurchasePrice === maxPurchase.kausjonCeiling && (
+            <p className="text-muted-foreground italic">
+              Begrenset av {limitCeilingLabels[maxPurchase.limitingFactor]} — mer kausjon hjelper ikke.
+            </p>
+          )}
+          {gfc != null && (
+            <>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Kausjonistens frie sikkerhet</span>
+                <span className="font-medium text-foreground">{formatCurrency(gfc)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Dekker kausjonen?</span>
+                {gfc >= kausjonApplied ? (
+                  <span className="text-green-400 font-medium">✓ dekker kausjonen</span>
+                ) : (
+                  <span className="text-red-400 font-medium">
+                    mangler {formatCurrency(kausjonApplied - gfc)}
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

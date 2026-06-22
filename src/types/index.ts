@@ -264,6 +264,8 @@ export interface MaxPurchaseAnalysis {
   maxPriceWithoutKausjon: number
   /** Taket kausjon ikke kommer forbi = min(gjeldsgrad, betjeningsevne). */
   kausjonCeiling: number
+  /** Kausjonistens frie pantesikkerhet (homeValue×0.9 − restgjeld). Kun satt når kausjonist-bolig er oppgitt. */
+  guarantorFreeCollateral?: number
 }
 
 /** Regelmelding fra vurderingen */

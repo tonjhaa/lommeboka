@@ -3,7 +3,7 @@ import { analyzeProperty } from './property'
 import { analyzeEquity } from './equity'
 import { analyzeDebtRatio } from './debtRatio'
 import { analyzeAffordability } from './affordability'
-import { analyzeMaxPurchase } from './maxPurchase'
+import { analyzeMaxPurchase, guarantorFreeCollateral as calcGuarantorFreeCollateral } from './maxPurchase'
 import { buildScenarioStatus } from './rules'
 import { buildAmortizationPlanWithSimulator } from './amortization'
 import { buildDistributionPlan } from './distribution'
@@ -96,7 +96,7 @@ export function calculateScenario(
   )
 
   // 5. Maks kjopsbeloep — samme forutsetninger som scenarioet (rente, lopetid, eierform)
-  const maxPurchaseAnalysis = analyzeMaxPurchase(
+  const maxPurchaseBase = analyzeMaxPurchase(
     equity,
     property.sharedDebt ?? 0,
     existingDebt,
@@ -111,6 +111,12 @@ export function calculateScenario(
     financeEstFee,
     loanParameters.kausjon ?? 0,
   )
+  const maxPurchaseAnalysis = {
+    ...maxPurchaseBase,
+    guarantorFreeCollateral: loanParameters.guarantorHomeValue != null
+      ? calcGuarantorFreeCollateral(loanParameters.guarantorHomeValue, loanParameters.guarantorMortgage ?? 0)
+      : undefined,
+  }
 
   // 6. Regelstatus
   const status = buildScenarioStatus(
