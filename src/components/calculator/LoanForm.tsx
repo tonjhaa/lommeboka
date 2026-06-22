@@ -169,8 +169,8 @@ export function LoanForm({ scenario, section = 'all' }: Props) {
         </div>
       )}
 
-      {/* --- Låne-sammendrag --- */}
-      {showAdvanced && (
+      {/* --- Låne-sammendrag — live-feedback på EK-inntastingen, hører ved essensiell EK-seksjon --- */}
+      {showEssential && (
         <div className="rounded-md bg-muted/40 px-4 py-3 space-y-1 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Kjøpspris</span>
