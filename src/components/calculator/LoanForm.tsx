@@ -273,6 +273,60 @@ export function LoanForm({ scenario }: Props) {
           step={500}
         />
       </div>
+
+      {/* --- Kausjon --- */}
+      <div className="rounded-md border border-border bg-card px-4 py-3 space-y-3">
+        <p className="text-sm font-medium text-foreground">Kausjon (valgfritt)</p>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="kausjon" className="flex items-center">
+            Kausjon (realkausjon)
+            <HelpTooltip content="Pant i kausjonistens bolig som stilles som sikkerhet for din boligkjøp. Teller som egenkapital i egenkapitalkravet, men ikke i gjeldsgrad eller betjeningsevne." />
+          </Label>
+          <NumberInput
+            id="kausjon"
+            value={loanParameters.kausjon ?? 0}
+            onChange={(v) => setLoan({ kausjon: v })}
+            suffix="kr"
+            min={0}
+            step={10_000}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="guarantorHomeValue" className="flex items-center">
+            Kausjonistens boligverdi
+            <HelpTooltip content="Markedsverdi på kausjonistens bolig. Brukes til å beregne kausjonistens ledige pantesikkerhet (boligverdi × 90% − restgjeld)." />
+          </Label>
+          <NumberInput
+            id="guarantorHomeValue"
+            value={loanParameters.guarantorHomeValue ?? 0}
+            onChange={(v) => setLoan({ guarantorHomeValue: v })}
+            suffix="kr"
+            min={0}
+            step={100_000}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="guarantorMortgage" className="flex items-center">
+            Kausjonistens restgjeld
+            <HelpTooltip content="Eksisterende gjeld med pant i kausjonistens bolig. Trekkes fra boligverdien for å finne ledig pantesikkerhet." />
+          </Label>
+          <NumberInput
+            id="guarantorMortgage"
+            value={loanParameters.guarantorMortgage ?? 0}
+            onChange={(v) => setLoan({ guarantorMortgage: v })}
+            suffix="kr"
+            min={0}
+            step={10_000}
+          />
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Kausjon (pant i kausjonistens bolig) løfter egenkapitalkravet — ikke gjeldsgrad eller betjeningsevne.
+        </p>
+      </div>
     </div>
   )
 }
