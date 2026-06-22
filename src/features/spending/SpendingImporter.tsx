@@ -29,16 +29,16 @@ export function SpendingImporter({ onDone }: { onDone?: () => void }) {
   }
 
   function setRowCategory(idx: number, category: BudgetCategory, applyToAll: boolean) {
-    setRows((prev) => {
-      if (!prev) return prev
-      const row = prev[idx]
-      if (applyToAll) {
-        const rule: CategoryRule = { id: crypto.randomUUID(), merchantKey: row.counterpartyKey, category, source: 'learned' }
-        setNewRules((r) => [...r.filter((x) => x.merchantKey !== rule.merchantKey), rule])
-        return prev.map((t) => t.counterpartyKey === row.counterpartyKey ? { ...t, category, categorySource: 'learned' } : t)
-      }
-      return prev.map((t, i) => i === idx ? { ...t, category, categorySource: 'manual' } : t)
-    })
+    if (!rows) return
+    if (applyToAll) {
+      const key = rows[idx].counterpartyKey
+      // To separate state-oppdateringer (ikke setNewRules inne i setRows-updater —
+      // det er en sideeffekt i en ren updater, og kan dobbelt-kjøres i StrictMode).
+      setNewRules((r) => [...r.filter((x) => x.merchantKey !== key), { id: crypto.randomUUID(), merchantKey: key, category, source: 'learned' }])
+      setRows((prev) => prev?.map((t) => t.counterpartyKey === key ? { ...t, category, categorySource: 'learned' } : t) ?? prev)
+    } else {
+      setRows((prev) => prev?.map((t, i) => i === idx ? { ...t, category, categorySource: 'manual' } : t) ?? prev)
+    }
   }
 
   function save() {
