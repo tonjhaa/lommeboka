@@ -163,6 +163,8 @@ export async function saveToSupabase(): Promise<void> {
     savingsPlanHorizon: state.savingsPlanHorizon,
     pensionSettings: state.pensionSettings,
     keyFigureOverrides: state.keyFigureOverrides,
+    spendingTransactions: state.spendingTransactions,
+    categoryRules: state.categoryRules,
     calibrationSettings: state.calibrationSettings,
     calibrationLog: state.calibrationLog,
     lockedCalibrationKeys: state.lockedCalibrationKeys,

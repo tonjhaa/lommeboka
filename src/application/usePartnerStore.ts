@@ -25,6 +25,8 @@ import type {
   FondPortfolio,
   ParsetLonnsslipp,
   PartnerVeikart,
+  BankSpendingTransaction,
+  CategoryRule,
 } from '@/types/economy'
 import { POLICY_RATE_HISTORY } from '@/config/economy.config'
 
@@ -509,6 +511,13 @@ export const usePartnerStore = create<EconomyState>()(
       keyFigureOverrides: [],
       setKeyFigureOverride: () => {},
       removeKeyFigureOverride: () => {},
+
+      spendingTransactions: [] as BankSpendingTransaction[],
+      categoryRules: [] as CategoryRule[],
+      addSpendingTransactions: () => {},
+      setSpendingTransactions: () => {},
+      setCategoryRule: () => {},
+      removeCategoryRule: () => {},
 
       calibrationSettings: DEFAULT_CALIBRATION_SETTINGS,
       calibrationLog: [],

@@ -38,6 +38,8 @@ import type {
   CalibrationSettings,
   CalibrationEntry,
   KeyFigureOverride,
+  BankSpendingTransaction,
+  CategoryRule,
 } from '@/types/economy'
 import { POLICY_RATE_HISTORY, LONNSVEKST_DEFAULT, GRUNNBELOP_VEKST_DEFAULT } from '@/config/economy.config'
 import { DEFAULT_BANK_PRESETS } from '@/config/bankPresets'
@@ -233,6 +235,13 @@ export interface EconomyState {
   setKeyFigureOverride: (o: KeyFigureOverride) => void
   removeKeyFigureOverride: (key: string, year: number) => void
 
+  spendingTransactions: BankSpendingTransaction[]
+  categoryRules: CategoryRule[]
+  addSpendingTransactions: (txs: BankSpendingTransaction[]) => void
+  setSpendingTransactions: (txs: BankSpendingTransaction[]) => void
+  setCategoryRule: (rule: CategoryRule) => void
+  removeCategoryRule: (merchantKey: string) => void
+
   calibrationSettings: CalibrationSettings
   calibrationLog: CalibrationEntry[]
   lockedCalibrationKeys: string[]
@@ -382,6 +391,8 @@ export const useEconomyStore = create<EconomyState>()(
 
       pensionSettings: null,
       keyFigureOverrides: [],
+      spendingTransactions: [],
+      categoryRules: [],
       calibrationSettings: DEFAULT_CALIBRATION_SETTINGS,
       // calibrationLog kappes til maks 50 nyeste ved skriving i importSlip — vokser ikke ubegrenset.
       calibrationLog: [],
@@ -399,6 +410,18 @@ export const useEconomyStore = create<EconomyState>()(
       })),
       removeKeyFigureOverride: (key, year) => set((s) => ({
         keyFigureOverrides: s.keyFigureOverrides.filter((x) => !(x.key === key && x.year === year)),
+      })),
+      addSpendingTransactions: (txs) => set((s) => {
+        const seen = new Set(s.spendingTransactions.map((t) => `${t.date}|${t.counterpartyKey}|${t.amount}`))
+        const fresh = txs.filter((t) => !seen.has(`${t.date}|${t.counterpartyKey}|${t.amount}`))
+        return { spendingTransactions: [...s.spendingTransactions, ...fresh] }
+      }),
+      setSpendingTransactions: (txs) => set({ spendingTransactions: txs }),
+      setCategoryRule: (rule) => set((s) => ({
+        categoryRules: [...s.categoryRules.filter((r) => r.merchantKey !== rule.merchantKey), rule],
+      })),
+      removeCategoryRule: (merchantKey) => set((s) => ({
+        categoryRules: s.categoryRules.filter((r) => r.merchantKey !== merchantKey),
       })),
       setCalibrationSettings: (s) => set({ calibrationSettings: s }),
       lockCalibration: (key) => set((st) => ({
@@ -1251,6 +1274,8 @@ export const useEconomyStore = create<EconomyState>()(
             savingsPlanHorizon: data.savingsPlanHorizon ?? 48,
             pensionSettings: data.pensionSettings ?? null,
             keyFigureOverrides: data.keyFigureOverrides ?? [],
+            spendingTransactions: data.spendingTransactions ?? [],
+            categoryRules: data.categoryRules ?? [],
             calibrationSettings: data.calibrationSettings ?? DEFAULT_CALIBRATION_SETTINGS,
             calibrationLog: data.calibrationLog ?? [],
             lockedCalibrationKeys: data.lockedCalibrationKeys ?? [],
@@ -1293,7 +1318,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 26,
+      version: 27,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v20 → v21: migrer tieredRates (snapshot) til tieredRateHistory (tidsserie)
@@ -1502,6 +1527,11 @@ export const useEconomyStore = create<EconomyState>()(
         if (fromVersion < 26 && !Array.isArray(state.keyFigureOverrides)) {
           state.keyFigureOverrides = []
         }
+        // v26 → v27: initialiser spendingTransactions og categoryRules for eksisterende brukere
+        if (fromVersion < 27) {
+          if (!Array.isArray(state.spendingTransactions)) state.spendingTransactions = []
+          if (!Array.isArray(state.categoryRules)) state.categoryRules = []
+        }
         return state
       },
       partialize: (state) => ({
@@ -1538,6 +1568,8 @@ export const useEconomyStore = create<EconomyState>()(
         lastGlobalPriceCheckAt: state.lastGlobalPriceCheckAt,
         pensionSettings: state.pensionSettings,
         keyFigureOverrides: state.keyFigureOverrides,
+        spendingTransactions: state.spendingTransactions,
+        categoryRules: state.categoryRules,
         calibrationSettings: state.calibrationSettings,
         calibrationLog: state.calibrationLog,
         lockedCalibrationKeys: state.lockedCalibrationKeys,
