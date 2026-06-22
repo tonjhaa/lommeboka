@@ -694,7 +694,7 @@ export type EconomyTab =
   | 'dashboard' | 'budget' | 'salary' | 'atf' | 'feriepenger'
   | 'savings' | 'fond' | 'debt' | 'absence' | 'tax'
   | 'subscriptions' | 'ivf' | 'vacation' | 'settings' | 'veikart' | 'gaver' | 'partner' | 'permisjon'
-  | 'pension' | 'formue' | 'calibration' | 'scenario'
+  | 'pension' | 'formue' | 'calibration' | 'scenario' | 'forbruk'
 
 export interface UserPreferences {
   onboardingCompleted: boolean

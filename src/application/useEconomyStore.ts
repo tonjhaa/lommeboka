@@ -1234,6 +1234,9 @@ export const useEconomyStore = create<EconomyState>()(
           if (prefs?.enabledTabs && !prefs.enabledTabs.includes('scenario')) {
             prefs.enabledTabs = [...prefs.enabledTabs, 'scenario']
           }
+          if (prefs?.enabledTabs && !prefs.enabledTabs.includes('forbruk')) {
+            prefs.enabledTabs = [...prefs.enabledTabs, 'forbruk']
+          }
           // Saniter profil fra sky/backup: OF11 (feriepenger) skal aldri ligge som
           // månedlig fast tillegg — eldre lagret data kan fortsatt ha den.
           let importedProfile = (data.profile ?? null) as EmploymentProfile | null
@@ -1364,6 +1367,13 @@ export const useEconomyStore = create<EconomyState>()(
           const prefs = state.userPreferences as { enabledTabs?: string[] }
           if (Array.isArray(prefs.enabledTabs) && !prefs.enabledTabs.includes('scenario')) {
             prefs.enabledTabs = [...prefs.enabledTabs, 'scenario']
+          }
+        }
+        // v26 → v27: legg til 'forbruk' i enabledTabs for eksisterende brukere
+        if (fromVersion < 27 && state.userPreferences) {
+          const prefs = state.userPreferences as { enabledTabs?: string[] }
+          if (Array.isArray(prefs.enabledTabs) && !prefs.enabledTabs.includes('forbruk')) {
+            prefs.enabledTabs = [...prefs.enabledTabs, 'forbruk']
           }
         }
         // v19 → v20: forventede lønnsoppgjør slås AV i prognosen som standard.

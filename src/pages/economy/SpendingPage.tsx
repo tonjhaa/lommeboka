@@ -1,0 +1,69 @@
+import { useState, useMemo } from 'react'
+import { useEconomyStore } from '@/application/useEconomyStore'
+import { aggregateByCategory } from '@/domain/economy/spendingCategorizer'
+import { SpendingImporter } from '@/features/spending/SpendingImporter'
+import type { BudgetCategory } from '@/types/economy'
+
+const SPENDING_CATEGORIES: BudgetCategory[] = ['mat', 'transport', 'bolig', 'helse', 'abonnement', 'forsikring', 'klær', 'fritid', 'annet_forbruk']
+const fmt = (n: number) => Math.round(n).toLocaleString('no-NO') + ' kr'
+
+export function SpendingPage() {
+  const txs = useEconomyStore((s) => s.spendingTransactions)
+  const budgetTemplate = useEconomyStore((s) => s.budgetTemplate)
+  const now = new Date()
+  const [year, setYear] = useState(now.getFullYear())
+  const [month, setMonth] = useState(now.getMonth() + 1)
+
+  const actual = useMemo(() => aggregateByCategory(txs, year, month), [txs, year, month])
+  const budgetByCat = useMemo(() => {
+    const out: Partial<Record<BudgetCategory, number>> = {}
+    for (const l of budgetTemplate.lines) {
+      if (l.amount < 0) out[l.category] = (out[l.category] ?? 0) + Math.abs(l.amount)
+    }
+    return out
+  }, [budgetTemplate])
+
+  return (
+    <div className="h-full overflow-y-auto p-4 md:p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Forbruk</h2>
+        <div className="flex items-center gap-2 text-sm">
+          <select value={month} onChange={(e) => setMonth(parseInt(e.target.value, 10))} className="rounded border border-border/50 bg-background px-2 py-1" aria-label="Måned">
+            {Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
+          </select>
+          <select value={year} onChange={(e) => setYear(parseInt(e.target.value, 10))} className="rounded border border-border/50 bg-background px-2 py-1" aria-label="År">
+            {[now.getFullYear(), now.getFullYear() - 1].map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-border/50 bg-card/60 p-4">
+        <h3 className="mb-2 text-sm font-medium">Importer brukskonto</h3>
+        <SpendingImporter />
+      </div>
+
+      <div className="rounded-xl border border-border/50 bg-card/60 p-4">
+        <h3 className="mb-2 text-sm font-medium">Forbruk vs budsjett — {month}/{year}</h3>
+        <div className="space-y-1.5">
+          {SPENDING_CATEGORIES.map((c) => {
+            const a = actual[c] ?? 0
+            const b = budgetByCat[c] ?? 0
+            if (a === 0 && b === 0) return null
+            const diff = a - b
+            return (
+              <div key={c} className="flex items-center justify-between text-[12px]">
+                <span className="capitalize">{c.replace('_', ' ')}</span>
+                <span className="flex items-center gap-3 font-mono">
+                  <span className="text-muted-foreground">{fmt(b)}</span>
+                  <span>{fmt(a)}</span>
+                  <span className={diff > 0 ? 'text-red-400' : 'text-green-400'}>{diff > 0 ? '+' : ''}{fmt(diff)}</span>
+                </span>
+              </div>
+            )
+          })}
+        </div>
+        <p className="mt-2 text-[10px] text-muted-foreground/60">Budsjett · faktisk · avvik. Kalibrering av prognosen mot dette kommer senere.</p>
+      </div>
+    </div>
+  )
+}
