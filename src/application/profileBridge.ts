@@ -1,6 +1,8 @@
 import type { ScenarioInput } from '@/types'
 import { useEconomyStore } from './useEconomyStore'
 import { computeEffectiveBalance } from '@/domain/economy/savingsCalculator'
+import { projectIncomeToYear, projectEquityToYear, projectDebtToYear, projectPartnerToYear } from '@/domain/economy/bridgeProjection'
+import { LONNSVEKST_DEFAULT } from '@/config/economy.config'
 
 /**
  * Henter relevante felt fra EconomyStore til boligkalkulator.
@@ -33,15 +35,30 @@ function calcBridgeEquity(): { total: number; accountCount: number; fondValue: n
   return { total: Math.round(accountSum + fondValue), accountCount: accounts.length, fondValue }
 }
 
-export function extractLoanInputFromEconomy(): Partial<ScenarioInput> {
+export function extractLoanInputFromEconomy(targetYear?: number): Partial<ScenarioInput> {
   const state = useEconomyStore.getState()
-  const { profile, debts } = state
+  const { profile, savingsAccounts, fondPortfolio, debts } = state
 
   if (!profile) return {}
 
-  const grossAnnualIncome = calcBridgeIncome(profile)
-  const { total: totalEquity } = calcBridgeEquity()
-  const existingDebt = debts.filter(d => d.status !== 'nedbetalt').reduce((s, d) => s + d.currentBalance, 0)
+  const now = new Date()
+  const nowYear = now.getFullYear()
+  const nowMonth = now.getMonth() + 1
+  const year = targetYear ?? nowYear
+  const nowObj = { year: nowYear, month: nowMonth }
+
+  // Inntekt: nå-inntekt framskrevet med lønnsvekst til målåret (eksponent 0 = uendret)
+  const nowIncome = calcBridgeIncome(profile)
+  const grossAnnualIncome = projectIncomeToYear(nowIncome, nowYear, year, LONNSVEKST_DEFAULT)
+
+  // EK: alle equity-kontoer (inkl. 'fond'-type savings accounts) via savingsBalanceAt
+  //     + fondPortfolio separat via fondValueAt — samme semantikk som calcBridgeEquity
+  const equityAccounts = (savingsAccounts ?? []).filter((a) => EQUITY_ACCOUNT_TYPES.has(a.type))
+  const totalEquity = projectEquityToYear(equityAccounts, fondPortfolio!, year, nowMonth, nowObj)
+
+  // Gjeld: aktive lån via debtBalanceAt (lineær for fortid, nedbetalingsplan for fremtid)
+  const activeDebts = debts.filter(d => d.status !== 'nedbetalt')
+  const existingDebt = projectDebtToYear(activeDebts, year, nowMonth, nowObj)
 
   return {
     household: {
@@ -64,10 +81,11 @@ export function extractLoanInputFromEconomy(): Partial<ScenarioInput> {
 
 /**
  * Henter tekst som forklarer hvilke felter som ble hentet og fra hvilke kilder.
+ * targetYear: fremtidig kjøpsår — tekst nevner «anslag for {år}» når fremtidig.
  */
-export function getProfileBridgeSummary(): string[] {
+export function getProfileBridgeSummary(targetYear?: number): string[] {
   const state = useEconomyStore.getState()
-  const { profile, debts } = state
+  const { profile, savingsAccounts, fondPortfolio, debts } = state
   const lines: string[] = []
 
   if (!profile) {
@@ -75,23 +93,35 @@ export function getProfileBridgeSummary(): string[] {
     return lines
   }
 
-  const grossAnnualIncome = calcBridgeIncome(profile)
+  const now = new Date()
+  const nowYear = now.getFullYear()
+  const nowMonth = now.getMonth() + 1
+  const year = targetYear ?? nowYear
+  const nowObj = { year: nowYear, month: nowMonth }
+  const isFuture = year > nowYear
+
+  const nowIncome = calcBridgeIncome(profile)
+  const grossAnnualIncome = projectIncomeToYear(nowIncome, nowYear, year, LONNSVEKST_DEFAULT)
+  const anslagSuffix = isFuture ? ` (anslag for ${year})` : ''
+
   lines.push(
-    `Bruttoårslønn: ${grossAnnualIncome.toLocaleString('no-NO')} kr (grunnlønn + faste tillegg, ekskl. midlertidige)`
+    `Bruttoårslønn: ${grossAnnualIncome.toLocaleString('no-NO')} kr (grunnlønn + faste tillegg, ekskl. midlertidige)${anslagSuffix}`
   )
 
-  const { total: totalEquity, accountCount, fondValue } = calcBridgeEquity()
+  const equityAccounts = (savingsAccounts ?? []).filter((a) => EQUITY_ACCOUNT_TYPES.has(a.type))
+  const totalEquity = projectEquityToYear(equityAccounts, fondPortfolio!, year, nowMonth, nowObj)
+  const accountCount = equityAccounts.length
   if (totalEquity > 0) {
     lines.push(
-      `Egenkapital: ${totalEquity.toLocaleString('no-NO')} kr (${accountCount} konto(er)` +
-      `${fondValue > 0 ? ` + fond ${fondValue.toLocaleString('no-NO')} kr` : ''})`
+      `Egenkapital: ${totalEquity.toLocaleString('no-NO')} kr (${accountCount} konto(er))${anslagSuffix}`
     )
   }
 
-  const existingDebt = debts.filter(d => d.status !== 'nedbetalt').reduce((s, d) => s + d.currentBalance, 0)
+  const activeDebts = debts.filter(d => d.status !== 'nedbetalt')
+  const existingDebt = projectDebtToYear(activeDebts, year, nowMonth, nowObj)
   if (existingDebt > 0) {
     lines.push(
-      `Eksisterende gjeld: ${existingDebt.toLocaleString('no-NO')} kr (${debts.filter(d => d.status !== 'nedbetalt').length} lån)`
+      `Eksisterende gjeld: ${existingDebt.toLocaleString('no-NO')} kr (${activeDebts.length} lån)${anslagSuffix}`
     )
   }
 
@@ -113,8 +143,9 @@ export function getCurrentBridgeValues(): { grossIncome: number; equity: number;
 /**
  * Henter medsøker-tall fra Partner-dataene (partnerVeikart — samme kilde som
  * Sparing-månedsoversikten og Veikart bruker).
+ * targetYear: fremtidig kjøpsår — projiserer inntekt/EK/gjeld; summary nevner året.
  */
-export function extractCoApplicantFromPartner(): {
+export function extractCoApplicantFromPartner(targetYear?: number): {
   grossIncome: number
   existingDebt: number
   label: string
@@ -124,25 +155,28 @@ export function extractCoApplicantFromPartner(): {
   const { partnerVeikart } = useEconomyStore.getState()
   if (!partnerVeikart?.enabled) return null
 
-  const grossIncome = Math.round(partnerVeikart.annualIncome ?? 0)
-  const existingDebt = Math.round(
-    (partnerVeikart.debts?.length ?? 0) > 0
-      ? partnerVeikart.debts!.reduce((s, d) => s + d.currentBalance, 0)
-      : partnerVeikart.debt ?? 0
-  )
-  const equityContribution = Math.round(
-    (partnerVeikart.accounts ?? []).reduce((s, a) => s + a.balance, 0) +
-    (partnerVeikart.bsu ?? 0) +
-    (partnerVeikart.fondCurrentValue ?? 0)
-  )
+  const now = new Date()
+  const nowYear = now.getFullYear()
+  const nowMonth = now.getMonth() + 1
+  const year = targetYear ?? nowYear
+  const nowObj = { year: nowYear, month: nowMonth }
+  const isFuture = year > nowYear
+  const anslagSuffix = isFuture ? ` (anslag for ${year})` : ''
+
+  const projected = projectPartnerToYear(partnerVeikart, year, nowMonth, nowObj, LONNSVEKST_DEFAULT)
+  if (!projected) return null
+
+  const grossIncome = projected.grossIncome
+  const existingDebt = projected.debt
+  const equityContribution = projected.equity
   const label = partnerVeikart.partnerName || 'Partner'
 
   const summary = [
-    `${label}: bruttoårslønn ${grossIncome.toLocaleString('no-NO')} kr (fra Partner-fanen)`,
-    `${label}: egenkapital ${equityContribution.toLocaleString('no-NO')} kr (kontoer + BSU + fond)`,
+    `${label}: bruttoårslønn ${grossIncome.toLocaleString('no-NO')} kr (fra Partner-fanen)${anslagSuffix}`,
+    `${label}: egenkapital ${equityContribution.toLocaleString('no-NO')} kr (kontoer + BSU + fond)${anslagSuffix}`,
   ]
   if (existingDebt > 0) {
-    summary.push(`${label}: eksisterende gjeld ${existingDebt.toLocaleString('no-NO')} kr`)
+    summary.push(`${label}: eksisterende gjeld ${existingDebt.toLocaleString('no-NO')} kr${anslagSuffix}`)
   }
 
   return { grossIncome, existingDebt, label, equityContribution, summary }
