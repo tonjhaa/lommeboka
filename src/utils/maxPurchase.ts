@@ -241,17 +241,18 @@ export function kausjonNeededForPrice(
   loanTermYears: number = config.loanDefaults.defaultLoanTermYears,
   ownershipType: OwnershipType = 'selveier',
   financeAllFees = false,
+  sharedDebt = 0,
 ): { kausjonNeeded: number; reachable: boolean; ceiling: number } {
   const minEqPct = config.lendingRules.minEquityPercent / 100
   const feeBreakdown = calcAcquisitionFees(targetPrice, config.fees, ownershipType, financeAllFees)
   const effEq = calcEffectiveEquity(equity, feeBreakdown.totalFees)
-  // Påkrevd egenkapital ved målpris (samme EK-regel som maxPriceByEquity bruker)
-  const requiredEquity = targetPrice * minEqPct
+  // Påkrevd egenkapital ved målpris — samme EK-regel som maxPriceByEquity: (pris + fellesgjeld) × minEqPct.
+  const requiredEquity = (targetPrice + sharedDebt) * minEqPct
   const kausjonNeeded = Math.max(0, Math.round(requiredEquity - effEq))
 
-  // Taket: gjeldsgrad + betjeningsevne (kausjon hjelper ikke forbi dette)
+  // Taket: gjeldsgrad + betjeningsevne (kausjon hjelper ikke forbi dette). Samme fellesgjeld.
   const a = analyzeMaxPurchase(
-    equity, 0, existingDebt, household, 0, 0, 0, config,
+    equity, sharedDebt, existingDebt, household, 0, 0, 0, config,
     interestRate, loanTermYears, ownershipType, financeAllFees,
   )
   const ceiling = a.kausjonCeiling

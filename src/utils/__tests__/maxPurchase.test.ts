@@ -62,6 +62,12 @@ describe('kausjonNeededForPrice', () => {
     expect(r.reachable).toBe(false)
     expect(r.ceiling).toBeLessThan(50_000_000)
   })
+  it('fellesgjeld øker nødvendig kausjon (samme EK-regel som forward)', () => {
+    const utenFelles = kausjonNeededForPrice(2_000_000, 100_000, 0, household, defaultConfig, 5.5, 25, 'andel', false, 0)
+    const medFelles = kausjonNeededForPrice(2_000_000, 100_000, 0, household, defaultConfig, 5.5, 25, 'andel', false, 500_000)
+    // EK-krav er (pris + fellesgjeld) × 10% → 500k fellesgjeld ⇒ +50k kausjon
+    expect(medFelles.kausjonNeeded - utenFelles.kausjonNeeded).toBe(50_000)
+  })
 })
 
 describe('guarantorFreeCollateral', () => {
