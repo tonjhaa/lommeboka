@@ -108,7 +108,8 @@ export function calculateScenario(
     loanParameters.interestRate,
     loanParameters.loanTermYears,
     property.ownershipType,
-    financeEstFee
+    financeEstFee,
+    loanParameters.kausjon ?? 0,
   )
 
   // 6. Regelstatus

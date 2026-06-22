@@ -78,6 +78,12 @@ export interface LoanParametersInput {
   stressTestRate?: number
   /** Ekstra månedlige kostnader husstanden har (barnehage, bilkostnader, etc.) */
   extraMonthlyExpenses?: number
+  /** Kausjon (realkausjon) i NOK — løfter egenkapitalkravet i kalkulatoren. */
+  kausjon?: number
+  /** Kausjonistens boligverdi i NOK (for sjekk av fri pantesikkerhet). */
+  guarantorHomeValue?: number
+  /** Kausjonistens restgjeld på egen bolig i NOK. */
+  guarantorMortgage?: number
   /** Finansier alle kjøpsgebyrer i lånets saldo (true) eller betal kontant av EK (false) */
   financeAllFees?: boolean
   /** Renteendring i nedbetalingsplanen (simulering) */
