@@ -253,16 +253,11 @@ export function AffordabilityCard({ analysis }: CardProps) {
 export function MaxPurchaseCard({ analysis }: CardProps) {
   const { maxPurchase } = analysis
 
-  const limitLabels: Record<typeof maxPurchase.limitingFactor, string> = {
-    equity: 'Begrenset av egenkapital',
-    debtRatio: 'Begrenset av gjeldsgrad',
-    affordability: 'Begrenset av betjeningsevne',
-  }
-
-  const limitCeilingLabels: Record<typeof maxPurchase.limitingFactor, string> = {
-    equity: 'egenkapitalkravet',
-    debtRatio: 'gjeldsgradsregelen',
-    affordability: 'betjeningsevnen',
+  // Ett record for begge label-variantene → en ny limitingFactor må kun legges til ett sted.
+  const limitFactorMeta: Record<typeof maxPurchase.limitingFactor, { label: string; ceiling: string }> = {
+    equity: { label: 'Begrenset av egenkapital', ceiling: 'egenkapitalkravet' },
+    debtRatio: { label: 'Begrenset av gjeldsgrad', ceiling: 'gjeldsgradsregelen' },
+    affordability: { label: 'Begrenset av betjeningsevne', ceiling: 'betjeningsevnen' },
   }
 
   const kausjonApplied = maxPurchase.kausjonApplied
@@ -283,7 +278,7 @@ export function MaxPurchaseCard({ analysis }: CardProps) {
           {formatCurrency(maxPurchase.maxPurchasePrice)}
         </p>
         <p className="text-xs text-muted-foreground mt-1">
-          {limitLabels[maxPurchase.limitingFactor]}
+          {limitFactorMeta[maxPurchase.limitingFactor].label}
         </p>
       </div>
 
@@ -328,7 +323,7 @@ export function MaxPurchaseCard({ analysis }: CardProps) {
           </div>
           {maxPurchase.maxPurchasePrice === maxPurchase.kausjonCeiling && (
             <p className="text-muted-foreground italic">
-              Begrenset av {limitCeilingLabels[maxPurchase.limitingFactor]} — mer kausjon hjelper ikke.
+              Begrenset av {limitFactorMeta[maxPurchase.limitingFactor].ceiling} — mer kausjon hjelper ikke.
             </p>
           )}
           {gfc != null && (
