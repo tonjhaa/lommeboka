@@ -29,6 +29,7 @@ describe('analyzeMaxPurchase — kausjon-invariant', () => {
 describe('analyzeMaxPurchase — kausjon løfter KUN EK-grensen', () => {
   it('kausjon hever maxByEquity, men ikke debtRatio/affordability', () => {
     const base = analyze(400_000, 0)        // lav EK → EK binder
+    expect(base.limitingFactor).toBe('equity')  // guard: testen er kun meningsfull når EK binder
     const withK = analyze(400_000, 1_000_000)
     expect(withK.maxByEquity).toBeGreaterThan(base.maxByEquity)
     expect(withK.maxByDebtRatio).toBe(base.maxByDebtRatio)
