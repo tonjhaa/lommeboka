@@ -346,6 +346,26 @@ export function MaxPurchaseCard({ analysis }: CardProps) {
           )}
         </div>
       )}
+
+      {maxPurchase.kausjonForTarget && (
+        <div className="space-y-1 border-t border-border pt-2 text-xs">
+          {maxPurchase.kausjonForTarget.reachable ? (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">
+                For å nå {formatCurrency(maxPurchase.kausjonForTarget.targetPrice)}
+              </span>
+              <span className="font-medium text-foreground">
+                trenger {formatCurrency(maxPurchase.kausjonForTarget.kausjonNeeded)} kausjon
+              </span>
+            </div>
+          ) : (
+            <p className="text-amber-400">
+              Kausjon hjelper opp til {formatCurrency(maxPurchase.kausjonForTarget.ceiling)}. For å nå{' '}
+              {formatCurrency(maxPurchase.kausjonForTarget.targetPrice)} må inntekt øke eller annen gjeld ned.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -84,6 +84,8 @@ export interface LoanParametersInput {
   guarantorHomeValue?: number
   /** Kausjonistens restgjeld på egen bolig i NOK. */
   guarantorMortgage?: number
+  /** Valgfri målpris (NOK): regn ut hvor mye kausjon som trengs for å nå denne. */
+  kausjonTargetPrice?: number
   /** Finansier alle kjøpsgebyrer i lånets saldo (true) eller betal kontant av EK (false) */
   financeAllFees?: boolean
   /** Renteendring i nedbetalingsplanen (simulering) */
@@ -266,6 +268,8 @@ export interface MaxPurchaseAnalysis {
   kausjonCeiling: number
   /** Kausjonistens frie pantesikkerhet (homeValue×0.9 − restgjeld). Kun satt når kausjonist-bolig er oppgitt. */
   guarantorFreeCollateral?: number
+  /** Revers: hvor mye kausjon trengs for en målpris. Kun satt når målpris er oppgitt. */
+  kausjonForTarget?: { targetPrice: number; kausjonNeeded: number; reachable: boolean; ceiling: number }
 }
 
 /** Regelmelding fra vurderingen */

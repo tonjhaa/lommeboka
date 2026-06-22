@@ -167,8 +167,10 @@ export function analyzeMaxPurchase(
     household.coApplicant?.otherIncome
   )
 
-  // EK-grensen bruker equity + kausjon; beholder også uten-kausjon-variant for diff-visning
-  const maxByEquity = maxPriceByEquity(equity + kausjon, sharedDebt, config, ownershipType, financeAllFees)
+  // EK-grensen bruker equity + kausjon; beholder også uten-kausjon-variant for diff-visning.
+  // Floor på 0 gjør den rene funksjonen robust uavhengig av kaller (UI hindrer negativ input).
+  const safeKausjon = Math.max(0, kausjon)
+  const maxByEquity = maxPriceByEquity(equity + safeKausjon, sharedDebt, config, ownershipType, financeAllFees)
   const maxByEquityNoKausjon = maxPriceByEquity(equity, sharedDebt, config, ownershipType, financeAllFees)
 
   // Gjeldsgrad og betjeningsevne er UENDRET — bruker kun equity (ikke kausjon)
@@ -221,7 +223,7 @@ export function analyzeMaxPurchase(
     maxPurchasePrice,
     limitingFactor,
     maxLoanAmount: Math.round(maxLoanAmount),
-    kausjonApplied: kausjon,
+    kausjonApplied: safeKausjon,
     maxPriceWithoutKausjon,
     kausjonCeiling,
   }

@@ -40,6 +40,12 @@ describe('analyzeMaxPurchase — kausjon løfter KUN EK-grensen', () => {
     expect(withK.maxPurchasePrice).toBe(withK.kausjonCeiling)
     expect(withK.maxPurchasePrice).toBeLessThanOrEqual(Math.min(withK.maxByDebtRatio, withK.maxByAffordability))
   })
+  it('negativ kausjon flooret til 0 (defensiv) ⇒ uendret fra kausjon=0', () => {
+    const base = analyze(400_000, 0)
+    const neg = analyze(400_000, -500_000)
+    expect(neg.kausjonApplied).toBe(0)
+    expect(neg.maxPurchasePrice).toBe(base.maxPurchasePrice)
+  })
   it('kausjon på en allerede gjeldsgrad-/betjeningsbundet bruker ⇒ 0 løft', () => {
     const base = analyze(5_000_000, 0)        // høy EK → ikke EK-bundet
     const withK = analyze(5_000_000, 2_000_000)

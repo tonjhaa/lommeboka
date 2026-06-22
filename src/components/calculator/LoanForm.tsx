@@ -323,6 +323,21 @@ export function LoanForm({ scenario }: Props) {
           />
         </div>
 
+        <div className="space-y-1.5">
+          <Label htmlFor="kausjonTargetPrice" className="flex items-center">
+            Målpris (regn nødvendig kausjon)
+            <HelpTooltip content="Oppgi en ønsket kjøpesum, så regner kalkulatoren ut hvor mye kausjon du trenger for å nå den — eller forteller om den ligger over taket gjeldsgrad/betjeningsevne setter." />
+          </Label>
+          <NumberInput
+            id="kausjonTargetPrice"
+            value={loanParameters.kausjonTargetPrice ?? 0}
+            onChange={(v) => setLoan({ kausjonTargetPrice: v })}
+            suffix="kr"
+            min={0}
+            step={100_000}
+          />
+        </div>
+
         <p className="text-xs text-muted-foreground">
           Kausjon (pant i kausjonistens bolig) løfter egenkapitalkravet — ikke gjeldsgrad eller betjeningsevne.
         </p>
