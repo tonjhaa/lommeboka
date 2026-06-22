@@ -411,6 +411,10 @@ export const useEconomyStore = create<EconomyState>()(
       removeKeyFigureOverride: (key, year) => set((s) => ({
         keyFigureOverrides: s.keyFigureOverrides.filter((x) => !(x.key === key && x.year === year)),
       })),
+      // Dedup mot EKSISTERENDE transaksjoner på (dato|motpart|beløp) — hindrer at re-import
+      // av samme CSV lager duplikater. Banken gir ingen transaksjons-ID, så to genuint ulike
+      // kjøp med identisk dato/motpart/beløp i SEPARATE importøkter kan ikke skilles; den andre
+      // suppresses (sjelden, akseptert trade-off). Identiske kjøp i SAMME CSV importeres begge.
       addSpendingTransactions: (txs) => set((s) => {
         const seen = new Set(s.spendingTransactions.map((t) => `${t.date}|${t.counterpartyKey}|${t.amount}`))
         const fresh = txs.filter((t) => !seen.has(`${t.date}|${t.counterpartyKey}|${t.amount}`))
