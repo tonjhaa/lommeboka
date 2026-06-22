@@ -84,7 +84,9 @@ function ApplicantFields({
 export function HouseholdForm({ scenario, section = 'all' }: Props) {
   const update = useAppStore((s) => s.updateScenario)
   const { household } = scenario
-  const [hasCoApplicant, setHasCoApplicant] = useState(Boolean(household.coApplicant))
+  // Utled fra storen (ikke lokal state): HouseholdForm rendres to ganger (essential + advanced),
+  // så lokal state ville desynke — «Hent medsøker»-knappen i én instans må vises i den andre.
+  const hasCoApplicant = Boolean(household.coApplicant)
   const [bridgeSummary, setBridgeSummary] = useState<string[] | null>(null)
   const showEssential = section === 'all' || section === 'essential'
   const showAdvanced = section === 'all' || section === 'advanced'
@@ -94,7 +96,6 @@ export function HouseholdForm({ scenario, section = 'all' }: Props) {
   }
 
   function toggleCoApplicant(checked: boolean) {
-    setHasCoApplicant(checked)
     if (checked) {
       setHousehold({
         coApplicant: { grossIncome: 0, existingDebt: 0, label: 'Søker 2' },
@@ -164,7 +165,6 @@ export function HouseholdForm({ scenario, section = 'all' }: Props) {
       },
       loanParameters: { ...scenario.loanParameters, equity: p1EK + partner.equityContribution },
     })
-    setHasCoApplicant(true)
     setBridgeSummary(partner.summary)
   }
 
