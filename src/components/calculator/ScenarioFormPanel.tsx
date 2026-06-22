@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { useAppStore } from '@/store/useAppStore'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { PropertyForm } from './PropertyForm'
 import { HouseholdForm } from './HouseholdForm'
 import { LoanForm } from './LoanForm'
-import { Home, Users, CreditCard, Pencil, Check } from 'lucide-react'
+import { Pencil, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
 import { calcAcquisitionFees } from '@/utils/property'
@@ -101,34 +100,36 @@ export function ScenarioFormPanel({ scenario }: Props) {
         )}
       </div>
 
-      {/* Inndata-faner */}
+      {/* Inndata — essensielt alltid synlig, avansert bak details */}
       <div className="flex-1 overflow-y-auto p-4">
-        <Tabs defaultValue="property">
-          <TabsList className="w-full mb-2">
-            <TabsTrigger value="property" className="flex-1 gap-1.5 text-xs">
-              <Home className="h-3.5 w-3.5" />
-              Bolig
-            </TabsTrigger>
-            <TabsTrigger value="household" className="flex-1 gap-1.5 text-xs">
-              <Users className="h-3.5 w-3.5" />
-              Husholdning
-            </TabsTrigger>
-            <TabsTrigger value="loan" className="flex-1 gap-1.5 text-xs">
-              <CreditCard className="h-3.5 w-3.5" />
-              Lån
-            </TabsTrigger>
-          </TabsList>
+        <div className="space-y-4">
+          {/* Essensielle felt — alltid synlig */}
+          <HouseholdForm scenario={scenario} section="essential" />
+          <LoanForm scenario={scenario} section="essential" />
+          <PropertyForm scenario={scenario} section="essential" />
 
-          <TabsContent value="property">
-            <PropertyForm scenario={scenario} />
-          </TabsContent>
-          <TabsContent value="household">
-            <HouseholdForm scenario={scenario} />
-          </TabsContent>
-          <TabsContent value="loan">
-            <LoanForm scenario={scenario} />
-          </TabsContent>
-        </Tabs>
+          {/* Progressiv avsløring */}
+          <details className="rounded-lg border border-border/50 bg-card/40">
+            <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium hover:bg-muted/30">
+              Boligdetaljer
+            </summary>
+            <div className="px-3 pb-3 pt-1"><PropertyForm scenario={scenario} section="advanced" /></div>
+          </details>
+
+          <details className="rounded-lg border border-border/50 bg-card/40">
+            <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium hover:bg-muted/30">
+              Husstand & medsøker
+            </summary>
+            <div className="px-3 pb-3 pt-1"><HouseholdForm scenario={scenario} section="advanced" /></div>
+          </details>
+
+          <details className="rounded-lg border border-border/50 bg-card/40">
+            <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium hover:bg-muted/30">
+              Avanserte lånevilkår
+            </summary>
+            <div className="px-3 pb-3 pt-1"><LoanForm scenario={scenario} section="advanced" /></div>
+          </details>
+        </div>
       </div>
 
       {/* Alltid-synlig lånesammendrag */}
