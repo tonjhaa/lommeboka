@@ -47,6 +47,12 @@ describe('categorize — presedens', () => {
   it('ord-grense: «datasats» treffer IKKE seed «sats» (falsk-positiv-vern)', () => {
     expect(categorize(normalizeCounterparty('DATASATS AS'), seedCategoryRules()).category).toBeNull()
   })
+  it('helord: «sparebank» treffer IKKE seed «spar» (falsk-positiv andre vei)', () => {
+    expect(categorize(normalizeCounterparty('SPAREBANK 1 GEBYR'), seedCategoryRules()).category).toBeNull()
+  })
+  it('bøyningsvariant: «vinmonopolet» dekkes (egen seed)', () => {
+    expect(categorize(normalizeCounterparty('VINMONOPOLET OSLO'), seedCategoryRules()).category).toBe('fritid')
+  })
 })
 
 describe('applyCategories', () => {

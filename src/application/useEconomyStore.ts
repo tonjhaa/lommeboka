@@ -44,6 +44,7 @@ import type {
 import { POLICY_RATE_HISTORY, LONNSVEKST_DEFAULT, GRUNNBELOP_VEKST_DEFAULT } from '@/config/economy.config'
 import { DEFAULT_BANK_PRESETS } from '@/config/bankPresets'
 import { calibrateProfile } from '@/domain/economy/forecastCalibration'
+import { applyCategories, seedCategoryRules } from '@/domain/economy/spendingCategorizer'
 
 // ------------------------------------------------------------
 // STATE INTERFACE
@@ -421,12 +422,16 @@ export const useEconomyStore = create<EconomyState>()(
         return { spendingTransactions: [...s.spendingTransactions, ...fresh] }
       }),
       setSpendingTransactions: (txs) => set({ spendingTransactions: txs }),
-      setCategoryRule: (rule) => set((s) => ({
-        categoryRules: [...s.categoryRules.filter((r) => r.merchantKey !== rule.merchantKey), rule],
-      })),
-      removeCategoryRule: (merchantKey) => set((s) => ({
-        categoryRules: s.categoryRules.filter((r) => r.merchantKey !== merchantKey),
-      })),
+      // Endring/fjerning av en regel re-appliseres på ALLE lagrede transaksjoner (bevarer
+      // 'manual'-rader), så en feillært regel faktisk retter historikk — ikke bare nye importer.
+      setCategoryRule: (rule) => set((s) => {
+        const categoryRules = [...s.categoryRules.filter((r) => r.merchantKey !== rule.merchantKey), rule]
+        return { categoryRules, spendingTransactions: applyCategories(s.spendingTransactions, [...categoryRules, ...seedCategoryRules()]) }
+      }),
+      removeCategoryRule: (merchantKey) => set((s) => {
+        const categoryRules = s.categoryRules.filter((r) => r.merchantKey !== merchantKey)
+        return { categoryRules, spendingTransactions: applyCategories(s.spendingTransactions, [...categoryRules, ...seedCategoryRules()]) }
+      }),
       setCalibrationSettings: (s) => set({ calibrationSettings: s }),
       lockCalibration: (key) => set((st) => ({
         lockedCalibrationKeys: st.lockedCalibrationKeys.includes(key)

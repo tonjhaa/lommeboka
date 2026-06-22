@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { Trash2 } from 'lucide-react'
 import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
 import { aggregateByCategory } from '@/domain/economy/spendingCategorizer'
 import { lineAmt, monthInDateRange } from '@/domain/economy/budgetTableComputer'
@@ -12,6 +13,8 @@ const nowYear = new Date().getFullYear()
 export function SpendingPage() {
   const txs = useActiveEconomyStore((s) => s.spendingTransactions)
   const budgetLines = useActiveEconomyStore((s) => s.budgetTemplate.lines)
+  const learnedRules = useActiveEconomyStore((s) => s.categoryRules)
+  const removeRule = useActiveEconomyStore((s) => s.removeCategoryRule)
   const [year, setYear] = useState(nowYear)
   const [month, setMonth] = useState(new Date().getMonth() + 1)
 
@@ -71,6 +74,23 @@ export function SpendingPage() {
         </div>
         <p className="mt-2 text-[10px] text-muted-foreground/60">Budsjett · faktisk · avvik. Kalibrering av prognosen mot dette kommer senere.</p>
       </div>
+
+      {learnedRules.length > 0 && (
+        <div className="rounded-xl border border-border/50 bg-card/60 p-4">
+          <h3 className="mb-2 text-sm font-medium">Lærte kategoriregler</h3>
+          <div className="space-y-1">
+            {learnedRules.map((r) => (
+              <div key={r.id} className="flex items-center justify-between text-[11px]">
+                <span className="min-w-0 flex-1 truncate"><span className="text-muted-foreground">{r.merchantKey}</span> → <span className="capitalize">{r.category.replace('_', ' ')}</span></span>
+                <button onClick={() => removeRule(r.merchantKey)} className="shrink-0 text-muted-foreground hover:text-red-400" aria-label={`Fjern regel for ${r.merchantKey}`}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[10px] text-muted-foreground/60">Å fjerne en regel re-kategoriserer lagrede transaksjoner for motparten.</p>
+        </div>
+      )}
     </div>
   )
 }

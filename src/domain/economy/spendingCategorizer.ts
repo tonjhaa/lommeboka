@@ -60,12 +60,12 @@ export function seedCategoryRules(): CategoryRule[] {
 export interface CategorizeResult { category: BudgetCategory | null; source: 'learned' | 'seed' | 'none' }
 
 /**
- * Ord-grense-bevisst seed-match: seed-nøkkelen må forekomme som et helt ord eller
- * ord-prefiks i den normaliserte motparten — ikke vilkårlig substring. Hindrer at
- * f.eks. «datasats» treffer seed 'sats' (Datasats AS) eller «matbutikk» treffer 'atb'.
- * Seed-nøkkelen normaliseres med samme funksjon så «uno-x» → «uno x» matcher korrekt.
- * `\b` etter seed dekker mellomrom, slutt, siffer og tegnsetting i ett.
- * Regex prekompileres per seed (modul-cache) — unngår O(N×M)-kompilering per batch.
+ * Helord-match (ordgrenser på begge sider): seed må forekomme som et helt ord i den
+ * normaliserte motparten — ikke vilkårlig substring og ikke prefiks. Hindrer falske positiver
+ * begge veier: «datasats» treffer ikke 'sats' (Datasats AS), og «sparebank» treffer ikke 'spar'.
+ * Norske bøyningsformer (f.eks. «vinmonopolet» vs seed 'vinmonopol') dekkes ved å legge
+ * varianten inn som egen seed, ikke ved å løsne matchen. Seed-nøkkelen normaliseres med samme
+ * funksjon så «uno-x» → «uno x» matcher. Regex prekompileres per seed (unngår O(N×M)).
  */
 const seedRegexCache = new Map<string, RegExp | null>()
 function seedMatches(key: string, rawSeed: string): boolean {

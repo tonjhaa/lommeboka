@@ -24,4 +24,18 @@ describe('spending-store', () => {
     expect(rules).toHaveLength(1)
     expect(rules[0].category).toBe('fritid')
   })
+
+  it('setCategoryRule re-appliserer på LAGREDE transaksjoner (retter historikk)', () => {
+    useEconomyStore.getState().addSpendingTransactions([tx('1', 'lokal kafe ukjent')])
+    expect(useEconomyStore.getState().spendingTransactions[0].category).toBeNull()
+    useEconomyStore.getState().setCategoryRule({ id: 'r1', merchantKey: 'lokal kafe ukjent', category: 'fritid', source: 'learned' })
+    expect(useEconomyStore.getState().spendingTransactions[0].category).toBe('fritid')
+  })
+
+  it('removeCategoryRule re-appliserer (faller tilbake til ingen/seed)', () => {
+    useEconomyStore.getState().addSpendingTransactions([tx('1', 'lokal kafe ukjent')])
+    useEconomyStore.getState().setCategoryRule({ id: 'r1', merchantKey: 'lokal kafe ukjent', category: 'fritid', source: 'learned' })
+    useEconomyStore.getState().removeCategoryRule('lokal kafe ukjent')
+    expect(useEconomyStore.getState().spendingTransactions[0].category).toBeNull()
+  })
 })

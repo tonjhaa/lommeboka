@@ -1,13 +1,16 @@
 import type { BudgetCategory } from '@/types/economy'
 
-/** Innebygde motpart→kategori-regler (substring-match mot normalisert nøkkel).
- *  Kort, vedlikeholdbar startliste — de vanligste norske kjedene. Resten lærer brukeren opp. */
+/** Innebygde motpart→kategori-regler (helord-match mot normalisert nøkkel).
+ *  Kort, vedlikeholdbar startliste — de vanligste norske kjedene. Resten lærer brukeren opp.
+ *  Norske bøyningsformer/varianter legges som EGNE oppføringer (helord-match dekker ikke
+ *  suffiks): «vinmonopolet» i tillegg til «vinmonopol», «eurospar» i tillegg til «spar». */
 export const SEED_CATEGORY_RULES: { match: string; category: BudgetCategory }[] = [
   // Mat / dagligvare
   { match: 'rema', category: 'mat' }, { match: 'kiwi', category: 'mat' },
   { match: 'meny', category: 'mat' }, { match: 'coop', category: 'mat' },
   { match: 'extra', category: 'mat' }, { match: 'spar', category: 'mat' },
-  { match: 'bunnpris', category: 'mat' }, { match: 'joker', category: 'mat' },
+  { match: 'eurospar', category: 'mat' }, { match: 'bunnpris', category: 'mat' },
+  { match: 'joker', category: 'mat' },
   { match: 'oda', category: 'mat' }, { match: 'foodora', category: 'mat' },
   // Transport
   { match: 'circle k', category: 'transport' }, { match: 'esso', category: 'transport' },
@@ -26,6 +29,7 @@ export const SEED_CATEGORY_RULES: { match: string; category: BudgetCategory }[] 
   { match: 'h&m', category: 'klær' }, { match: 'zara', category: 'klær' },
   { match: 'cubus', category: 'klær' }, { match: 'zalando', category: 'klær' },
   // Fritid
-  { match: 'vinmonopol', category: 'fritid' }, { match: 'sats', category: 'fritid' },
+  { match: 'vinmonopol', category: 'fritid' }, { match: 'vinmonopolet', category: 'fritid' },
+  { match: 'sats', category: 'fritid' },
   { match: 'komplett', category: 'fritid' }, { match: 'elkjøp', category: 'fritid' },
 ]
