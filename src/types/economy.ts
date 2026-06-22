@@ -989,3 +989,25 @@ export interface KeyFigureOverride {
   verifiedAt: string         // "YYYY-MM-DD"
   source?: string
 }
+
+// ------------------------------------------------------------
+// FORBRUKS-IMPORT + KATEGORISERING
+// ------------------------------------------------------------
+
+export interface BankSpendingTransaction {
+  id: string
+  date: string                 // "YYYY-MM-DD"
+  counterpartyRaw: string      // "REMA 1000 OSLO 1234"
+  counterpartyKey: string      // "rema 1000" (normalisert)
+  amount: number               // signert; utgift = negativt
+  category: BudgetCategory | null
+  categorySource: 'seed' | 'learned' | 'manual' | 'none'
+  importBatchId: string
+}
+
+export interface CategoryRule {
+  id: string
+  merchantKey: string          // normalisert motpart (learned: eksakt, seed: substring)
+  category: BudgetCategory
+  source: 'seed' | 'learned'
+}
