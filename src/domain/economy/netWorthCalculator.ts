@@ -155,7 +155,7 @@ function isAfter(year: number, month: number, now: { year: number; month: number
  * Sparing: nåverdi (accounts + BSU) ± månedssparing × antall måneder fra nå.
  * Fond: flat (fondCurrentValue). Gjeld: nåverdi ± terminbeløp.
  */
-function partnerNetWorthAt(
+export function partnerNetWorthAt(
   partner: PartnerVeikart,
   year: number,
   month: number,
