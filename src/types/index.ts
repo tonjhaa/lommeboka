@@ -147,6 +147,8 @@ export interface ScenarioInput {
   distribution?: DistributionInput
   planChanges?: PlanChangesInput[]
   extraScenario?: ExtraScenarioInput
+  /** Kjøpsår — styrer år-bevisst forhåndsfyll fra profil/partner. Default = inneværende år. */
+  purchaseYear?: number
   /** Tidsstempel for når scenariet ble opprettet */
   createdAt: number
   /** Om dette er basisscenario */

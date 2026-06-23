@@ -88,6 +88,7 @@ export function HouseholdForm({ scenario, section = 'all' }: Props) {
   // så lokal state ville desynke — «Hent medsøker»-knappen i én instans må vises i den andre.
   const hasCoApplicant = Boolean(household.coApplicant)
   const [bridgeSummary, setBridgeSummary] = useState<string[] | null>(null)
+  const [noPartnerMsg, setNoPartnerMsg] = useState(false)
   const showEssential = section === 'all' || section === 'essential'
   const showAdvanced = section === 'all' || section === 'advanced'
 
@@ -108,8 +109,9 @@ export function HouseholdForm({ scenario, section = 'all' }: Props) {
     }
   }
 
-  function handleUseProfile() {
-    const partial = extractLoanInputFromEconomy()
+  function handleUseProfile(yearOverride?: number) {
+    const yr = yearOverride ?? scenario.purchaseYear
+    const partial = extractLoanInputFromEconomy(yr)
     if (!partial.household) {
       setBridgeSummary(['Ingen lønnsprofil registrert i Lommeboka.'])
       return
@@ -134,15 +136,17 @@ export function HouseholdForm({ scenario, section = 'all' }: Props) {
         existingDebt: partial.household.primaryApplicant.existingDebt ?? 0,
       },
     })
-    setBridgeSummary(getProfileBridgeSummary())
+    setBridgeSummary(getProfileBridgeSummary(yr))
   }
 
-  function handleUsePartner() {
-    const partner = extractCoApplicantFromPartner()
+  function handleUsePartner(yearOverride?: number) {
+    const yr = yearOverride ?? scenario.purchaseYear
+    const partner = extractCoApplicantFromPartner(yr)
     if (!partner) {
-      setBridgeSummary(['Partner er ikke aktivert — koble til eller legg inn partnerdata i Partner-fanen.'])
+      setNoPartnerMsg(true)
       return
     }
+    setNoPartnerMsg(false)
     // Behold Søker 1s EK-bidrag; partnerens EK legges til totalen
     const p1EK = scenario.distribution?.primaryEquityContribution
       ?? (household.coApplicant ? Math.round(scenario.loanParameters.equity * 0.5) : scenario.loanParameters.equity)
@@ -172,7 +176,8 @@ export function HouseholdForm({ scenario, section = 'all' }: Props) {
   const freshness = (() => {
     const snap = scenario.bridgeSnapshot
     if (!snap) return null
-    const current = getCurrentBridgeValues()
+    // Samme kjøpsår som snapshot ble laget med — ellers falsk «siden da»-avvik for fremtidsår.
+    const current = getCurrentBridgeValues(scenario.purchaseYear)
     if (!current) return null
     const diffs: string[] = []
     if (Math.abs(current.equity - snap.equity) > 1_000) {
@@ -202,19 +207,62 @@ export function HouseholdForm({ scenario, section = 'all' }: Props) {
     <div className="space-y-5">
       {showEssential && (
         <>
-          {/* Bruk min profil / Hent partner */}
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs text-muted-foreground">
-              Hent tall fra Lommeboka automatisk
-            </p>
-            <div className="flex gap-2 shrink-0">
-              <Button variant="outline" size="sm" className="text-xs" onClick={handleUseProfile}>
-                Bruk min profil
-              </Button>
-              <Button variant="outline" size="sm" className="text-xs text-violet-400 border-violet-500/40 hover:bg-violet-500/10" onClick={handleUsePartner}>
-                Hent medsøker fra Partner
-              </Button>
+          {/* Kjøpsår + profil-bro */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="space-y-1 flex-1">
+                <Label className="text-xs">Kjøpsår</Label>
+                <NumberInput
+                  value={scenario.purchaseYear ?? new Date().getFullYear()}
+                  onChange={(v) => {
+                    update(scenario.id, { purchaseYear: v })
+                    // Auto-reproject: når år endres og profil alt er hentet, oppdater felt
+                    if (scenario.bridgeSnapshot) {
+                      handleUseProfile(v)
+                      if (hasCoApplicant) {
+                        handleUsePartner(v)
+                      }
+                    }
+                  }}
+                  min={new Date().getFullYear()}
+                  step={1}
+                />
+              </div>
+              <div className="flex gap-2 shrink-0 self-end pb-0.5">
+                <Button variant="outline" size="sm" className="text-xs" onClick={() => handleUseProfile()}>
+                  Bruk min profil
+                </Button>
+              </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Hent tall fra Lommeboka — projisert til kjøpsåret.
+            </p>
+          </div>
+
+          {/* Inkluder partner som medsøker */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground">Inkluder partner som medsøker</p>
+                <p className="text-xs text-muted-foreground">Henter inntekt, gjeld og EK fra Partner-fanen</p>
+              </div>
+              <Switch
+                checked={hasCoApplicant}
+                onCheckedChange={(checked) => {
+                  setNoPartnerMsg(false)
+                  if (checked) {
+                    handleUsePartner()
+                  } else {
+                    toggleCoApplicant(false)
+                  }
+                }}
+              />
+            </div>
+            {noPartnerMsg && (
+              <p className="text-xs text-amber-400">
+                Ingen partner registrert i Partner-fanen.
+              </p>
+            )}
           </div>
 
           {/* Ferskhets-indikator */}
@@ -224,7 +272,7 @@ export function HouseholdForm({ scenario, section = 'all' }: Props) {
                 <span>
                   Hentet fra Lommeboka {freshness.date} — siden da: {freshness.diffs.join(', ')}
                 </span>
-                <button className="underline underline-offset-2 shrink-0" onClick={handleUseProfile}>
+                <button className="underline underline-offset-2 shrink-0" onClick={() => handleUseProfile()}>
                   Oppdater
                 </button>
               </div>
