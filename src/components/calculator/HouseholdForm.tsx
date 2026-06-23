@@ -88,6 +88,7 @@ export function HouseholdForm({ scenario, section = 'all' }: Props) {
   // så lokal state ville desynke — «Hent medsøker»-knappen i én instans må vises i den andre.
   const hasCoApplicant = Boolean(household.coApplicant)
   const [bridgeSummary, setBridgeSummary] = useState<string[] | null>(null)
+  const [noPartnerMsg, setNoPartnerMsg] = useState(false)
   const showEssential = section === 'all' || section === 'essential'
   const showAdvanced = section === 'all' || section === 'advanced'
 
@@ -142,9 +143,10 @@ export function HouseholdForm({ scenario, section = 'all' }: Props) {
     const yr = yearOverride ?? scenario.purchaseYear
     const partner = extractCoApplicantFromPartner(yr)
     if (!partner) {
-      setBridgeSummary(['Partner er ikke aktivert — koble til eller legg inn partnerdata i Partner-fanen.'])
+      setNoPartnerMsg(true)
       return
     }
+    setNoPartnerMsg(false)
     // Behold Søker 1s EK-bidrag; partnerens EK legges til totalen
     const p1EK = scenario.distribution?.primaryEquityContribution
       ?? (household.coApplicant ? Math.round(scenario.loanParameters.equity * 0.5) : scenario.loanParameters.equity)
@@ -229,14 +231,37 @@ export function HouseholdForm({ scenario, section = 'all' }: Props) {
                 <Button variant="outline" size="sm" className="text-xs" onClick={() => handleUseProfile()}>
                   Bruk min profil
                 </Button>
-                <Button variant="outline" size="sm" className="text-xs text-violet-400 border-violet-500/40 hover:bg-violet-500/10" onClick={() => handleUsePartner()}>
-                  Hent medsøker fra Partner
-                </Button>
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
               Hent tall fra Lommeboka — projisert til kjøpsåret.
             </p>
+          </div>
+
+          {/* Inkluder partner som medsøker */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground">Inkluder partner som medsøker</p>
+                <p className="text-xs text-muted-foreground">Henter inntekt, gjeld og EK fra Partner-fanen</p>
+              </div>
+              <Switch
+                checked={hasCoApplicant}
+                onCheckedChange={(checked) => {
+                  setNoPartnerMsg(false)
+                  if (checked) {
+                    handleUsePartner()
+                  } else {
+                    toggleCoApplicant(false)
+                  }
+                }}
+              />
+            </div>
+            {noPartnerMsg && (
+              <p className="text-xs text-amber-400">
+                Ingen partner registrert i Partner-fanen.
+              </p>
+            )}
           </div>
 
           {/* Ferskhets-indikator */}
