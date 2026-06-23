@@ -176,7 +176,8 @@ export function HouseholdForm({ scenario, section = 'all' }: Props) {
   const freshness = (() => {
     const snap = scenario.bridgeSnapshot
     if (!snap) return null
-    const current = getCurrentBridgeValues()
+    // Samme kjøpsår som snapshot ble laget med — ellers falsk «siden da»-avvik for fremtidsår.
+    const current = getCurrentBridgeValues(scenario.purchaseYear)
     if (!current) return null
     const diffs: string[] = []
     if (Math.abs(current.equity - snap.equity) > 1_000) {

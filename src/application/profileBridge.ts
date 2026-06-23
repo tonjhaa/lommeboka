@@ -1,7 +1,6 @@
 import type { ScenarioInput } from '@/types'
 import type { FondPortfolio } from '@/types/economy'
 import { useEconomyStore } from './useEconomyStore'
-import { computeEffectiveBalance } from '@/domain/economy/savingsCalculator'
 import { fondValueAt } from '@/domain/economy/netWorthCalculator'
 import { projectIncomeToYear, projectEquityToYear, projectDebtToYear, projectPartnerToYear } from '@/domain/economy/bridgeProjection'
 import { LONNSVEKST_DEFAULT } from '@/config/economy.config'
@@ -29,15 +28,6 @@ function calcBridgeIncome(profile: NonNullable<ReturnType<typeof useEconomyStore
   )
 }
 
-function calcBridgeEquity(): { total: number; accountCount: number; fondValue: number } {
-  const { savingsAccounts, fondPortfolio } = useEconomyStore.getState()
-  const now = new Date()
-  const accounts = savingsAccounts.filter((a) => EQUITY_ACCOUNT_TYPES.has(a.type))
-  const accountSum = accounts.reduce((s, a) => s + computeEffectiveBalance(a, now), 0)
-  const fondValue = [...(fondPortfolio?.snapshots ?? [])]
-    .sort((a, b) => b.date.localeCompare(a.date))[0]?.totalValue ?? 0
-  return { total: Math.round(accountSum + fondValue), accountCount: accounts.length, fondValue }
-}
 
 /** Felles projeksjon for både felt-utfylling og summary — ett kall, ingen duplikat-divergens. */
 interface BridgeProjection {
@@ -59,7 +49,7 @@ function buildBridgeProjection(targetYear?: number): BridgeProjection | null {
   const fond = fondPortfolio ?? EMPTY_FOND
 
   const grossAnnualIncome = projectIncomeToYear(calcBridgeIncome(profile), nowYear, year, LONNSVEKST_DEFAULT)
-  // EK: equity-kontoer (inkl. 'fond'-type savings) + fondPortfolio separat — samme semantikk som calcBridgeEquity
+  // EK: equity-kontoer (inkl. 'fond'-type savings) via savingsBalanceAt + fondPortfolio separat via fondValueAt
   const equityAccounts = (savingsAccounts ?? []).filter((a) => EQUITY_ACCOUNT_TYPES.has(a.type))
   const totalEquity = projectEquityToYear(equityAccounts, fond, year, nowMonth, nowObj)
   const fondValue = Math.round(fondValueAt(fond, year, nowMonth, nowObj))
@@ -109,15 +99,15 @@ export function getProfileBridgeSummary(targetYear?: number): string[] {
   return lines
 }
 
-/** Gjeldende Lommeboka-verdier — brukes av ferskhets-indikatoren i kalkulatoren. */
-export function getCurrentBridgeValues(): { grossIncome: number; equity: number; existingDebt: number } | null {
-  const { profile, debts } = useEconomyStore.getState()
-  if (!profile) return null
-  return {
-    grossIncome: calcBridgeIncome(profile),
-    equity: calcBridgeEquity().total,
-    existingDebt: debts.filter(d => d.status !== 'nedbetalt').reduce((s, d) => s + d.currentBalance, 0),
-  }
+/**
+ * Gjeldende Lommeboka-verdier for ferskhets-indikatoren. MÅ ta samme targetYear som
+ * snapshot ble laget med — ellers sammenlignes projiserte snapshot-tall mot dagens
+ * nå-tall, og indikatoren viser et falskt «siden da»-avvik for fremtidige kjøpsår.
+ */
+export function getCurrentBridgeValues(targetYear?: number): { grossIncome: number; equity: number; existingDebt: number } | null {
+  const p = buildBridgeProjection(targetYear)
+  if (!p) return null
+  return { grossIncome: p.grossAnnualIncome, equity: p.totalEquity, existingDebt: p.existingDebt }
 }
 
 /**

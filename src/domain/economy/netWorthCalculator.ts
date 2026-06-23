@@ -167,8 +167,12 @@ export function partnerNetWorthAt(
   const monthlySave = partnerMonthlySavingsTotal(partner) + (partner.bsuMonthlyContribution ?? 0)
   const sparing = Math.max(0, nowSparing + monthlySave * dM)
   const fond = partner.fondCurrentValue ?? 0
-  const nowGjeld = (partner.debts ?? []).reduce((s, d) => s + (d.currentBalance ?? 0), 0)
-  const monthlyPay = (partner.debts ?? []).reduce((s, d) => s + (d.monthlyPayment ?? 0), 0)
+  // Fall tilbake på legacy `debt`-skalaren når debts-arrayen er tom (eldre partner-data).
+  const debtList = partner.debts ?? []
+  const nowGjeld = debtList.length > 0
+    ? debtList.reduce((s, d) => s + (d.currentBalance ?? 0), 0)
+    : (partner.debt ?? 0)
+  const monthlyPay = debtList.reduce((s, d) => s + (d.monthlyPayment ?? 0), 0)
   const gjeld = Math.max(0, nowGjeld - monthlyPay * dM)
   return { sparing, fond, gjeld }
 }

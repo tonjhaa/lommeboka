@@ -62,4 +62,10 @@ describe('projectPartnerToYear', () => {
   it('partner disabled ⇒ null', () => {
     expect(projectPartnerToYear({ enabled: false } as PartnerVeikart, 2029, 6, now, 3)).toBeNull()
   })
+  it('legacy debt-skalar brukes når debts-arrayen er tom', () => {
+    const legacy = { enabled: true, partnerName: 'P', annualIncome: 0, monthlySavings: 0,
+      accounts: [], debts: [], debt: 150_000 } as unknown as PartnerVeikart
+    // år = nå ⇒ ingen nedbetaling ⇒ gjeld = legacy-skalaren
+    expect(projectPartnerToYear(legacy, now.year, now.month, now, 3)?.debt).toBe(150_000)
+  })
 })
