@@ -1,22 +1,22 @@
-import { AlertTriangle, Zap, Home } from 'lucide-react'
+import { AlertTriangle, Zap, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useAppStore } from '@/store/useAppStore'
 import { useNetWorthSeries } from '@/hooks/useNetWorthSeries'
 import { useSharedProjectStore } from '@/store/useSharedProjectStore'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { FormuePage } from './FormuePage'
 import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
 import type { EconomyState } from '@/application/useEconomyStore'
-import { DEFAULT_PENSION_SETTINGS } from '@/application/useEconomyStore'
 import { calculateGoalProgress, computeEffectiveBalance, checkBSULimits } from '@/domain/economy/savingsCalculator'
-import { projectPension, buildPensionInputFromProfile } from '@/domain/economy/pensionCalculator'
-import { useKeyFigures } from '@/hooks/useKeyFigures'
+import { projectPension } from '@/domain/economy/pensionCalculator'
+import { usePensionBaseInput } from '@/hooks/usePensionBaseInput'
+import { useBudgetTable } from '@/hooks/useBudgetTable'
 import { analyzeTaxSettlements } from '@/domain/economy/taxSettlementCalc'
 import { getDaysUsedLast12Months, getDaysUsedFromEvents, getAbsenceStatus, getAbsenceStatusFromEvents, getStatusColor } from '@/domain/economy/absenceCalculator'
 import type { AbsenceStatus } from '@/types/economy'
 import { sumATFByYear } from '@/domain/economy/atfCalculator'
-import { forecastJune } from '@/domain/economy/holidayPayCalculator'
-import { computeBudgetTable } from '@/domain/economy/budgetTableComputer'
-import { useAppStore } from '@/store/useAppStore'
 import { useVeikart, calcMaxPurchase } from '@/hooks/useVeikart'
 import { partnerNonBsuEquity } from '@/types/economy'
 import { cn } from '@/lib/utils'
@@ -24,6 +24,14 @@ import { HeroBand, calcHealthScore } from '@/components/economy/widgets/HeroBand
 import { FormueChart } from '@/components/economy/charts/FormueChart'
 
 const MONTH_SHORT_FORMUE = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des']
+
+interface DashboardChip {
+  /** Stabil id — brukes til å huske avviste chips på tvers av økter */
+  id: string
+  icon: string
+  text: string
+  accent?: string
+}
 
 function fmtNOK(n: number): string {
   return Math.round(n).toLocaleString('no-NO') + ' kr'
@@ -90,18 +98,18 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
     budgetTemplate,
     profile,
     fondPortfolio,
-    subscriptions,
-    insurances,
-    temporaryPayEntries,
-    budgetOverrides,
     ivfTransactions,
     userPreferences,
     partnerVeikart,
-    pensionSettings,
     calibrationLog,
   } = useActiveEconomyStore()
 
-  const kf = useKeyFigures()
+  const { baseInput: pensionBaseRaw, hasBirthYear } = usePensionBaseInput()
+  // Chipen vises kun når brukeren faktisk har oppgitt fødselsår (ikke fallback).
+  const pensionBase = hasBirthYear ? pensionBaseRaw : null
+
+  const dismissedChips = useAppStore((s) => s.dismissedChips)
+  const dismissChip = useAppStore((s) => s.dismissChip)
 
   const now = useMemo(() => new Date(), [])
   const currentYear = now.getFullYear()
@@ -144,21 +152,15 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
 
   const taxAnalysis = analyzeTaxSettlements(taxSettlements, profile?.extraTaxWithholding ?? 0)
 
-  const appScenarios = useAppStore((s) => s.scenarios)
-  const appActiveScenarioId = useAppStore((s) => s.activeScenarioId)
-  const appAnalyses = useAppStore((s) => s.analyses)
-  const activeScenario = appScenarios.find((s) => s.id === appActiveScenarioId)
-  const maxKjøpesum = activeScenario
-    ? appAnalyses[activeScenario.id]?.maxPurchase?.maxPurchasePrice
-    : null
-
-  // Veikart-data for dashbord-chip
+  // Veikart-data for dashbord-chip — Veikart-motoren er den ENE kilden til
+  // «hvor mye bolig kan jeg kjøpe?» på dashbordet.
   const veikartData = useVeikart()
 
   // ── Formue over tid (netto formue-serie) — ÉN kilde for vist formue ──
   // dinSerie er ALLTID scope 'din' og brukes til hero + helsescore. fellesSerie brukes
   // kun i grafen når toggelen står på 'felles'. Begge hooks kalles ubetinget (Rules of Hooks).
   const [formueScope, setFormueScope] = useState<'din' | 'felles'>('din')
+  const [showFormueDetails, setShowFormueDetails] = useState(false)
   const dinSerie = useNetWorthSeries('din')
   const fellesSerie = useNetWorthSeries('felles')
   const formueSerie = formueScope === 'felles' ? fellesSerie : dinSerie
@@ -182,24 +184,10 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
   const ivfSrcTxs = sharedIvfTxs.length > 0 ? sharedIvfTxs : ivfTransactions
   const ivfSaldo = ivfSrcTxs.filter(t => t.date <= todayStr).reduce((s, t) => s + t.amount, 0)
 
-  // ── Budsjett ──────────────────────────────────────────────
-  const juneForecast = profile ? forecastJune(currentYear, monthHistory, profile, atfEntries, [], kf.feriepengerProsent) : null
+  // ── Budsjett — kanonisk motor, delt med Budsjett-fanen ────
+  const { table: budgetTable, juneForecast } = useBudgetTable(currentYear)
 
-  const yearOverrides = Object.fromEntries(
-    Object.entries(budgetOverrides)
-      .filter(([k]) => k.startsWith(`${currentYear}:`))
-      .map(([k, v]) => [k.slice(String(currentYear).length + 1), v])
-  )
-  const budgetTable = profile
-    ? computeBudgetTable(
-        currentYear, profile, budgetTemplate, monthHistory, atfEntries,
-        savingsAccounts, debts, subscriptions, insurances,
-        yearOverrides, temporaryPayEntries, juneForecast ?? undefined,
-        false, ivfTransactions, fondPortfolio,
-      )
-    : null
-
-  const allBudgetRows = budgetTable?.sections.flatMap((s) => s.rows) ?? []
+  const allBudgetRows = budgetTable.sections.flatMap((s) => s.rows)
   const monthIdx = currentMonth - 1
   const nettoRow = allBudgetRows.find((r) => r.id === 'netto')
   const nettoCell = nettoRow?.cells[monthIdx]
@@ -264,15 +252,17 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
   })
 
   // ── Pengepuls-chips ───────────────────────────────────────
-  const chips: { icon: string; text: string; accent?: string }[] = []
+  const chips: DashboardChip[] = []
   if (sparerate12m !== null) {
     chips.push({
+      id: 'sparerate',
       icon: '💰',
       text: `Sparerate ${sparerate12m}% av netto (siste 12 mnd faktisk)`,
       accent: sparerate12m >= 20 ? 'green' : sparerate12m >= 10 ? 'yellow' : 'red',
     })
   } else if (nettoFraBudsjett > 0 && overskuddFraBudsjett !== null) {
     chips.push({
+      id: 'sparerate',
       icon: '💰',
       text: `Sparerate ${sparerate}% av netto (budsjettestimert)`,
       accent: sparerate >= 20 ? 'green' : sparerate >= 10 ? 'yellow' : 'red',
@@ -280,11 +270,13 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
   }
   if (ivfSaldo > 0) {
     chips.push({
+      id: 'prosjekt',
       icon: '🫀',
       text: `Prosjekt-kassen: ${fmtNOK(ivfSaldo)} (inngår i formue)`,
     })
   } else if (ivfSaldo < -500) {
     chips.push({
+      id: 'prosjekt',
       icon: '🫀',
       text: `Prosjektet er netto ${fmtNOK(Math.abs(ivfSaldo))} i underskudd`,
       accent: 'red',
@@ -296,6 +288,7 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
     const isNextPaycheck = nextPayday.getMonth() === 5 // juni = 5
     const days = Math.ceil((junePayday.getTime() - now.getTime()) / 86400000)
     chips.push({
+      id: 'feriepenger',
       icon: '🏖️',
       text: isNextPaycheck
         ? `Feriepenger inngår i neste lønn (${Math.round(juneForecast.nettoJuni).toLocaleString('no-NO')} kr)`
@@ -306,13 +299,13 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
     const goal = savingsGoals[0]
     const prog = calculateGoalProgress(goal, savingsAccounts, fondVerdi, fondPortfolio?.monthlyDeposit ?? 0)
     if (prog.percent >= 100) {
-      chips.push({ icon: '✅', text: `«${goal.label}» er nådd!`, accent: 'green' })
+      chips.push({ id: 'sparemaal', icon: '✅', text: `«${goal.label}» er nådd!`, accent: 'green' })
     } else if (prog.monthsRemaining !== null && prog.monthsRemaining > 0) {
-      chips.push({ icon: '🎯', text: `«${goal.label}» nås om ca. ${prog.monthsRemaining} mnd` })
+      chips.push({ id: 'sparemaal', icon: '🎯', text: `«${goal.label}» nås om ca. ${prog.monthsRemaining} mnd` })
     }
   }
   if (atfSum > 0) {
-    chips.push({ icon: '🎖️', text: `ATF-bonus i år: ${Math.round(atfSum).toLocaleString('no-NO')} kr` })
+    chips.push({ id: 'atf', icon: '🎖️', text: `ATF-bonus i år: ${Math.round(atfSum).toLocaleString('no-NO')} kr` })
   }
 
   // ATF-validering: sjekk om forventet utbetaling mangler importert slipp
@@ -327,6 +320,7 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
   })
   if (atfMissingSlip.length > 0) {
     chips.push({
+      id: 'atf-manglende-slipp',
       icon: '⚠️',
       text: `${atfMissingSlip.length} ATF-utbetaling${atfMissingSlip.length > 1 ? 'er' : ''} mangler importert slipp`,
       accent: 'yellow',
@@ -336,16 +330,18 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
   if (veikartData.maxPurchase > 0) {
     const now12mScenario = veikartData.scenarios.find(s => s.years === 1)
     chips.push({
+      id: 'kjopekraft',
       icon: '🏠',
       text: `Kjøpekraft nå: ${(veikartData.maxPurchase / 1_000_000).toFixed(1)} mill — om 1 år: ${now12mScenario ? (now12mScenario.maxPurchase / 1_000_000).toFixed(1) : '?'} mill`,
       accent: 'green',
     })
   }
   if (absenceDays >= 16) {
-    chips.push({ icon: '⚠️', text: `${absenceDays}/24 egenmeldingsdager brukt`, accent: 'red' })
+    chips.push({ id: 'egenmelding', icon: '⚠️', text: `${absenceDays}/24 egenmeldingsdager brukt`, accent: 'red' })
   }
   if (taxAnalysis.recommendation === 'reduce_extra') {
     chips.push({
+      id: 'skattetrekk',
       icon: '🧾',
       text: `Vurder å senke ekstra trekk med ${fmtNOK(taxAnalysis.recommendedExtraAdjustment)}/mnd`,
       accent: 'yellow',
@@ -358,24 +354,26 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
     const bsuStatus = checkBSULimits(bsuAccount, currentYear)
     if (!bsuStatus.isMaxed && bsuStatus.remainingYearlyQuota > 0) {
       chips.push({
+        id: 'bsu',
         icon: '🏦',
         text: `BSU-kvote igjen i år: ${fmtNOK(bsuStatus.remainingYearlyQuota)}`,
         accent: bsuStatus.remainingYearlyQuota < 5000 ? 'yellow' : undefined,
       })
     } else if (bsuStatus.isMaxed) {
-      chips.push({ icon: '🏦', text: 'BSU er fylt opp', accent: 'green' })
+      chips.push({ id: 'bsu', icon: '🏦', text: 'BSU er fylt opp', accent: 'green' })
     }
   }
 
   // Importpåminnelse: ingen slipp importert denne måneden
   if (!currentMonthRecord || currentMonthRecord.source !== 'imported_slip') {
-    chips.push({ icon: '📥', text: 'Husk å importere lønnsslipp for denne måneden', accent: 'yellow' })
+    chips.push({ id: 'importer-slipp', icon: '📥', text: 'Husk å importere lønnsslipp for denne måneden', accent: 'yellow' })
   }
 
   // Gjeldsmilepæl: ett lån er < 10 % igjen
   const nearlyPaidDebt = debts.find(d => d.status !== 'nedbetalt' && d.originalAmount > 0 && d.currentBalance / d.originalAmount < 0.1)
   if (nearlyPaidDebt) {
     chips.push({
+      id: 'gjeldsmilepael',
       icon: '🎉',
       text: `«${nearlyPaidDebt.creditor}» er snart nedbetalt (${fmtNOK(nearlyPaidDebt.currentBalance)} igjen)`,
       accent: 'green',
@@ -385,37 +383,23 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
   // Budsjettunderskudd
   if (overskuddFraBudsjett !== null && overskuddFraBudsjett < -500) {
     chips.push({
+      id: 'budsjettunderskudd',
       icon: '📉',
       text: `Budsjettunderskudd denne måneden: ${fmtNOK(Math.abs(overskuddFraBudsjett))}`,
       accent: 'red',
     })
   }
 
-  // Pensjon-chip
-  if (profile && userPreferences?.birthYear && (userPreferences.birthYear >= 1963)) {
-    const ps = pensionSettings ?? { ...DEFAULT_PENSION_SETTINGS, birthYear: userPreferences.birthYear }
+  // Pensjon-chip — samme kanoniske input som Pensjon-siden og Simulatoren
+  if (pensionBase) {
     try {
-      const proj = projectPension({
-        ...buildPensionInputFromProfile(
-          profile, ps, currentYear,
-          kf.grunnbelop,
-          kf.delingstall,
-          {
-            folketrygd: kf.folketrygdOpptjeningssats,
-            spkLav: kf.spkPaaslagLav,
-            spkHoy: kf.spkPaaslagHoy,
-            afp: kf.afpOpptjeningssats,
-            takFolketrygdG: kf.takFolketrygdG,
-            takSpkG: kf.takSpkG,
-          },
-        ),
-        uttaksalder: 67,
-      })
+      const proj = projectPension({ ...pensionBase, uttaksalder: 67 })
       chips.push({
+        id: 'pensjon',
         icon: '🏛️',
         text: `Forventet pensjon ~${Math.round(proj.monthlyTotal).toLocaleString('no-NO')} kr/mnd ved 67 (estimat)`,
       })
-    } catch { /* født før 1963 / ugyldig input — hopp over */ }
+    } catch { /* ugyldig input — hopp over */ }
   }
 
   // Treffsikkerhet-chip: nyeste vesentlige kalibrering (≥ 300 kr) siste 30 dager —
@@ -425,10 +409,20 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
   if (recentCal) {
     const diff = recentCal.calibrated - recentCal.previous
     chips.push({
+      id: 'kalibrering',
       icon: '🎯',
       text: `${recentCal.label}-estimat justert ${diff >= 0 ? '+' : ''}${Math.round(diff).toLocaleString('no-NO')} kr`,
     })
   }
+
+  // Prioritering: varsler først (rød > gul), så nøytral innsikt, grønt sist.
+  // Avviste chips holdes skjult til dismiss-datoen har passert.
+  const severityRank = (c: DashboardChip) =>
+    c.accent === 'red' ? 0 : c.accent === 'yellow' ? 1 : c.accent === 'green' ? 3 : 2
+  const todayISO = now.toISOString().slice(0, 10)
+  const sortedChips = chips
+    .filter((c) => (dismissedChips[c.id] ?? '') <= todayISO)
+    .sort((a, b) => severityRank(a) - severityRank(b))
 
   // ── Render ────────────────────────────────────────────────
   return (
@@ -457,17 +451,25 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
           avgNetto12m={avgNetto12m}
         />
         <div className="flex flex-col gap-1">
-          {partnerVeikart.enabled && (
-            <div className="flex gap-1 self-end">
-              {(['din','felles'] as const).map((sc) => (
-                <button key={sc} onClick={() => setFormueScope(sc)}
-                  className={cn('rounded px-2 py-0.5 text-[10px] font-medium border',
-                    formueScope === sc ? 'border-primary text-primary' : 'border-border/40 text-muted-foreground')}>
-                  {sc === 'din' ? 'Din' : 'Felles'}
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="flex gap-1 self-end items-center">
+            {partnerVeikart.enabled && (
+              <>
+                {(['din','felles'] as const).map((sc) => (
+                  <button key={sc} onClick={() => setFormueScope(sc)}
+                    className={cn('rounded px-2 py-0.5 text-[10px] font-medium border',
+                      formueScope === sc ? 'border-primary text-primary' : 'border-border/40 text-muted-foreground')}>
+                    {sc === 'din' ? 'Din' : 'Felles'}
+                  </button>
+                ))}
+              </>
+            )}
+            <button
+              onClick={() => setShowFormueDetails(true)}
+              className="rounded px-2 py-0.5 text-[10px] font-medium border border-border/40 text-muted-foreground hover:text-foreground hover:border-border transition-colors"
+            >
+              Detaljer →
+            </button>
+          </div>
           <FormueChart
             history={formueHistory}
             projected={formueProjected}
@@ -475,7 +477,7 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
             label="Netto formue"
           />
         </div>
-        <PengePulsCard chips={chips} />
+        <PengePulsCard chips={sortedChips} onDismiss={dismissChip} />
       </div>
 
       {/* ── 3. PARTNER-KJØPEKRAFT ── */}
@@ -533,10 +535,20 @@ export function EconomyDashboard({ onNavigate }: { onNavigate: (page: string) =>
           absenceDays={absenceDays}
           absenceStatus={absenceStatus}
           taxAnalysis={taxAnalysis}
-          onNavigate={onNavigate}
-          maxKjøpesum={maxKjøpesum}
         />
       </div>
+
+      {/* ── FORMUE-DETALJER (tidligere egen fane) ── */}
+      <Dialog open={showFormueDetails} onOpenChange={setShowFormueDetails}>
+        <DialogContent className="max-w-4xl w-[92vw] h-[85vh] p-0 flex flex-col overflow-hidden">
+          <DialogHeader className="px-4 pt-4 pb-0 shrink-0">
+            <DialogTitle className="text-base">Formue over tid</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 min-h-0">
+            <FormuePage />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -600,7 +612,13 @@ function MonthlyFlowCard({
 // MIDT-RAD: PENGEPULS-KORT
 // ══════════════════════════════════════════════════════════════
 
-function PengePulsCard({ chips }: { chips: { icon: string; text: string; accent?: string }[] }) {
+const MAX_VISIBLE_CHIPS = 5
+
+function PengePulsCard({ chips, onDismiss }: { chips: DashboardChip[]; onDismiss: (id: string) => void }) {
+  const [showAll, setShowAll] = useState(false)
+  const visible = showAll ? chips : chips.slice(0, MAX_VISIBLE_CHIPS)
+  const hiddenCount = chips.length - MAX_VISIBLE_CHIPS
+
   return (
     <div className="rounded-xl border border-border/50 bg-card/60 px-4 pt-3 pb-3 flex flex-col">
       <div className="flex items-center gap-1.5 mb-2.5">
@@ -611,11 +629,11 @@ function PengePulsCard({ chips }: { chips: { icon: string; text: string; accent?
         <p className="text-xs text-muted-foreground flex-1">Last inn data for å se innsikter.</p>
       ) : (
         <div className="flex flex-col gap-1.5 overflow-y-auto">
-          {chips.map((chip, i) => (
+          {visible.map((chip) => (
             <span
-              key={i}
+              key={chip.id}
               className={cn(
-                'inline-flex items-start gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] border leading-snug',
+                'group inline-flex items-start gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] border leading-snug',
                 chip.accent === 'green' && 'bg-green-500/10 border-green-500/20 text-green-400',
                 chip.accent === 'yellow' && 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400',
                 chip.accent === 'red' && 'bg-red-500/10 border-red-500/20 text-red-400',
@@ -623,9 +641,25 @@ function PengePulsCard({ chips }: { chips: { icon: string; text: string; accent?
               )}
             >
               <span className="shrink-0">{chip.icon}</span>
-              <span>{chip.text}</span>
+              <span className="flex-1 min-w-0">{chip.text}</span>
+              <button
+                onClick={() => onDismiss(chip.id)}
+                className="shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
+                aria-label="Skjul denne innsikten i 7 dager"
+                title="Skjul i 7 dager"
+              >
+                <X className="h-3 w-3" />
+              </button>
             </span>
           ))}
+          {hiddenCount > 0 && (
+            <button
+              onClick={() => setShowAll((v) => !v)}
+              className="self-start text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+            >
+              {showAll ? 'Vis færre' : `+ ${hiddenCount} flere`}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -760,17 +794,15 @@ function GjeldCard({
 }
 
 // ══════════════════════════════════════════════════════════════
-// BUNN-GRID: EGENMELDING + SKATT (+ valgfri bolig)
+// BUNN-GRID: EGENMELDING + SKATT
 // ══════════════════════════════════════════════════════════════
 
 function AbsenceAndTaxCard({
-  absenceDays, absenceStatus, taxAnalysis, maxKjøpesum,
+  absenceDays, absenceStatus, taxAnalysis,
 }: {
   absenceDays: number
   absenceStatus: AbsenceStatus
   taxAnalysis: ReturnType<typeof analyzeTaxSettlements>
-  onNavigate: (page: string) => void
-  maxKjøpesum: number | null | undefined
 }) {
   return (
     <div className="rounded-xl border border-border/50 bg-card/60 flex flex-col overflow-hidden">
@@ -810,22 +842,6 @@ function AbsenceAndTaxCard({
         )}
         {taxAnalysis.recommendation === 'keep' && (
           <p className="text-[11px] text-muted-foreground">Skattetrekk ser riktig ut ✓</p>
-        )}
-
-        {/* Boligscenario */}
-        {maxKjøpesum && (
-          <div className="flex items-center justify-between pt-1 border-t border-border/30">
-            <div className="flex items-center gap-1.5 text-[11px]">
-              <Home className="h-3 w-3 text-muted-foreground shrink-0" />
-              <span className="text-muted-foreground">Maks kjøpesum</span>
-            </div>
-            <button
-              onClick={() => useAppStore.getState().setCurrentView('calculator')}
-              className="text-[11px] font-semibold font-mono text-blue-400 hover:text-blue-300 transition-colors"
-            >
-              {Math.round(maxKjøpesum).toLocaleString('no-NO')} kr →
-            </button>
-          </div>
         )}
       </div>
     </div>

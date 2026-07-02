@@ -1,14 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { SlidersHorizontal, Target, Plus, Trash2 } from 'lucide-react'
 import { useScenario } from '@/hooks/useScenario'
 import { useAppStore } from '@/store/useAppStore'
-import { useEconomyStore } from '@/application/useEconomyStore'
-import { useKeyFigures } from '@/hooks/useKeyFigures'
+import { useForecastAccuracy } from '@/hooks/useForecastAccuracy'
 import { DEFAULT_SCENARIO_LEVERS } from '@/domain/economy/scenarioSimulator'
-import { computeAccuracy } from '@/domain/economy/forecastCalibration'
-import { computeBudgetTable } from '@/domain/economy/budgetTableComputer'
-import { forecastJune } from '@/domain/economy/holidayPayCalculator'
 import { cn } from '@/lib/utils'
 
 const MONTHS = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des']
@@ -16,50 +12,13 @@ function fmtNOK(n: number): string { return Math.round(n).toLocaleString('no-NO'
 
 export function ScenarioPage() {
   // ── Alle hooks FØR tidlig return (Rules of Hooks) ──────────────────────────
-  const kf = useKeyFigures()
   const result = useScenario()
   const levers = useAppStore((s) => s.scenarioLevers)
   const setLevers = useAppStore((s) => s.setScenarioLevers)
 
-  // Store-felt for treffsikkerhet-bånd (identisk med ForecastAccuracyPage)
-  const profile = useEconomyStore((s) => s.profile)
-  const monthHistory = useEconomyStore((s) => s.monthHistory)
-  const budgetTemplate = useEconomyStore((s) => s.budgetTemplate)
-  const atfEntries = useEconomyStore((s) => s.atfEntries)
-  const savingsAccounts = useEconomyStore((s) => s.savingsAccounts)
-  const debts = useEconomyStore((s) => s.debts)
-  const subscriptions = useEconomyStore((s) => s.subscriptions)
-  const insurances = useEconomyStore((s) => s.insurances)
-  const budgetOverrides = useEconomyStore((s) => s.budgetOverrides)
-  const temporaryPayEntries = useEconomyStore((s) => s.temporaryPayEntries)
-  const ivfTransactions = useEconomyStore((s) => s.ivfTransactions)
-  const fondPortfolio = useEconomyStore((s) => s.fondPortfolio)
-
-  // Treffsikkerhet-beregning — identisk med ForecastAccuracyPage
-  const hitRate = useMemo(() => {
-    if (!profile) return null
-    const year = new Date().getFullYear()
-    const yearOverrides = Object.fromEntries(
-      Object.entries(budgetOverrides)
-        .filter(([k]) => k.startsWith(`${year}:`))
-        .map(([k, v]) => [k.slice(String(year).length + 1), v])
-    )
-    const juneForecast = forecastJune(year, monthHistory, profile, atfEntries, undefined, kf.feriepengerProsent)
-    const table = computeBudgetTable(
-      year, profile, budgetTemplate, monthHistory, atfEntries,
-      savingsAccounts, debts, subscriptions, insurances,
-      yearOverrides, temporaryPayEntries, juneForecast ?? undefined,
-      false, ivfTransactions, fondPortfolio,
-    )
-    const rows = table.sections
-      .flatMap((s) => s.rows)
-      .filter((r) => (!r.isBold || r.id === 'netto') && !r.isCumulative)
-      .map((r) => ({
-        id: r.id, label: r.label, cells: r.cells.map((c) => ({ budget: c.budget, actual: c.actual })),
-      }))
-    const accuracy = computeAccuracy(rows)
-    return accuracy.monthsWithData > 0 ? accuracy.overallHitRate : null
-  }, [profile, budgetTemplate, monthHistory, atfEntries, savingsAccounts, debts, subscriptions, insurances, budgetOverrides, temporaryPayEntries, ivfTransactions, fondPortfolio, kf])
+  // Treffsikkerhet-bånd — kanonisk motor, delt med Treffsikkerhet-visningen
+  const { report } = useForecastAccuracy()
+  const hitRate = report && report.monthsWithData > 0 ? report.overallHitRate : null
 
   // Lokal state for engangshendelse-skjema
   const [newLabel, setNewLabel] = useState('')

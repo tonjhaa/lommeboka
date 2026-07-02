@@ -1,30 +1,12 @@
-import { useMemo } from 'react'
 import { Target, Lock, Unlock } from 'lucide-react'
-// useEconomyStore direkte (ikke useActiveEconomyStore) — kalibrering er et personlig
-// verktøy mot egne slipper, ikke en partner-kontekst.
 import { useEconomyStore } from '@/application/useEconomyStore'
-import { useKeyFigures } from '@/hooks/useKeyFigures'
-import { computeAccuracy } from '@/domain/economy/forecastCalibration'
-import { computeBudgetTable } from '@/domain/economy/budgetTableComputer'
-import { forecastJune } from '@/domain/economy/holidayPayCalculator'
+import { useForecastAccuracy } from '@/hooks/useForecastAccuracy'
 import { cn } from '@/lib/utils'
 
 function fmtNOK(n: number): string { return Math.round(n).toLocaleString('no-NO') + ' kr' }
 
 export function ForecastAccuracyPage() {
-  const kf = useKeyFigures()
   const profile = useEconomyStore((s) => s.profile)
-  const monthHistory = useEconomyStore((s) => s.monthHistory)
-  const budgetTemplate = useEconomyStore((s) => s.budgetTemplate)
-  const atfEntries = useEconomyStore((s) => s.atfEntries)
-  const savingsAccounts = useEconomyStore((s) => s.savingsAccounts)
-  const debts = useEconomyStore((s) => s.debts)
-  const subscriptions = useEconomyStore((s) => s.subscriptions)
-  const insurances = useEconomyStore((s) => s.insurances)
-  const budgetOverrides = useEconomyStore((s) => s.budgetOverrides)
-  const temporaryPayEntries = useEconomyStore((s) => s.temporaryPayEntries)
-  const ivfTransactions = useEconomyStore((s) => s.ivfTransactions)
-  const fondPortfolio = useEconomyStore((s) => s.fondPortfolio)
   const calibrationLog = useEconomyStore((s) => s.calibrationLog)
   const settings = useEconomyStore((s) => s.calibrationSettings)
   const setCalibrationSettings = useEconomyStore((s) => s.setCalibrationSettings)
@@ -32,38 +14,9 @@ export function ForecastAccuracyPage() {
   const lockCalibration = useEconomyStore((s) => s.lockCalibration)
   const unlockCalibration = useEconomyStore((s) => s.unlockCalibration)
 
-  const slipCount = monthHistory.filter((m) => m.source === 'imported_slip').length
-
-  const report = useMemo(() => {
-    if (!profile) return null
-    const year = new Date().getFullYear()
-    // Samme budsjettberegning som dashbordet — ekte data, ellers blir budsjett-cellene
-    // (og dermed treff-%) feil for ATF/sparing/gjeld/abo/forsikring/fond.
-    // Kjent v1-begrensning: bruker dashbordets 15-args-kall, ikke BudgetPage sin mer
-    // nøyaktige trekktabell-/lonnsoppgjor-baserte beregning. Skattetrekk-treff kan derfor
-    // avvike marginalt fra Budsjett-fanen.
-    const yearOverrides = Object.fromEntries(
-      Object.entries(budgetOverrides)
-        .filter(([k]) => k.startsWith(`${year}:`))
-        .map(([k, v]) => [k.slice(String(year).length + 1), v])
-    )
-    const juneForecast = forecastJune(year, monthHistory, profile, atfEntries, undefined, kf.feriepengerProsent)
-    const table = computeBudgetTable(
-      year, profile, budgetTemplate, monthHistory, atfEntries,
-      savingsAccounts, debts, subscriptions, insurances,
-      yearOverrides, temporaryPayEntries, juneForecast ?? undefined,
-      false, ivfTransactions, fondPortfolio,
-    )
-    // Mål kun granulære linjerader (+ netto som hovedtall). Sum-/YTD-rader ekskluderes:
-    // de er avledet og padder treff-% med nær-duplikate avvik (sum-trekk, overskudd, brutto …).
-    const rows = table.sections
-      .flatMap((s) => s.rows)
-      .filter((r) => (!r.isBold || r.id === 'netto') && !r.isCumulative)
-      .map((r) => ({
-        id: r.id, label: r.label, cells: r.cells.map((c) => ({ budget: c.budget, actual: c.actual })),
-      }))
-    return computeAccuracy(rows)
-  }, [profile, budgetTemplate, monthHistory, atfEntries, savingsAccounts, debts, subscriptions, insurances, budgetOverrides, temporaryPayEntries, ivfTransactions, fondPortfolio, kf])
+  // Kanonisk treffsikkerhet — samme motor (useBudgetTable) som Budsjett-fanen,
+  // så skattetrekk-treff ikke lenger avviker fra budsjettabellen.
+  const { report, slipCount } = useForecastAccuracy()
 
   if (!profile || slipCount < 2) {
     return (

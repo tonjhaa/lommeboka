@@ -2,10 +2,8 @@ import { useMemo } from 'react'
 import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
 import { useAppStore } from '@/store/useAppStore'
 import { simulateScenario, type ScenarioBaseline } from '@/domain/economy/scenarioSimulator'
-import { buildPensionInputFromProfile } from '@/domain/economy/pensionCalculator'
-import { DEFAULT_PENSION_SETTINGS } from '@/application/useEconomyStore'
+import { usePensionBaseInput } from '@/hooks/usePensionBaseInput'
 import { computeEffectiveBalance } from '@/domain/economy/savingsCalculator'
-import { useKeyFigures } from '@/hooks/useKeyFigures'
 import type { ScenarioResult } from '@/types/economy'
 
 export function useScenario(): ScenarioResult | null {
@@ -15,36 +13,17 @@ export function useScenario(): ScenarioResult | null {
   const ivfTransactions = useActiveEconomyStore((s) => s.ivfTransactions)
   const debts = useActiveEconomyStore((s) => s.debts)
   const partnerVeikart = useActiveEconomyStore((s) => s.partnerVeikart)
-  const userPreferences = useActiveEconomyStore((s) => s.userPreferences)
-  const pensionSettings = useActiveEconomyStore((s) => s.pensionSettings)
   const levers = useAppStore((s) => s.scenarioLevers)
-  const kf = useKeyFigures()
+  // Kanonisk pensjonsinput — samme hook som Pensjon-siden og dashbord-chipen,
+  // så baseline-pensjonen matcher overalt.
+  const { baseInput: pensionBase } = usePensionBaseInput()
 
   return useMemo(() => {
-    if (!profile) return null
+    if (!profile || !pensionBase) return null
     const d = new Date()
     const now = { year: d.getFullYear(), month: d.getMonth() + 1 }
     const fasteTillegg = (profile.fixedAdditions ?? []).reduce((s, t) => s + t.amount, 0)
     const grossMonthly = profile.baseMonthly + fasteTillegg
-
-    // Kanonisk pensjonsinput — samme byggefunksjon som Pensjon/Dashboard, så baseline matcher.
-    const settings = pensionSettings ?? {
-      ...DEFAULT_PENSION_SETTINGS,
-      birthYear: userPreferences?.birthYear ?? DEFAULT_PENSION_SETTINGS.birthYear,
-    }
-    const pensionBase = buildPensionInputFromProfile(
-      profile, settings, now.year,
-      kf.grunnbelop,
-      kf.delingstall,
-      {
-        folketrygd: kf.folketrygdOpptjeningssats,
-        spkLav: kf.spkPaaslagLav,
-        spkHoy: kf.spkPaaslagHoy,
-        afp: kf.afpOpptjeningssats,
-        takFolketrygdG: kf.takFolketrygdG,
-        takSpkG: kf.takSpkG,
-      },
-    )
 
     // Egenkapital med samme basis som Veikart: effektiv saldo (sparekonto + BSU) + fond.
     const equity =
@@ -72,5 +51,5 @@ export function useScenario(): ScenarioResult | null {
       partnerVeikart,
     }
     return simulateScenario(baseline, levers)
-  }, [profile, savingsAccounts, fondPortfolio, ivfTransactions, debts, partnerVeikart, userPreferences, pensionSettings, levers, kf])
+  }, [profile, pensionBase, savingsAccounts, fondPortfolio, ivfTransactions, debts, partnerVeikart, levers])
 }

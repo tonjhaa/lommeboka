@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   Shield, Briefcase, PiggyBank, BarChart2, CreditCard,
   FileText, TrendingUp, RefreshCw, HeartPulse, Umbrella,
-  Palmtree, CheckCircle2, ArrowRight, ChevronLeft, Map, Gift, Baby, Landmark, LineChart, Target, SlidersHorizontal, Wallet,
+  Palmtree, CheckCircle2, ArrowRight, ChevronLeft, Map, Gift, Baby, Landmark, SlidersHorizontal,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -57,13 +57,6 @@ export const MODULES: ModuleOption[] = [
     label: 'Skatteoppgjør',
     desc: 'Prognose og historikk for skatteoppgjør',
     icon: TrendingUp,
-    defaultFor: ['forsvaret', 'custom'],
-  },
-  {
-    tab: 'calibration',
-    label: 'Treffsikkerhet',
-    desc: 'Auto-kalibrer prognoser mot faktiske slipper',
-    icon: Target,
     defaultFor: ['forsvaret', 'custom'],
   },
   {
@@ -130,27 +123,15 @@ export const MODULES: ModuleOption[] = [
     defaultFor: ['forsvaret', 'custom'],
   },
   {
-    tab: 'forbruk',
-    label: 'Forbruk',
-    desc: 'Importer brukskonto, auto-kategoriser, se forbruk vs budsjett',
-    icon: Wallet,
-    defaultFor: ['forsvaret', 'custom'],
-  },
-  {
     tab: 'permisjon',
     label: 'Permisjon',
     desc: 'Planlegg foreldrepermisjon og se lønnsutfall',
     icon: Baby,
     defaultFor: [],
   },
-  {
-    tab: 'formue',
-    label: 'Formue over tid',
-    desc: 'Netto formue (sparing/fond/gjeld) som tidsserie',
-    icon: LineChart,
-    defaultFor: ['forsvaret', 'custom'],
-  },
 ]
+// Forbruk og Treffsikkerhet ligger nå som visninger i Budsjett, og Formue over
+// tid som detaljvisning på Dashbord — de er ikke lenger egne moduler.
 
 // ------------------------------------------------------------
 // Step components

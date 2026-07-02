@@ -6,9 +6,7 @@ import { Button } from '@/components/ui/button'
 import { NumberInput } from '@/components/ui/number-input'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { useAppStore } from '@/store/useAppStore'
-import { useKeyFigures } from '@/hooks/useKeyFigures'
-import { computeBudgetTable } from '@/domain/economy/budgetTableComputer'
-import { forecastJune } from '@/domain/economy/holidayPayCalculator'
+import { useBudgetTable } from '@/hooks/useBudgetTable'
 import { beregnSkatt, CURRENT_RATES, type TaxInput } from '@/domain/economy/norwegianTaxCalc'
 import { computeYearlyInterestIncome } from '@/domain/economy/savingsCalculator'
 import { cn } from '@/lib/utils'
@@ -58,26 +56,14 @@ export function beregnPendlerfradrag(kmEnVei: number, arbeidsdager: number): num
 // ------------------------------------------------------------
 
 export function TaxCalculatorPage() {
-  const {
-    profile, monthHistory, budgetTemplate, atfEntries,
-    savingsAccounts, debts, subscriptions, insurances,
-    temporaryPayEntries, budgetOverrides, fondPortfolio,
-    setProfile,
-  } = useEconomyStore()
+  const { profile, savingsAccounts, debts, setProfile } = useEconomyStore()
   const setCurrentView = useAppStore((s) => s.setCurrentView)
-  const kf = useKeyFigures()
 
-  // Hent prognose-inntekt fra budsjettabellen
+  // Prognose-inntekt fra den kanoniske budsjettmotoren — samme forutsetninger
+  // (trekktabell, lønnsoppgjør, ansettelsesdato) som Budsjett-fanen.
   const currentYear = new Date().getFullYear()
-  const juneForecast = profile ? forecastJune(currentYear, monthHistory, profile, atfEntries, undefined, kf.feriepengerProsent) : null
-  const yearOverrides: Record<string, number> = {}
-  for (const [k, v] of Object.entries(budgetOverrides)) {
-    if (k.startsWith(`${currentYear}:`)) yearOverrides[k.slice(`${currentYear}:`.length)] = v
-  }
-  const budgetTable = profile
-    ? computeBudgetTable(currentYear, profile, budgetTemplate, monthHistory, atfEntries, savingsAccounts, debts, subscriptions, insurances, yearOverrides, temporaryPayEntries, juneForecast ?? undefined, false, [], fondPortfolio)
-    : null
-  const allRows = budgetTable?.sections.flatMap((s) => s.rows) ?? []
+  const { table: budgetTable } = useBudgetTable(currentYear)
+  const allRows = budgetTable.sections.flatMap((s) => s.rows)
   const bruttoRow = allRows.find((r) => r.id === 'brutto')
   const projectedIncome = bruttoRow ? Math.abs(bruttoRow.annualActual) : 0
   const projectedFagforening = Math.abs(allRows.find((r) => r.id === 'fagforening')?.annualActual ?? 0)

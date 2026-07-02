@@ -18,12 +18,6 @@ const EconomyPage = lazyWithRetry(() =>
   }))
 )
 
-const VeikartPage = lazyWithRetry(() =>
-  import('@/pages/economy/VeikartPage').then((m) => ({
-    default: m.VeikartPage,
-  }))
-)
-
 const TaxCalculatorPage = lazyWithRetry(() =>
   import('@/pages/TaxCalculatorPage').then((m) => ({
     default: m.TaxCalculatorPage as ComponentType,
@@ -61,11 +55,6 @@ function AppContent() {
         {currentView === 'skattekalkulator' && (
           <Suspense fallback={<PageFallback />}>
             <TaxCalculatorPage />
-          </Suspense>
-        )}
-        {currentView === 'veikart' && (
-          <Suspense fallback={<PageFallback />}>
-            <VeikartPage />
           </Suspense>
         )}
         {currentView === 'partner' && (

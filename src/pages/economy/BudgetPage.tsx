@@ -1,17 +1,16 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Lock, LockOpen, Upload, Plus, LayoutDashboard, Table2, Pencil, Undo2, ChevronDown, ChevronRight, X } from 'lucide-react'
+import { Lock, LockOpen, Upload, Plus, LayoutDashboard, Table2, Pencil, Undo2, ChevronDown, ChevronRight, X, Wallet, Target } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useActiveEconomyStore } from '@/contexts/EconomyStoreContext'
-import { useKeyFigures } from '@/hooks/useKeyFigures'
 import { PayslipImporter } from '@/features/payslip/PayslipImporter'
-import { computeBudgetTable } from '@/domain/economy/budgetTableComputer'
+import { SpendingPage } from './SpendingPage'
+import { ForecastAccuracyPage } from './ForecastAccuracyPage'
 import type { BudgetRow, MonthMeta } from '@/domain/economy/budgetTableComputer'
-import { forecastJune } from '@/domain/economy/holidayPayCalculator'
-import { slaaOppTrekk, slaaOppTrekkSync } from '@/utils/trekktabellLookup'
+import { useBudgetTable, type BudgetTable } from '@/hooks/useBudgetTable'
 import type { BudgetCategory, BudgetLine } from '@/types/economy'
 import { cn } from '@/lib/utils'
 
@@ -59,27 +58,16 @@ function amountClass(n: number, bold = false): string {
 // ----------------------------------------------------------------
 
 export function BudgetPage() {
-  const kf = useKeyFigures()
-
   const {
-    profile,
     budgetTemplate,
     monthHistory,
-    atfEntries,
     savingsAccounts,
-    debts,
-    subscriptions,
-    insurances,
-    temporaryPayEntries,
-    ivfTransactions,
-    ivfSettings,
-    fondPortfolio,
+    budgetOverrides,
     lockMonth,
     unlockMonth,
     addBudgetLine,
     updateBudgetLine,
     removeBudgetLine,
-    budgetOverrides,
     setBudgetOverride,
     clearBudgetOverride,
     _budgetUndoStack,
@@ -88,39 +76,19 @@ export function BudgetPage() {
     removeContribution,
     updateSavingsAccount: updateSavingsAccountInBudget,
     removeWithdrawal,
-    absenceHireDate,
     lonnsoppgjor,
     updateLonnsoppgjor,
   } = useActiveEconomyStore()
 
   const now = new Date()
   const [activeYear, setActiveYear] = useState(now.getFullYear())
-  const [selectedView, setSelectedView] = useState<'oversikt' | 'tabell'>('tabell')
+  const [selectedView, setSelectedView] = useState<'oversikt' | 'tabell' | 'forbruk' | 'treffsikkerhet'>('tabell')
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
   const [showSlipFor, setShowSlipFor] = useState<number | null>(null)
   const [addingLinePrefill, setAddingLinePrefill] = useState<Partial<BudgetLine> | null>(null)
   const [editingLine, setEditingLine] = useState<BudgetLine | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState<{ lineId: string; label: string } | null>(null)
   const [contribDialog, setContribDialog] = useState<{ accId: string; month: number } | null>(null)
-  const [trekktabellLoaded, setTrekktabellLoaded] = useState(false)
-
-  // Last trekktabelldata for brukerens tabellnummer inn i minne-cachen
-  useEffect(() => {
-    const tabellnummer = profile?.tabellnummer
-    if (!tabellnummer) return
-    const baseMonthly = (profile?.baseMonthly ?? 0)
-    if (baseMonthly <= 0) return
-    slaaOppTrekk(tabellnummer, Math.round(baseMonthly), 1)
-      .then(() => setTrekktabellLoaded(true))
-      .catch(() => { /* ignorer nettverksfeil — trekkrutinen brukes som fallback */ })
-  }, [profile?.tabellnummer, profile?.baseMonthly])
-
-  const trekktabellLookup = useMemo(() => {
-    const tabellnummer = profile?.tabellnummer
-    if (!trekktabellLoaded || !tabellnummer) return undefined
-    return (grunnlag: number) => slaaOppTrekkSync(tabellnummer, grunnlag, 1) ?? undefined
-  }, [trekktabellLoaded, profile?.tabellnummer])
-
   const canUndo = _budgetUndoStack.length > 0
 
   const handleUndo = useCallback(() => {
@@ -141,6 +109,11 @@ export function BudgetPage() {
   const [hideTemporary, setHideTemporary] = useState(false)
   
 
+  // Kanonisk budsjettmotor — samme hook som Dashbord, Simulator og Skattekalkulator
+  // bruker, så alle tall i appen deler forutsetninger.
+  const { table: tableData } = useBudgetTable(activeYear, { hideTemporary })
+
+  // Årets overrides trengs fortsatt lokalt til «bak inn i malen»-funksjonen.
   const yearOverrides = useMemo(() => {
     const prefix = `${activeYear}:`
     const result: Record<string, number> = {}
@@ -149,32 +122,6 @@ export function BudgetPage() {
     }
     return result
   }, [budgetOverrides, activeYear])
-
-  const juneForecast = profile
-    ? forecastJune(activeYear, monthHistory, profile, atfEntries, temporaryPayEntries, kf.feriepengerProsent)
-    : undefined
-
-  const tableData = computeBudgetTable(
-    activeYear,
-    profile,
-    budgetTemplate,
-    monthHistory,
-    atfEntries,
-    savingsAccounts,
-    debts,
-    subscriptions,
-    insurances,
-    yearOverrides,
-    temporaryPayEntries,
-    juneForecast ?? undefined,
-    hideTemporary,
-    ivfTransactions,
-    fondPortfolio,
-    ivfSettings?.selfLabel,
-    trekktabellLookup,
-    absenceHireDate,
-    lonnsoppgjor,
-  )
 
   const { metas, sections } = tableData
 
@@ -295,79 +242,86 @@ export function BudgetPage() {
   // Total cols = 1 (label) + 12 × 2 (months) + 1 (årssum) = 26
   const TOTAL_COLS = 26
 
+  // Forbruk og Treffsikkerhet er innlemmede visninger med egne kontroller —
+  // budsjettets år-/månedvelger og handlingsknapper gjelder ikke dem.
+  const budsjettVisning = selectedView === 'oversikt' || selectedView === 'tabell'
+
+  const VIEWS = [
+    { id: 'oversikt' as const, label: 'Oversikt', Icon: LayoutDashboard },
+    { id: 'tabell' as const, label: 'Tabell', Icon: Table2 },
+    { id: 'forbruk' as const, label: 'Forbruk', Icon: Wallet },
+    { id: 'treffsikkerhet' as const, label: 'Treffsikkerhet', Icon: Target },
+  ]
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ---- Top bar ---- */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border shrink-0 flex-wrap">
-        {/* Year selector */}
-        <div className="flex gap-1 shrink-0">
-          {years.map((y) => (
-            <Button
-              key={y}
-              variant={activeYear === y ? 'default' : 'outline'}
-              size="sm"
-              className="text-xs h-7 px-2.5"
-              onClick={() => setActiveYear(y)}
-            >
-              {y}
-            </Button>
-          ))}
-        </div>
+        {budsjettVisning && (
+          <>
+            {/* Year selector */}
+            <div className="flex gap-1 shrink-0">
+              {years.map((y) => (
+                <Button
+                  key={y}
+                  variant={activeYear === y ? 'default' : 'outline'}
+                  size="sm"
+                  className="text-xs h-7 px-2.5"
+                  onClick={() => setActiveYear(y)}
+                >
+                  {y}
+                </Button>
+              ))}
+            </div>
 
-        {/* Divider */}
-        <div className="h-5 w-px bg-border shrink-0" />
+            {/* Divider */}
+            <div className="h-5 w-px bg-border shrink-0" />
 
-        {/* Month pills */}
-        <div className="flex gap-0.5 flex-wrap">
-          {metas.map((meta) => (
-            <button
-              key={meta.month}
-              onClick={() => setSelectedMonth(meta.month)}
-              className={cn(
-                'relative flex items-center gap-1 text-[11px] px-2 py-1 rounded-md transition-colors',
-                selectedMonth === meta.month
-                  ? 'bg-primary text-primary-foreground font-medium'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/40',
-              )}
-            >
-              {MONTH_SHORT[meta.month]}
-              {(meta.hasSlip || meta.isLocked) && (
-                <span className={cn(
-                  'h-1 w-1 rounded-full',
-                  selectedMonth === meta.month ? 'bg-primary-foreground/70' : 'bg-green-500/70',
-                )} />
-              )}
-            </button>
-          ))}
-        </div>
+            {/* Month pills */}
+            <div className="flex gap-0.5 flex-wrap">
+              {metas.map((meta) => (
+                <button
+                  key={meta.month}
+                  onClick={() => setSelectedMonth(meta.month)}
+                  className={cn(
+                    'relative flex items-center gap-1 text-[11px] px-2 py-1 rounded-md transition-colors',
+                    selectedMonth === meta.month
+                      ? 'bg-primary text-primary-foreground font-medium'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/40',
+                  )}
+                >
+                  {MONTH_SHORT[meta.month]}
+                  {(meta.hasSlip || meta.isLocked) && (
+                    <span className={cn(
+                      'h-1 w-1 rounded-full',
+                      selectedMonth === meta.month ? 'bg-primary-foreground/70' : 'bg-green-500/70',
+                    )} />
+                  )}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Spacer */}
         <div className="flex-1" />
 
         {/* View toggle */}
         <div className="flex gap-0.5 bg-muted/40 rounded-md p-0.5">
-          <button
-            onClick={() => setSelectedView('oversikt')}
-            className={cn(
-              'flex items-center gap-1 text-[11px] px-2.5 py-1 rounded transition-colors',
-              selectedView === 'oversikt'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <LayoutDashboard className="h-3 w-3" /> Oversikt
-          </button>
-          <button
-            onClick={() => setSelectedView('tabell')}
-            className={cn(
-              'flex items-center gap-1 text-[11px] px-2.5 py-1 rounded transition-colors',
-              selectedView === 'tabell'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <Table2 className="h-3 w-3" /> Tabell
-          </button>
+          {VIEWS.map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              onClick={() => setSelectedView(id)}
+              className={cn(
+                'flex items-center gap-1 text-[11px] px-2.5 py-1 rounded transition-colors',
+                selectedView === id
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Icon className="h-3 w-3" /> {label}
+            </button>
+          ))}
         </div>
 
         {/* Action buttons */}
@@ -384,47 +338,51 @@ export function BudgetPage() {
             </Button>
           </>
         )}
-        {hasUnsavedOverrides && (
-          <Button
-            size="sm"
-            className="text-xs h-7 gap-1 bg-amber-500/15 text-amber-400 border border-amber-500/40 hover:bg-amber-500/25 hover:text-amber-300"
-            onClick={handleSaveBudget}
-            title="Bekreft endringer og fjern gul markering"
-          >
-            Lagre endringer
-          </Button>
+        {budsjettVisning && (
+          <>
+            {hasUnsavedOverrides && (
+              <Button
+                size="sm"
+                className="text-xs h-7 gap-1 bg-amber-500/15 text-amber-400 border border-amber-500/40 hover:bg-amber-500/25 hover:text-amber-300"
+                onClick={handleSaveBudget}
+                title="Bekreft endringer og fjern gul markering"
+              >
+                Lagre endringer
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs h-7 gap-1"
+              onClick={handleUndo}
+              disabled={!canUndo}
+              title="Angre (⌘Z)"
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+              Angre
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs h-7 gap-1"
+              onClick={() => setAddingLinePrefill({})}
+            >
+              <Plus className="h-3 w-3" /> Ny linje
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs h-7 gap-1"
+              onClick={() => setShowSlipFor(selectedMonth)}
+            >
+              <Upload className="h-3 w-3" /> Last opp slipp
+            </Button>
+          </>
         )}
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-xs h-7 gap-1"
-          onClick={handleUndo}
-          disabled={!canUndo}
-          title="Angre (⌘Z)"
-        >
-          <Undo2 className="h-3.5 w-3.5" />
-          Angre
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-xs h-7 gap-1"
-          onClick={() => setAddingLinePrefill({})}
-        >
-          <Plus className="h-3 w-3" /> Ny linje
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-xs h-7 gap-1"
-          onClick={() => setShowSlipFor(selectedMonth)}
-        >
-          <Upload className="h-3 w-3" /> Last opp slipp
-        </Button>
       </div>
 
       {/* ---- Forventet lønnsoppgjør-indikator ---- */}
-      {forventetForYear && (
+      {budsjettVisning && forventetForYear && (
         <div className={`flex items-center gap-2 px-4 py-1.5 border-b text-xs shrink-0 ${
           forventetAktiv ? 'border-green-500/30 bg-green-500/5 text-green-300' : 'border-amber-500/30 bg-amber-500/5 text-amber-300'
         }`}>
@@ -454,6 +412,20 @@ export function BudgetPage() {
           selectedMonth={selectedMonth}
           activeYear={activeYear}
         />
+      )}
+
+      {/* ---- Forbruk view (tidligere egen fane) ---- */}
+      {selectedView === 'forbruk' && (
+        <div className="flex-1 min-h-0">
+          <SpendingPage />
+        </div>
+      )}
+
+      {/* ---- Treffsikkerhet view (tidligere egen fane) ---- */}
+      {selectedView === 'treffsikkerhet' && (
+        <div className="flex-1 min-h-0">
+          <ForecastAccuracyPage />
+        </div>
       )}
 
       {/* ---- Tabell view ---- */}
@@ -909,7 +881,7 @@ function OversiktView({
   selectedMonth,
   activeYear,
 }: {
-  sections: ReturnType<typeof computeBudgetTable>['sections']
+  sections: BudgetTable['sections']
   metas: MonthMeta[]
   selectedMonth: number
   activeYear: number

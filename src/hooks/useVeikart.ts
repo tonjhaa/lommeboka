@@ -14,7 +14,8 @@ const BSU_MAX_AGE = 33         // siste år man KAN spare (fyller 34)
 const BSU_TAX_BENEFIT = 0.10   // 10% av innskudd
 const STRESSTEST_MIN = defaultConfig.lendingRules.minStressTestRate / 100
 const STRESSTEST_PP = defaultConfig.lendingRules.stressTestAddition / 100
-const CURRENT_RATE = 0.0425    // 4.25% (norges bank 2026)
+// Samme rentesats som boligkalkulatorens standard — én kilde til renteantakelsen.
+const CURRENT_RATE = defaultConfig.loanDefaults.defaultInterestRate / 100
 const DEFAULT_SAVINGS_RATE = 3.5  // % per år, sparekonto
 // DEFAULT_FOND_RATE importeres fra economy.config (delt med Formue-modulen)
 
