@@ -6,6 +6,7 @@ import { SalaryGrowthChart } from '@/components/economy/charts/SalaryGrowthChart
 import { MonthlyNettoChart } from '@/components/economy/charts/MonthlyNettoChart'
 import { TaxRateChart } from '@/components/economy/charts/TaxRateChart'
 import { slaaOppTrekk } from '@/utils/trekktabellLookup'
+import { beregnSkatt } from '@/domain/economy/norwegianTaxCalc'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -219,12 +220,6 @@ export function SalaryPage() {
   const ytdTax = taxByYear.get(nowYear)
   const ytdRate = ytdTax && ytdTax.brutto > 0 ? (ytdTax.skatt / ytdTax.brutto) * 100 : null
 
-  // Normalmåned-sats til simulatoren: snitt av siste 3 normale slipper
-  const recentNormal = normalSlips.slice(0, 3)
-  const normalTaxRate = recentNormal.length > 0
-    ? recentNormal.reduce((s, m) => s + (m.slipData!.skattetrekk / m.slipData!.bruttoSum) * 100, 0) / recentNormal.length
-    : null
-
   // KPI-grunnlag
   const fasteTilleggMnd = profile?.fixedAdditions.reduce((s, a) => s + Math.max(0, a.amount), 0) ?? 0
   const atfYTD = importedSlips
@@ -404,7 +399,6 @@ export function SalaryPage() {
           {profile && (
             <LønnssimulatorCard
               profile={profile}
-              effectiveTaxRate={normalTaxRate}
               latestNetto={normalNettoMedian ?? 0}
             />
           )}
@@ -1382,11 +1376,9 @@ function LonnsoppgjorSection({
 
 function LønnssimulatorCard({
   profile,
-  effectiveTaxRate,
   latestNetto,
 }: {
   profile: EmploymentProfile
-  effectiveTaxRate: number | null
   latestNetto: number
 }) {
   const tillegg = profile.fixedAdditions.reduce((s, a) => s + Math.max(0, a.amount), 0)
@@ -1399,9 +1391,19 @@ function LønnssimulatorCard({
   const fagforening = profile.unionFee
   const husleie = profile.housingDeduction
   const ekstraTrekk = profile.extraTaxWithholding
-  // Bruk faktisk skatteprosent fra siste slipp om tilgjengelig, ellers 30 %
-  const skatteRate = effectiveTaxRate !== null ? effectiveTaxRate / 100 : 0.30
-  const skatt = Math.round(brutto * skatteRate)
+  // Faktisk progressiv årsskatt via den ekte skattemotoren (samme som scenario-simulator/budsjett),
+  // ikke en flat snittsats fra slippene. Pensjon + fagforening er fradragsberettiget → reduserer
+  // skattegrunnlaget. skattInntekt er årlig inntektsskatt (inkl. trygdeavgift); deles på 12.
+  const skattRes = beregnSkatt({
+    lonnsInntekt: brutto * 12, pensjonsinntekt: 0, næringsInntekt: 0, kapitalInntekt: 0,
+    andreFradrag: 0, renteutgifter: 0, arbeidsreiseFradrag: 0,
+    fagforeningskontingent: fagforening * 12, pensjonspremie: pensjon * 12,
+    utgiftsgodtgjørelse: 0, bsuSkattefradrag: 0,
+    primaerboligVerdi: 0, sekundaerboligVerdi: 0, bankinnskudd: 0, aksjerFondVerdi: 0,
+    annenFormue: 0, gjeld: 0,
+  })
+  const skatt = Math.round(skattRes.skattInntekt / 12)
+  const skatteRate = brutto > 0 ? skatt / brutto : 0
   const estimertNetto = brutto - skatt - pensjon - fagforening - husleie - ekstraTrekk
 
   const delta = latestNetto > 0 ? estimertNetto - latestNetto : null
@@ -1481,9 +1483,7 @@ function LønnssimulatorCard({
               )}
             </div>
           </div>
-          {effectiveTaxRate === null && (
-            <p className="text-[10px] text-muted-foreground">* Skatteestimat basert på 30 %. Importer slipp for nøyaktig sats.</p>
-          )}
+          <p className="text-[10px] text-muted-foreground">Progressiv årsskatt via skattemotoren (samme som budsjett/scenario). Faktisk månedstrekk kan variere.</p>
         </div>
       </CardContent>
     </Card>
