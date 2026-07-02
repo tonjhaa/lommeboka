@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
-import { useEconomyStore, DEFAULT_PENSION_SETTINGS } from '@/application/useEconomyStore'
-import { projectPension, buildPensionInputFromProfile } from '@/domain/economy/pensionCalculator'
-import { useKeyFigures } from '@/hooks/useKeyFigures'
+import { useEconomyStore } from '@/application/useEconomyStore'
+import { projectPension } from '@/domain/economy/pensionCalculator'
+import { usePensionBaseInput } from '@/hooks/usePensionBaseInput'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { PensionSettings } from '@/types/economy'
@@ -39,34 +39,13 @@ const SÆRALDER_AGES = [57, 60, 63] as const
 export function PensionPage() {
   const profile = useEconomyStore((s) => s.profile)
   const prefs = useEconomyStore((s) => s.userPreferences)
-  const stored = useEconomyStore((s) => s.pensionSettings)
   const setPensionSettings = useEconomyStore((s) => s.setPensionSettings)
-  const kf = useKeyFigures()
 
   // Alle hooks må kalles før enhver betinget return (Rules of Hooks).
-  const settings = useMemo<PensionSettings>(() => stored ?? {
-    ...DEFAULT_PENSION_SETTINGS,
-    birthYear: prefs?.birthYear ?? DEFAULT_PENSION_SETTINGS.birthYear,
-  }, [stored, prefs?.birthYear])
+  // Kanonisk pensjonsinput — samme hook som dashbord-chipen og Simulatoren.
+  const { baseInput, settings } = usePensionBaseInput()
 
   const [uttaksalder, setUttaksalder] = useState(67)
-
-  const baseInput = useMemo(
-    () => (profile ? buildPensionInputFromProfile(
-      profile, settings, new Date().getFullYear(),
-      kf.grunnbelop,
-      kf.delingstall,
-      {
-        folketrygd: kf.folketrygdOpptjeningssats,
-        spkLav: kf.spkPaaslagLav,
-        spkHoy: kf.spkPaaslagHoy,
-        afp: kf.afpOpptjeningssats,
-        takFolketrygdG: kf.takFolketrygdG,
-        takSpkG: kf.takSpkG,
-      },
-    ) : null),
-    [profile, settings, kf],
-  )
 
   const projection = useMemo(() => {
     if (!baseInput) return null

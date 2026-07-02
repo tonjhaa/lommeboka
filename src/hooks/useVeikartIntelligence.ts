@@ -1,9 +1,7 @@
 import { useMemo } from 'react'
 import { useEconomyStore } from '@/application/useEconomyStore'
-import { useKeyFigures } from '@/hooks/useKeyFigures'
 import { computeEffectiveBalance } from '@/domain/economy/savingsCalculator'
-import { computeBudgetTable } from '@/domain/economy/budgetTableComputer'
-import { forecastJune } from '@/domain/economy/holidayPayCalculator'
+import { useBudgetTable } from '@/hooks/useBudgetTable'
 import { settlementBalance } from '@/domain/economy/taxSettlementCalc'
 
 // ── Typer ────────────────────────────────────────────────────────
@@ -60,8 +58,6 @@ const PROJECTION_MONTHS = 72  // 6 år
 // ── Hook ─────────────────────────────────────────────────────────
 
 export function useVeikartIntelligence() {
-  const kf = useKeyFigures()
-
   const {
     profile,
     userPreferences,
@@ -72,12 +68,11 @@ export function useVeikartIntelligence() {
     savingsAccounts,
     atfEntries,
     taxSettlements,
-    budgetTemplate,
-    budgetOverrides,
-    subscriptions,
-    insurances,
-    fondPortfolio,
   } = useEconomyStore()
+
+  // Kanonisk budsjettmotor — samme kilde som Budsjett-/Skatt-fanen, så
+  // skatteoppgjør-estimatet under matcher (ikke naiv ×12/mnd).
+  const { table: budgetTableNow } = useBudgetTable(new Date().getFullYear())
 
   return useMemo(() => {
     const now = new Date()
@@ -85,26 +80,11 @@ export function useVeikartIntelligence() {
     const maxDate = new Date(now.getFullYear(), now.getMonth() + PROJECTION_MONTHS, 1)
     const maxYM = `${maxDate.getFullYear()}-${String(maxDate.getMonth() + 1).padStart(2, '0')}`
 
-    // Budsjettets trekktabell-projeksjon for inneværende år — samme kilde som
-    // Skatt-fanen, så skatteoppgjør-estimatet under matcher (ikke naiv ×12/mnd).
     // Beregnes én gang og gjenbrukes til både skatteoppgjør-event og budgetSurplus.
     let budgetWithheldAnnual: number | null = null
     let budgetOverskuddCell: { budget: number; actual: number | null } | undefined
     if (profile) {
-      const cy = now.getFullYear()
-      const juneFc = forecastJune(cy, monthHistory, profile, atfEntries, undefined, kf.feriepengerProsent)
-      const yearOv = Object.fromEntries(
-        Object.entries(budgetOverrides)
-          .filter(([k]) => k.startsWith(`${cy}:`))
-          .map(([k, v]) => [k.slice(String(cy).length + 1), v]),
-      )
-      const bt = computeBudgetTable(
-        cy, profile, budgetTemplate, monthHistory, atfEntries,
-        savingsAccounts, debts, subscriptions, insurances,
-        yearOv, temporaryPayEntries, juneFc ?? undefined,
-        false, [], fondPortfolio,
-      )
-      const rows = bt?.sections.flatMap(s => s.rows) ?? []
+      const rows = budgetTableNow.sections.flatMap(s => s.rows)
       const skattR = rows.find(r => r.id === 'skatt')
       const ekstraR = rows.find(r => r.id === 'ekstra')
       if (skattR) {
@@ -493,7 +473,6 @@ export function useVeikartIntelligence() {
   }, [
     profile, userPreferences, monthHistory, temporaryPayEntries,
     lonnsoppgjor, debts, savingsAccounts, atfEntries, taxSettlements,
-    budgetTemplate, budgetOverrides, subscriptions, insurances, fondPortfolio,
-    kf,
+    budgetTableNow,
   ])
 }

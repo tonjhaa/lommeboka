@@ -5,27 +5,6 @@ import { useEconomyStore } from '@/application/useEconomyStore'
 import { useAppStore } from '@/store/useAppStore'
 import type { EconomySubPage } from '@/store/useAppStore'
 import { OnboardingWizard } from './OnboardingWizard'
-import {
-  LayoutDashboard,
-  CreditCard,
-  TrendingUp,
-  Shield,
-  Receipt,
-  PiggyBank,
-  Clipboard,
-  FileText,
-  RefreshCw,
-  Palmtree,
-  Umbrella,
-  Map,
-  Gift,
-  Landmark,
-  LineChart,
-  Target,
-  SlidersHorizontal,
-  Wallet,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
 
 const EconomyDashboard = lazyWithRetry(() =>
   import('./EconomyDashboard').then((m) => ({ default: m.EconomyDashboard }))
@@ -72,45 +51,9 @@ const GiftPage = lazyWithRetry(() =>
 const PensionPage = lazyWithRetry(() =>
   import('./PensionPage').then((m) => ({ default: m.PensionPage }))
 )
-const FormuePage = lazyWithRetry(() =>
-  import('./FormuePage').then((m) => ({ default: m.FormuePage }))
-)
-const ForecastAccuracyPage = lazyWithRetry(() =>
-  import('./ForecastAccuracyPage').then((m) => ({ default: m.ForecastAccuracyPage }))
-)
 const ScenarioPage = lazyWithRetry(() =>
   import('./ScenarioPage').then((m) => ({ default: m.ScenarioPage }))
 )
-const SpendingPage = lazyWithRetry(() =>
-  import('./SpendingPage').then((m) => ({ default: m.SpendingPage }))
-)
-
-interface NavItem {
-  page: EconomySubPage
-  label: string
-  Icon: React.FC<{ className?: string }>
-}
-
-const NAV_ITEMS: NavItem[] = [
-  { page: 'dashboard', label: 'Dashbord', Icon: LayoutDashboard },
-  { page: 'formue', label: 'Formue', Icon: LineChart },
-  { page: 'budget', label: 'Budsjett', Icon: Clipboard },
-  { page: 'forbruk', label: 'Forbruk', Icon: Wallet },
-  { page: 'salary', label: 'Lønn', Icon: Receipt },
-  { page: 'atf', label: 'ATF', Icon: Shield },
-  { page: 'feriepenger', label: 'Feriepenger', Icon: Palmtree },
-  { page: 'savings', label: 'Sparing', Icon: PiggyBank },
-  { page: 'debt', label: 'Gjeld', Icon: CreditCard },
-  { page: 'absence', label: 'Fravær', Icon: FileText },
-  { page: 'tax', label: 'Skatt', Icon: TrendingUp },
-  { page: 'calibration', label: 'Treffsikkerhet', Icon: Target },
-  { page: 'subscriptions', label: 'Abo & Fors.', Icon: RefreshCw },
-  { page: 'vacation', label: 'Ferie', Icon: Umbrella },
-  { page: 'veikart', label: 'Veikart', Icon: Map },
-  { page: 'scenario', label: 'Simulator', Icon: SlidersHorizontal },
-  { page: 'pension', label: 'Pensjon', Icon: Landmark },
-  { page: 'gaver', label: 'Gaver', Icon: Gift },
-]
 
 function PageFallback() {
   return (
@@ -169,11 +112,18 @@ class PageErrorBoundary extends Component<
   }
 }
 
+// Sider denne komponenten faktisk kan rendre. Ukjente/utdaterte persisted-verdier
+// faller tilbake til dashbordet i stedet for blank side.
+const KNOWN_PAGES: ReadonlySet<EconomySubPage> = new Set<EconomySubPage>([
+  'dashboard', 'budget', 'salary', 'atf', 'savings', 'fond', 'debt', 'absence',
+  'tax', 'subscriptions', 'feriepenger', 'vacation', 'veikart', 'pension',
+  'gaver', 'scenario', 'settings',
+])
+
 export function EconomyPage() {
   const userPreferences = useEconomyStore((s) => s.userPreferences)
   const hasData = useEconomyStore((s) => s.savingsAccounts.length > 0 || s.monthHistory.length > 0 || s.debts.length > 0 || s.profile !== null)
   const currentPage = useAppStore((s) => s.currentEconomyPage)
-  const setCurrentPage = useAppStore((s) => s.setCurrentEconomyPage)
 
   // Re-parse lagrede slipper automatisk når parserlogikken er oppdatert
   useEffect(() => {
@@ -192,57 +142,31 @@ export function EconomyPage() {
     )
   }
 
-  const enabledPages = new Set(userPreferences?.enabledTabs ?? [])
-  const visibleNavItems = NAV_ITEMS.filter(
-    ({ page }) => enabledPages.has(page) || page === 'settings'
-  )
+  const page: EconomySubPage = KNOWN_PAGES.has(currentPage) ? currentPage : 'dashboard'
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Sub-navigasjon */}
-      <nav className="flex items-center gap-1 border-b border-border bg-card px-3 shrink-0 overflow-x-auto">
-        {visibleNavItems.map(({ page, label, Icon }) => (
-          <button
-            key={page}
-            onClick={() => setCurrentPage(page)}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 transition-colors whitespace-nowrap shrink-0',
-              currentPage === page
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-            )}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{label}</span>
-          </button>
-        ))}
-      </nav>
-
-      {/* Sideinnhold */}
       <div className="flex-1 overflow-hidden">
         <PageErrorBoundary>
         <Suspense fallback={<PageFallback />}>
-          {currentPage === 'dashboard' && (
-            <EconomyDashboard onNavigate={(p) => setCurrentPage(p as EconomySubPage)} />
+          {page === 'dashboard' && (
+            <EconomyDashboard onNavigate={(p) => useAppStore.getState().setCurrentEconomyPage(p as EconomySubPage)} />
           )}
-          {currentPage === 'budget' && <BudgetPage />}
-          {currentPage === 'salary' && <SalaryPage />}
-          {currentPage === 'atf' && <ATFPage />}
-          {(currentPage === 'savings' || currentPage === 'fond') && <SavingsPage />}
-          {currentPage === 'debt' && <DebtPage />}
-          {currentPage === 'absence' && <AbsencePage />}
-          {currentPage === 'tax' && <TaxSettlementPage />}
-          {currentPage === 'subscriptions' && <SubscriptionsPage />}
-          {currentPage === 'feriepenger' && <FeriepengePage />}
-          {currentPage === 'vacation' && <VacationPage />}
-          {currentPage === 'veikart' && <VeikartPage />}
-          {currentPage === 'pension' && <PensionPage />}
-          {currentPage === 'gaver' && <GiftPage />}
-          {currentPage === 'formue' && <FormuePage />}
-          {currentPage === 'calibration' && <ForecastAccuracyPage />}
-          {currentPage === 'scenario' && <ScenarioPage />}
-          {currentPage === 'forbruk' && <SpendingPage />}
-          {currentPage === 'settings' && <EconomySettingsPage />}
+          {page === 'budget' && <BudgetPage />}
+          {page === 'salary' && <SalaryPage />}
+          {page === 'atf' && <ATFPage />}
+          {(page === 'savings' || page === 'fond') && <SavingsPage />}
+          {page === 'debt' && <DebtPage />}
+          {page === 'absence' && <AbsencePage />}
+          {page === 'tax' && <TaxSettlementPage />}
+          {page === 'subscriptions' && <SubscriptionsPage />}
+          {page === 'feriepenger' && <FeriepengePage />}
+          {page === 'vacation' && <VacationPage />}
+          {page === 'veikart' && <VeikartPage />}
+          {page === 'pension' && <PensionPage />}
+          {page === 'gaver' && <GiftPage />}
+          {page === 'scenario' && <ScenarioPage />}
+          {page === 'settings' && <EconomySettingsPage />}
         </Suspense>
         </PageErrorBoundary>
       </div>

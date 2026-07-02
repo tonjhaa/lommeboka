@@ -464,7 +464,8 @@ function ModulesSection() {
       <div>
         <h3 className="text-sm font-semibold">Moduler</h3>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Velg hvilke faner som vises i Økonomi-navigasjonen.
+          Velg hvilke sider som vises i navigasjonen. Sidene er gruppert i
+          Oversikt, Inntekt, Utgifter, Sparing & gjeld, Fremtid og Livet.
         </p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -497,7 +498,8 @@ function ModulesSection() {
         })}
       </div>
       <p className="text-xs text-muted-foreground">
-        Faner som alltid vises: Dashbord, Budsjett, Lønn, Innstillinger.
+        Sider som alltid vises: Dashbord, Budsjett, Lønn, Boligkalkulator, Skattekalkulator og Innstillinger.
+        Forbruk og Treffsikkerhet ligger som visninger i Budsjett, og Formue over tid bak «Detaljer» på Dashbordet.
       </p>
     </div>
   )

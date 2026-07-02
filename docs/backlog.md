@@ -1,11 +1,20 @@
 # Lommeboka — Backlog
 
 > Fersk gjennomgang av hele verktøyet, forankret i faktisk kodebase.
-> **Sist oppdatert:** 2026-06-22. Oppdater når punkter leveres eller nye dukker opp.
+> **Sist oppdatert:** 2026-07-02. Oppdater når punkter leveres eller nye dukker opp.
 > Effort: **S** = timer, **M** = en økt, **L** = flere økter / eget delprosjekt.
 
 ## Levert nylig (kontekst)
-Pensjonsmodul · Formue over tid · Treffsikkerhet (kalibrering) · Scenario-simulator ·
+**IA-ombygging (2026-07-02):** gruppert to-nivå-navigasjon (Oversikt/Inntekt/Utgifter/
+Sparing & gjeld/Fremtid/Livet) eier nå ALL navigasjon i `MainNav.tsx`; EconomyPage har ingen
+egen fanerad. Tynne faner slått sammen: Forbruk + Treffsikkerhet → visninger i Budsjett,
+Formue → «Detaljer»-dialog på Dashbord. Pengepuls-chips prioriteres (rød > gul > nøytral > grønn),
+maks 5 synlige + dismiss (7 dager, persistert i useAppStore). Én motor per formål:
+`useBudgetTable` (kanonisk budsjettabell m/ trekktabell+lønnsoppgjør+ansettelsesdato overalt),
+`useForecastAccuracy`, `usePensionBaseInput`. Døde AppViews fjernet + migrering (v3) av
+persisted navigasjon.
+
+Tidligere: Pensjonsmodul · Formue over tid · Treffsikkerhet (kalibrering) · Scenario-simulator ·
 Nøkkeltall-register (fundament + auto-hent G fra NAV) · security-CI-fiks + SHA-pinning.
 Alle i prod på lommeboka.com. Specs i `docs/superpowers/specs/`.
 
@@ -80,6 +89,18 @@ Gjennomgang av touch-targets, scroll-områder og tabell-/grid-overflow på små 
 ### 4.3 Kontekstuell onboarding — **M**
 `OnboardingWizard.tsx` finnes (modul-toggling). Utvid med kontekstuelle hint/tomtilstander
 i nye/komplekse moduler (scenario, nøkkeltall-register, pensjon) for nye brukere.
+
+### 4.4 PartnerPage: dashbordkortenes onNavigate treffer feil tab — **S**
+`PartnerPage` rendrer `EconomyDashboard` med `onNavigate={(p) => setTab(p as Tab)}`, men
+dashbordets sider heter `savings`/`atf`/`debt` mens partner-tabene heter `sparing`/`gjeld` …
+Knappene («Legg til lån» osv.) gjør derfor ingenting i partner-kontekst. Map id-ene eller
+skjul knappene der. (Pre-eksisterende, oppdaget under IA-ombyggingen 2026-07-02.)
+
+### 4.5 Kjøpekraft: Veikart-motoren mangler betjeningsevne-regelen — **M**
+`calcMaxPurchaseSimple` (Veikart/Sparing/Simulator/dashbord-chip) bruker EK- og gjeldsgrad-
+regelen, mens Boligkalkulatorens `analyzeMaxPurchase` også har betjeningsevne (SIFO + stressrente).
+Alle bruker samme modul (`utils/maxPurchase.ts`), men tallene kan avvike når betjeningsevnen
+binder. Vurder å la den forenklede varianten ta inn husholdningsdata når de finnes.
 
 ---
 

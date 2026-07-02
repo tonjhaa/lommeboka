@@ -11,8 +11,8 @@ import type { ScenarioLevers } from '@/types/economy'
 import { defaultConfig } from '@/config/default.config'
 import { DEFAULT_SCENARIO_LEVERS } from '@/domain/economy/scenarioSimulator'
 
-export type AppView = 'calculator' | 'comparison' | 'settings' | 'economy' | 'skattekalkulator' | 'veikart' | 'partner' | 'ivf'
-export type EconomySubPage = 'dashboard' | 'budget' | 'salary' | 'atf' | 'savings' | 'debt' | 'absence' | 'tax' | 'subscriptions' | 'feriepenger' | 'fond' | 'ivf' | 'vacation' | 'settings' | 'veikart' | 'gaver' | 'partner' | 'permisjon' | 'pension' | 'formue' | 'calibration' | 'scenario' | 'forbruk'
+export type AppView = 'calculator' | 'economy' | 'skattekalkulator' | 'partner' | 'ivf'
+export type EconomySubPage = 'dashboard' | 'budget' | 'salary' | 'atf' | 'savings' | 'debt' | 'absence' | 'tax' | 'subscriptions' | 'feriepenger' | 'fond' | 'vacation' | 'settings' | 'veikart' | 'gaver' | 'pension' | 'scenario'
 
 interface AppState {
   config: AppConfig
@@ -27,6 +27,10 @@ interface AppState {
   currentEconomyPage: EconomySubPage
   savingsTab: 'kontoer' | 'fond' | 'måneder' | 'råd'
   prosjektTab: 'behandling' | 'permisjon' | 'innkjøpsliste'
+
+  /** Avviste Pengepuls-chips: chip-id → ISO-dato chipen er skjult til */
+  dismissedChips: Record<string, string>
+  dismissChip: (id: string) => void
 
   scenarioLevers: ScenarioLevers
   setScenarioLevers: (levers: ScenarioLevers) => void
@@ -68,6 +72,16 @@ export const useAppStore = create<AppState>()(
       savingsTab: 'kontoer',
       prosjektTab: 'behandling',
       scenarioLevers: DEFAULT_SCENARIO_LEVERS,
+
+      dismissedChips: {},
+      dismissChip: (id) =>
+        set((state) => ({
+          dismissedChips: {
+            ...state.dismissedChips,
+            // Skjul i 7 dager — deretter dukker chipen opp igjen om den fortsatt gjelder
+            [id]: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
+          },
+        })),
 
       setTheme: (theme) => set({ theme }),
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
@@ -150,7 +164,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'boligkalkulator-storage',
-      version: 2,
+      version: 3,
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>
         if (version < 2 && state.config) {
@@ -159,6 +173,23 @@ export const useAppStore = create<AppState>()(
             ...defaultConfig,
             ...(state.config as object),
           }
+        }
+        if (version < 3) {
+          // Døde/fjernede views og undersider: koble persisted navigasjon
+          // over på gyldige mål så ingen lander på blank side.
+          const view = state.currentView as string
+          if (view === 'veikart') {
+            state.currentView = 'economy'
+            state.currentEconomyPage = 'veikart'
+          } else if (!['calculator', 'economy', 'skattekalkulator', 'partner', 'ivf'].includes(view)) {
+            state.currentView = 'economy'
+          }
+          const pageMap: Record<string, string> = {
+            ivf: 'dashboard', partner: 'dashboard', permisjon: 'dashboard',
+            formue: 'dashboard', calibration: 'budget', forbruk: 'budget',
+          }
+          const page = state.currentEconomyPage as string
+          if (page in pageMap) state.currentEconomyPage = pageMap[page]
         }
         return state
       },
@@ -172,6 +203,7 @@ export const useAppStore = create<AppState>()(
         savingsTab: state.savingsTab,
         prosjektTab: state.prosjektTab,
         scenarioLevers: state.scenarioLevers,
+        dismissedChips: state.dismissedChips,
       }),
     }
   )
