@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import { User, Pencil, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
+import { useEconomyStore } from '@/application/useEconomyStore'
 import { NumberInput } from '@/components/ui/number-input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
-import { Separator } from '@/components/ui/separator'
+import { HelpTooltip } from '@/components/ui/help-tooltip'
 import { Button } from '@/components/ui/button'
 import {
   extractLoanInputFromEconomy,
@@ -12,7 +14,7 @@ import {
   getCurrentBridgeValues,
   extractCoApplicantFromPartner,
 } from '@/application/profileBridge'
-import { formatCurrency } from '@/lib/utils'
+import { cn, formatCurrency } from '@/lib/utils'
 import type { ScenarioInput, ApplicantInput } from '@/types'
 
 interface Props {
@@ -20,37 +22,72 @@ interface Props {
   section?: 'essential' | 'advanced' | 'all'
 }
 
-function ApplicantFields({
+/** Kompakt søker-kort: navn + nøkkeltall, klikk for å redigere */
+function ApplicantCard({
+  name,
   applicant,
-  label,
-  onChange,
-  section = 'all',
+  editing,
+  onToggleEdit,
 }: {
+  name: string
   applicant: ApplicantInput
-  label: string
-  onChange: (patch: Partial<ApplicantInput>) => void
-  section?: 'essential' | 'advanced' | 'all'
+  editing: boolean
+  onToggleEdit: () => void
 }) {
-  const showEssential = section === 'all' || section === 'essential'
-  const showAdvanced = section === 'all' || section === 'advanced'
   return (
-    <div className="space-y-4">
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>
-
-      {showAdvanced && (
-        <div className="space-y-1.5">
-          <Label>Navn (valgfritt)</Label>
-          <Input
-            value={applicant.label ?? ''}
-            onChange={(e) => onChange({ label: e.target.value })}
-            placeholder={label}
-          />
-        </div>
+    <button
+      onClick={onToggleEdit}
+      className={cn(
+        'rounded-lg border p-3 text-left transition-colors w-full',
+        editing ? 'border-primary/50 bg-primary/5' : 'border-border bg-card/60 hover:border-border hover:bg-muted/30',
       )}
+    >
+      <div className="flex items-center justify-between gap-1 mb-1.5">
+        <span className="flex items-center gap-1.5 min-w-0">
+          <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className="text-sm font-medium truncate" title={name}>{name}</span>
+        </span>
+        <Pencil className={cn('h-3 w-3 shrink-0', editing ? 'text-primary' : 'text-muted-foreground/50')} />
+      </div>
+      <div className="space-y-0.5 text-xs">
+        <div className="flex justify-between gap-2">
+          <span className="text-muted-foreground">Brutto/år</span>
+          <span className="font-mono tabular-nums whitespace-nowrap">{formatCurrency(applicant.grossIncome + (applicant.otherIncome ?? 0))}</span>
+        </div>
+        <div className="flex justify-between gap-2">
+          <span className="text-muted-foreground">Gjeld</span>
+          <span className="font-mono tabular-nums whitespace-nowrap">{formatCurrency(applicant.existingDebt ?? 0)}</span>
+        </div>
+      </div>
+    </button>
+  )
+}
 
-      {showEssential && (
+/** Redigeringsfelter for én søker — vises under kort-griden */
+function ApplicantEditor({
+  name,
+  applicant,
+  onChange,
+}: {
+  name: string
+  applicant: ApplicantInput
+  onChange: (patch: Partial<ApplicantInput>) => void
+}) {
+  return (
+    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Rediger {name}</p>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Navn</Label>
+        <Input
+          value={applicant.label ?? ''}
+          onChange={(e) => onChange({ label: e.target.value })}
+          placeholder={name}
+          className="h-9 text-sm"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label>Bruttoinntekt per år</Label>
+          <Label className="text-xs">Bruttoinntekt per år</Label>
           <NumberInput
             value={applicant.grossIncome}
             onChange={(v) => onChange({ grossIncome: v })}
@@ -59,38 +96,53 @@ function ApplicantFields({
             step={10_000}
           />
         </div>
-      )}
-
-      {showEssential && (
         <div className="space-y-1.5">
-          <Label>Eksisterende gjeld</Label>
+          <Label className="text-xs flex items-center">
+            Annen inntekt/år
+            <HelpTooltip content="Leieinntekter, biinntekt o.l. Teller i både gjeldsgrad og betjeningsevne." />
+          </Label>
           <NumberInput
-            value={applicant.existingDebt ?? 0}
-            onChange={(v) => onChange({ existingDebt: v })}
+            value={applicant.otherIncome ?? 0}
+            onChange={(v) => onChange({ otherIncome: v })}
             suffix="kr"
             min={0}
-            step={10_000}
+            step={5_000}
           />
-          <p className="text-xs text-muted-foreground">
-            Billån, studielån, kredittkort, etc. Telles i gjeldsgraden og
-            betjenes automatisk i stresstesten.
-          </p>
         </div>
-      )}
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs flex items-center">
+          Eksisterende gjeld
+          <HelpTooltip content="Billån, studielån, kredittkort osv. Telles i gjeldsgraden og betjenes automatisk i stresstesten." />
+        </Label>
+        <NumberInput
+          value={applicant.existingDebt ?? 0}
+          onChange={(v) => onChange({ existingDebt: v })}
+          suffix="kr"
+          min={0}
+          step={10_000}
+        />
+      </div>
     </div>
   )
 }
 
 export function HouseholdForm({ scenario, section = 'all' }: Props) {
   const update = useAppStore((s) => s.updateScenario)
+  const partnerName = useEconomyStore((s) => s.partnerVeikart.partnerName)
   const { household } = scenario
   // Utled fra storen (ikke lokal state): HouseholdForm rendres to ganger (essential + advanced),
   // så lokal state ville desynke — «Hent medsøker»-knappen i én instans må vises i den andre.
   const hasCoApplicant = Boolean(household.coApplicant)
   const [bridgeSummary, setBridgeSummary] = useState<string[] | null>(null)
+  const [showSyncDetails, setShowSyncDetails] = useState(false)
   const [noPartnerMsg, setNoPartnerMsg] = useState(false)
+  const [editingApplicant, setEditingApplicant] = useState<'primary' | 'co' | null>(null)
   const showEssential = section === 'all' || section === 'essential'
   const showAdvanced = section === 'all' || section === 'advanced'
+
+  const primaryName = household.primaryApplicant.label?.trim() || 'Deg'
+  const coName = household.coApplicant?.label?.trim() || partnerName?.trim() || 'Medsøker'
 
   function setHousehold(patch: Partial<typeof household>) {
     update(scenario.id, { household: { ...household, ...patch } })
@@ -99,13 +151,15 @@ export function HouseholdForm({ scenario, section = 'all' }: Props) {
   function toggleCoApplicant(checked: boolean) {
     if (checked) {
       setHousehold({
-        coApplicant: { grossIncome: 0, existingDebt: 0, label: 'Søker 2' },
+        coApplicant: { grossIncome: 0, existingDebt: 0, label: partnerName?.trim() || 'Medsøker' },
         adults: Math.max(household.adults, 2),
       })
+      setEditingApplicant('co')
     } else {
       const { coApplicant: _, ...rest } = household
       void _
       update(scenario.id, { household: { ...rest, coApplicant: undefined, adults: Math.max(1, household.adults - 1) } })
+      setEditingApplicant(null)
     }
   }
 
@@ -114,6 +168,7 @@ export function HouseholdForm({ scenario, section = 'all' }: Props) {
     const partial = extractLoanInputFromEconomy(yr)
     if (!partial.household) {
       setBridgeSummary(['Ingen lønnsprofil registrert i Lommeboka.'])
+      setShowSyncDetails(true)
       return
     }
     update(scenario.id, {
@@ -198,159 +253,160 @@ export function HouseholdForm({ scenario, section = 'all' }: Props) {
     }
   })()
 
-  // When section='essential': profil-bro + primary applicant essentials (income+debt)
-  // When section='advanced': primary applicant name + co-applicant toggle+fields + household size
-  // When section='all' (default): full original layout — profil-bro + all primary fields + co-applicant + household
-  const primaryApplicantSection = section === 'all' ? 'all' : section
+  const totalGross =
+    household.primaryApplicant.grossIncome + (household.primaryApplicant.otherIncome ?? 0) +
+    (household.coApplicant ? household.coApplicant.grossIncome + (household.coApplicant.otherIncome ?? 0) : 0)
+  const totalDebt =
+    (household.primaryApplicant.existingDebt ?? 0) + (household.coApplicant?.existingDebt ?? 0)
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {showEssential && (
         <>
           {/* Kjøpsår + profil-bro */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="space-y-1 flex-1">
-                <Label className="text-xs">Kjøpsår</Label>
-                <NumberInput
-                  grouping={false}
-                  value={scenario.purchaseYear ?? new Date().getFullYear()}
-                  onChange={(v) => {
-                    update(scenario.id, { purchaseYear: v })
-                    // Auto-reproject: når år endres og profil alt er hentet, oppdater felt
-                    if (scenario.bridgeSnapshot) {
-                      handleUseProfile(v)
-                      if (hasCoApplicant) {
-                        handleUsePartner(v)
-                      }
+          <div className="flex items-end gap-3">
+            <div className="space-y-1 flex-1">
+              <Label className="text-xs flex items-center">
+                Kjøpsår
+                <HelpTooltip content="«Bruk min profil» henter lønn, EK og gjeld fra Lommeboka — projisert til dette året." />
+              </Label>
+              <NumberInput
+                grouping={false}
+                value={scenario.purchaseYear ?? new Date().getFullYear()}
+                onChange={(v) => {
+                  update(scenario.id, { purchaseYear: v })
+                  // Auto-reproject: når år endres og profil alt er hentet, oppdater felt
+                  if (scenario.bridgeSnapshot) {
+                    handleUseProfile(v)
+                    if (hasCoApplicant) {
+                      handleUsePartner(v)
                     }
-                  }}
-                  min={new Date().getFullYear()}
-                  step={1}
-                />
-              </div>
-              <div className="flex gap-2 shrink-0 self-end pb-0.5">
-                <Button variant="outline" size="sm" className="text-xs" onClick={() => handleUseProfile()}>
-                  Bruk min profil
-                </Button>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Hent tall fra Lommeboka — projisert til kjøpsåret.
-            </p>
-          </div>
-
-          {/* Inkluder partner som medsøker */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-foreground">Inkluder partner som medsøker</p>
-                <p className="text-xs text-muted-foreground">Henter inntekt, gjeld og EK fra Partner-fanen</p>
-              </div>
-              <Switch
-                checked={hasCoApplicant}
-                onCheckedChange={(checked) => {
-                  setNoPartnerMsg(false)
-                  if (checked) {
-                    handleUsePartner()
-                  } else {
-                    toggleCoApplicant(false)
                   }
                 }}
+                min={new Date().getFullYear()}
+                step={1}
               />
             </div>
-            {noPartnerMsg && (
-              <p className="text-xs text-amber-400">
-                Ingen partner registrert i Partner-fanen.
-              </p>
-            )}
+            <Button variant="outline" size="sm" className="text-xs shrink-0" onClick={() => handleUseProfile()}>
+              Bruk min profil
+            </Button>
           </div>
 
-          {/* Ferskhets-indikator */}
+          {/* Kompakt sync-linje — erstatter de gamle forklaringsboksene */}
           {freshness && (
             freshness.diffs.length > 0 ? (
-              <div className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300 flex items-center justify-between gap-2">
-                <span>
-                  Hentet fra Lommeboka {freshness.date} — siden da: {freshness.diffs.join(', ')}
+              <div className="flex items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-300">
+                <span className="min-w-0 truncate" title={`Siden ${freshness.date}: ${freshness.diffs.join(', ')}`}>
+                  ⚠ Siden {freshness.date}: {freshness.diffs.join(', ')}
                 </span>
-                <button className="underline underline-offset-2 shrink-0" onClick={() => handleUseProfile()}>
-                  Oppdater
+                <button
+                  className="flex items-center gap-1 underline underline-offset-2 shrink-0"
+                  onClick={() => { handleUseProfile(); if (hasCoApplicant) handleUsePartner() }}
+                >
+                  <RefreshCw className="h-3 w-3" /> Oppdater
                 </button>
               </div>
             ) : (
-              <p className="text-[11px] text-muted-foreground">
-                ✓ Synket med Lommeboka {freshness.date} — ingen endringer siden.
-              </p>
+              <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                <span>✓ Synket med Lommeboka {freshness.date} — alt à jour</span>
+                {bridgeSummary && (
+                  <button
+                    className="flex items-center gap-0.5 hover:text-foreground transition-colors shrink-0"
+                    onClick={() => setShowSyncDetails((v) => !v)}
+                  >
+                    detaljer {showSyncDetails ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  </button>
+                )}
+              </div>
             )
           )}
-
-          {bridgeSummary && (
-            <div className="rounded-md bg-muted/50 p-2 space-y-0.5">
+          {showSyncDetails && bridgeSummary && (
+            <div className="rounded-md bg-muted/40 px-2.5 py-2 space-y-0.5">
               {bridgeSummary.map((line, i) => (
-                <p key={i} className="text-xs text-muted-foreground">{line}</p>
+                <p key={i} className="text-[11px] text-muted-foreground">{line}</p>
               ))}
-              <button
-                className="text-xs text-muted-foreground underline mt-1"
-                onClick={() => setBridgeSummary(null)}
-              >
-                Lukk
-              </button>
             </div>
           )}
 
-          <Separator />
+          {/* Søkere: navngitte kort — alltid synlige, klikk for å redigere */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Søkere</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground flex items-center">
+                  Inkluder partner
+                  <HelpTooltip content="Henter inntekt, gjeld og EK fra Partner-fanen og legger partneren til som medsøker." />
+                </span>
+                <Switch
+                  checked={hasCoApplicant}
+                  onCheckedChange={(checked) => {
+                    setNoPartnerMsg(false)
+                    if (checked) {
+                      handleUsePartner()
+                    } else {
+                      toggleCoApplicant(false)
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            {noPartnerMsg && (
+              <p className="text-xs text-amber-400">
+                Ingen partner registrert i Partner-fanen.{' '}
+                <button className="underline underline-offset-2" onClick={() => { setNoPartnerMsg(false); toggleCoApplicant(true) }}>
+                  Legg til medsøker manuelt
+                </button>
+              </p>
+            )}
 
-          <ApplicantFields
-            applicant={household.primaryApplicant}
-            label="Søker 1"
-            section={primaryApplicantSection}
-            onChange={(patch) =>
-              setHousehold({ primaryApplicant: { ...household.primaryApplicant, ...patch } })
-            }
-          />
+            <div className={cn('grid gap-2', hasCoApplicant ? 'grid-cols-2' : 'grid-cols-1')}>
+              <ApplicantCard
+                name={primaryName}
+                applicant={household.primaryApplicant}
+                editing={editingApplicant === 'primary'}
+                onToggleEdit={() => setEditingApplicant((e) => (e === 'primary' ? null : 'primary'))}
+              />
+              {hasCoApplicant && household.coApplicant && (
+                <ApplicantCard
+                  name={coName}
+                  applicant={household.coApplicant}
+                  editing={editingApplicant === 'co'}
+                  onToggleEdit={() => setEditingApplicant((e) => (e === 'co' ? null : 'co'))}
+                />
+              )}
+            </div>
+
+            {editingApplicant === 'primary' && (
+              <ApplicantEditor
+                name={primaryName}
+                applicant={household.primaryApplicant}
+                onChange={(patch) =>
+                  setHousehold({ primaryApplicant: { ...household.primaryApplicant, ...patch } })
+                }
+              />
+            )}
+            {editingApplicant === 'co' && household.coApplicant && (
+              <ApplicantEditor
+                name={coName}
+                applicant={household.coApplicant}
+                onChange={(patch) =>
+                  setHousehold({ coApplicant: { ...household.coApplicant!, ...patch } })
+                }
+              />
+            )}
+
+            {hasCoApplicant && (
+              <p className="text-[11px] text-muted-foreground">
+                Samlet: <span className="font-mono">{formatCurrency(totalGross)}</span>/år
+                {' · '}gjeld <span className="font-mono">{formatCurrency(totalDebt)}</span>
+              </p>
+            )}
+          </div>
         </>
       )}
 
       {showAdvanced && (
         <>
-          {/* When section='advanced' only: show primary applicant name field */}
-          {section === 'advanced' && (
-            <ApplicantFields
-              applicant={household.primaryApplicant}
-              label="Søker 1"
-              section="advanced"
-              onChange={(patch) =>
-                setHousehold({ primaryApplicant: { ...household.primaryApplicant, ...patch } })
-              }
-            />
-          )}
-
-          <Separator />
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-foreground">Medsøker</p>
-              <p className="text-xs text-muted-foreground">Legg til ektefelle / samboer</p>
-            </div>
-            <Switch checked={hasCoApplicant} onCheckedChange={toggleCoApplicant} />
-          </div>
-
-          {hasCoApplicant && household.coApplicant && (
-            <>
-              <Separator />
-              <ApplicantFields
-                applicant={household.coApplicant}
-                label="Søker 2"
-                section="all"
-                onChange={(patch) =>
-                  setHousehold({ coApplicant: { ...household.coApplicant!, ...patch } })
-                }
-              />
-            </>
-          )}
-
-          <Separator />
-
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Antall barn (0–17 år)</Label>
