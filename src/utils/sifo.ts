@@ -61,11 +61,10 @@ export function calcSIFOExpenses(household: HouseholdInput, config: SIFOConfig):
     dist.age11to13 * config.child11to13Monthly +
     dist.age14to17 * config.child14to17Monthly
 
-  // Stordriftsfordel: 10% rabatt for husholdninger med 3+ personer
-  const rawTotal = adultCost + childCost
-  const discount = adults + household.children >= 3 ? 0.10 : 0
-
-  return Math.round(rawTotal * (1 - discount))
+  // Ingen «stordriftsrabatt»: SIFO-satsene er allerede per person, og bankene
+  // regner full SIFO i betjeningsevnen. En rabatt her ville gitt et mer
+  // optimistisk svar enn banken faktisk gir.
+  return Math.round(adultCost + childCost)
 }
 
 /**
@@ -90,14 +89,11 @@ export function calcSIFOBreakdown(
     dist.age11to13 * config.child11to13Monthly +
     dist.age14to17 * config.child14to17Monthly
 
-  const rawTotal = adultsCost + childrenCost
-  const discountRate = household.adults + household.children >= 3 ? 0.10 : 0
-  const discount = rawTotal * discountRate
-
   return {
     adults: adultsCost,
     children: childrenCost,
-    discount,
-    total: Math.round(rawTotal - discount),
+    // Beholdt i API-et for bakoverkompatibilitet — alltid 0 (se calcSIFOExpenses)
+    discount: 0,
+    total: Math.round(adultsCost + childrenCost),
   }
 }

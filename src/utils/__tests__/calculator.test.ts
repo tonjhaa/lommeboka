@@ -90,7 +90,7 @@ describe('calculateScenario — for lite EK', () => {
   const analysis = calculateScenario(lowEqScenario, defaultConfig)
 
   it('EK-kravet er ikke oppfylt', () => {
-    // 500k - gebyrer ≈ 375k effektiv, 15% av 5M = 750k → for lite
+    // 500k - gebyrer ≈ 375k effektiv, 10% av 5M = 500k → for lite
     expect(analysis.equity.approved).toBe(false)
   })
 
@@ -233,6 +233,92 @@ describe('calculateScenario — guarantorFreeCollateral i maxPurchase', () => {
     const analysis = calculateScenario(scenarioWithGuarantor, defaultConfig)
     // 3_000_000 × 0.9 − 0 = 2_700_000
     expect(analysis.maxPurchase.guarantorFreeCollateral).toBe(2_700_000)
+  })
+})
+
+// ------------------------------------------------------------
+// Regresjon: fellesgjeld er borettslagets lån — ikke ditt eget
+// ------------------------------------------------------------
+
+describe('fellesgjeld-modellen (andel med fellesgjeld)', () => {
+  const andelScenario: ScenarioInput = {
+    ...baseScenario,
+    id: 'test-andel',
+    property: {
+      ...baseScenario.property,
+      ownershipType: 'andel',
+      price: 3_000_000,
+      sharedDebt: 1_000_000,
+      monthlyFee: 6_000, // inkluderer betjening av fellesgjelden
+    },
+  }
+  const analysis = calculateScenario(andelScenario, defaultConfig)
+  const utenFellesgjeld = calculateScenario(
+    {
+      ...andelScenario,
+      id: 'test-andel-uten',
+      property: { ...andelScenario.property, sharedDebt: 0 },
+    },
+    defaultConfig
+  )
+
+  it('eget lånebeløp er kjøpspris − effektiv EK (fellesgjeld holdes utenfor)', () => {
+    // Andel: ingen dokumentavgift → gebyrer = 3 000 kr. EK 900k − 3k = 897k.
+    // Eget lån = 3 000 000 − 897 000 = 2 103 000 — IKKE 3 103 000.
+    expect(analysis.property.loanAmount).toBe(2_103_000)
+  })
+
+  it('gjeldsgraden teller fellesgjelden med i samlet gjeld', () => {
+    expect(analysis.debtRatio.totalDebt).toBe(
+      utenFellesgjeld.debtRatio.totalDebt + 1_000_000
+    )
+  })
+
+  it('belåningsgraden inkluderer fellesgjeld i både lån og verdi', () => {
+    // (2 103 000 + 1 000 000) / 4 000 000 = 77,6 %
+    expect(analysis.property.ltvRatio).toBeCloseTo(77.575, 1)
+  })
+
+  it('terminbeløpet dekker kun eget lån — fellesgjelden betjenes via felleskost', () => {
+    // Samme eget lån ⇒ samme terminbeløp, uavhengig av fellesgjeld
+    expect(analysis.affordability.monthlyPaymentStress).toBe(
+      utenFellesgjeld.affordability.monthlyPaymentStress
+    )
+  })
+
+  it('betjeningsevnen stresser fellesgjelden med rentepåslaget (ikke full annuitet)', () => {
+    // 1 000 000 × 3 % / 12 = 2 500 kr/mnd
+    expect(analysis.affordability.sharedDebtStress).toBe(2_500)
+    expect(analysis.affordability.disposableAmount).toBe(
+      utenFellesgjeld.affordability.disposableAmount - 2_500
+    )
+  })
+
+  it('EK-kravet beregnes fortsatt av pris + fellesgjeld', () => {
+    // 10 % av 4 000 000 = 400 000 (pluss kontantgebyrer)
+    expect(analysis.equity.requiredEquity).toBe(400_000 + 3_000)
+  })
+})
+
+describe('betjeningsevne — annen inntekt teller med (samme grunnlag som gjeldsgrad)', () => {
+  it('otherIncome øker disponibelt beløp', () => {
+    const withOther = calculateScenario(
+      {
+        ...baseScenario,
+        household: {
+          ...baseScenario.household,
+          primaryApplicant: { ...baseScenario.household.primaryApplicant, otherIncome: 120_000 },
+        },
+      },
+      defaultConfig
+    )
+    const without = calculateScenario(baseScenario, defaultConfig)
+    expect(withOther.affordability.monthlyNetIncome).toBeGreaterThan(
+      without.affordability.monthlyNetIncome
+    )
+    expect(withOther.maxPurchase.maxByAffordability).toBeGreaterThan(
+      without.maxPurchase.maxByAffordability
+    )
   })
 })
 

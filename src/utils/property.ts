@@ -80,6 +80,7 @@ export function analyzeProperty(
   financeAllFees = false
 ): PropertyAnalysis {
   const totalValue = calcTotalPropertyValue(property)
+  const sharedDebt = property.sharedDebt ?? 0
   const feeBreakdown = calcAcquisitionFees(
     property.price,
     fees,
@@ -89,11 +90,14 @@ export function analyzeProperty(
   const effectiveEquity = calcEffectiveEquity(equity, feeBreakdown.totalFees)
 
   const totalAcquisitionCost = totalValue + feeBreakdown.totalFees + feeBreakdown.financedFees
+  // Eget banklån: kjøpesum − effektiv EK. Fellesgjelden er borettslagets lån —
+  // den betjenes via felleskostnadene og skal IKKE inn i ditt eget annuitetslån.
   const loanAmount = Math.max(
     0,
-    totalValue - effectiveEquity + feeBreakdown.financedFees
+    property.price - effectiveEquity + feeBreakdown.financedFees
   )
-  const ltvRatio = totalValue > 0 ? (loanAmount / totalValue) * 100 : 0
+  // Belåningsgrad per utlånsforskriften: (eget lån + andel fellesgjeld) / verdi inkl. fellesgjeld.
+  const ltvRatio = totalValue > 0 ? ((loanAmount + sharedDebt) / totalValue) * 100 : 0
 
   return {
     purchasePrice: property.price,

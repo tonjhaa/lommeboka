@@ -78,7 +78,8 @@ export const defaultConfig: AppConfig = {
   lendingRules: {
     /**
      * Minimum egenkapital: 10% av kjopssum inkl. fellesgjeld.
-     * (15% er hovedregelen, men 10% gjelder for forstehjemslaanere — brukt som standard her)
+     * Generelt krav fra 01.01.2025 (senket fra 15%) — gjelder alle nedbetalingslaan
+     * med pant i bolig, ikke bare forstehjemslaanere.
      * Kilde: FOR-2024-12-18-3398 § 7
      */
     minEquityPercent: 10,
@@ -102,8 +103,8 @@ export const defaultConfig: AppConfig = {
     minStressTestRate: 7.0,
 
     /**
-     * Maksimal belaaningsgrad (LTV): 90% for forstehjemslaanere (standard her).
-     * Ordinaere laan: 85%. Rammelaan: 60%. BSU-garantilaan: inntil 100%.
+     * Maksimal belaaningsgrad (LTV): 90% — generelt krav fra 01.01.2025
+     * (hevet fra 85%). Rammelaan: 60%. Speiler EK-kravet paa 10%.
      * Kilde: FOR-2024-12-18-3398 § 7
      */
     maxLtvRatio: 90,

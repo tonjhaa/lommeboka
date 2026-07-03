@@ -8,17 +8,18 @@ import { buildScenarioStatus } from './rules'
 import { buildAmortizationPlanWithSimulator } from './amortization'
 import { buildDistributionPlan } from './distribution'
 import { calcTotalAnnualIncome } from './tax'
-import { calcAcquisitionFees, calcEffectiveEquity, calcTotalPropertyValue } from './property'
+import { calcAcquisitionFees, calcEffectiveEquity } from './property'
 
 /**
- * Beregner effektive gebyrer og laanebeloep for et scenario.
+ * Beregner effektive gebyrer og EGET laanebeloep for et scenario.
+ * Fellesgjeld holdes UTENFOR — den er borettslagets laan og betjenes via
+ * felleskostnadene. Den teller likevel med i gjeldsgrad og belaaningsgrad.
  * Haandterer ownershipType (0% dok.avgift for andel/aksje) og
  * financeAllFees (finansier alle kjopsgebyrer i laanet).
  */
 function calcLoanAmount(scenario: ScenarioInput, config: AppConfig): number {
   const { property, loanParameters } = scenario
   const equity = loanParameters.equity
-  const totalPropertyValue = calcTotalPropertyValue(property)
   const financeEstFee = loanParameters.financeAllFees ?? false
 
   const fees = calcAcquisitionFees(
@@ -28,7 +29,7 @@ function calcLoanAmount(scenario: ScenarioInput, config: AppConfig): number {
     financeEstFee
   )
   const effectiveEquity = calcEffectiveEquity(equity, fees.totalFees)
-  return Math.max(0, totalPropertyValue - effectiveEquity + fees.financedFees)
+  return Math.max(0, property.price - effectiveEquity + fees.financedFees)
 }
 
 /**
@@ -63,10 +64,11 @@ export function calculateScenario(
     financeEstFee
   )
 
-  // 3. Gjeldsgrad
+  // 3. Gjeldsgrad — samlet gjeld inkluderer andel fellesgjeld (utlånsforskriften)
   const existingDebt =
     (household.primaryApplicant.existingDebt ?? 0) +
     (household.coApplicant?.existingDebt ?? 0)
+  const sharedDebt = property.sharedDebt ?? 0
 
   const totalAnnualIncome = calcTotalAnnualIncome(
     household.primaryApplicant.grossIncome,
@@ -76,13 +78,14 @@ export function calculateScenario(
   )
 
   const debtRatioAnalysis = analyzeDebtRatio(
-    loanAmount,
+    loanAmount + sharedDebt,
     existingDebt,
     totalAnnualIncome,
     config.lendingRules
   )
 
   // 4. Betjeningsevne — inkl. betjening av eksisterende gjeld ved stressrente
+  // og rentestress på fellesgjelden (dagens betjening ligger i felleskostnadene)
   const affordabilityAnalysis = analyzeAffordability(
     loanAmount,
     loanParameters.interestRate,
@@ -92,7 +95,8 @@ export function calculateScenario(
     property.propertyTax,
     loanParameters.extraMonthlyExpenses,
     config,
-    existingDebt
+    existingDebt,
+    sharedDebt
   )
 
   // 5. Maks kjopsbeloep — samme forutsetninger som scenarioet (rente, lopetid, eierform)

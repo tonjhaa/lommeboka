@@ -48,9 +48,9 @@ export function StatusBanner({ analysis }: Props) {
           </p>
           <p className="text-xs text-muted-foreground">
             {status.errorCount > 0
-              ? `${status.errorCount} krav ikke oppfylt${status.warningCount > 0 ? `, ${status.warningCount} advarsler` : ''}`
+              ? `${status.errorCount} krav ikke oppfylt${status.warningCount > 0 ? `, ${status.warningCount} ${status.warningCount === 1 ? 'advarsel' : 'advarsler'}` : ''}`
               : status.warningCount > 0
-              ? `${status.warningCount} advarsler`
+              ? `${status.warningCount} ${status.warningCount === 1 ? 'advarsel' : 'advarsler'}`
               : 'Alle krav er oppfylt'}
           </p>
         </div>

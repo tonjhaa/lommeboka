@@ -1,6 +1,6 @@
 import type { MaxPurchaseAnalysis, AppConfig, HouseholdInput, PropertyInput } from '@/types'
 import { calcAcquisitionFees, calcEffectiveEquity } from './property'
-import { calcStressTestRate, calcExistingDebtServicing } from './affordability'
+import { calcStressTestRate, calcExistingDebtServicing, calcSharedDebtStress } from './affordability'
 import { calcSIFOExpenses } from './sifo'
 import { calcHouseholdMonthlyNetIncome, calcTotalAnnualIncome } from './tax'
 import { maxLoanFromPayment } from './loan'
@@ -96,8 +96,11 @@ function maxPriceByAffordability(
   ownershipType: OwnershipType,
   financeAllFees: boolean
 ): number {
-  const primaryGross = household.primaryApplicant.grossIncome
-  const coGross = household.coApplicant?.grossIncome
+  // Samme inntektsgrunnlag som analyzeAffordability: brutto + annen inntekt per søker
+  const primaryGross = household.primaryApplicant.grossIncome + (household.primaryApplicant.otherIncome ?? 0)
+  const coGross = household.coApplicant
+    ? household.coApplicant.grossIncome + (household.coApplicant.otherIncome ?? 0)
+    : undefined
   const monthlyNetIncome = calcHouseholdMonthlyNetIncome(primaryGross, coGross)
 
   const stressRate = calcStressTestRate(interestRate, config.lendingRules)
@@ -110,8 +113,10 @@ function maxPriceByAffordability(
     extraMonthlyExpenses +
     config.fees.termFee
   const debtServicing = calcExistingDebtServicing(existingDebt, stressRate)
+  // Rentestress på fellesgjelden — dagens betjening ligger i monthlyFee
+  const sharedDebtStress = calcSharedDebtStress(sharedDebt, config.lendingRules)
 
-  const maxPayment = monthlyNetIncome - sifo - otherExpenses - debtServicing
+  const maxPayment = monthlyNetIncome - sifo - otherExpenses - debtServicing - sharedDebtStress
   const maxLoan = maxLoanFromPayment(Math.max(0, maxPayment), stressRate, loanTermYears)
 
   const fees = config.fees
@@ -119,7 +124,9 @@ function maxPriceByAffordability(
   const feeBreakdown = calcAcquisitionFees(estimatedPrice, fees, ownershipType, financeAllFees)
   const effEq = calcEffectiveEquity(equity, feeBreakdown.totalFees)
 
-  const maxPrice = maxLoan + effEq - sharedDebt - feeBreakdown.financedFees
+  // maxLoan er EGET lån (annuiteten dekker ikke fellesgjelden — den betjenes
+  // via felleskost + rentestress over) → pris = eget lån + effektiv EK
+  const maxPrice = maxLoan + effEq - feeBreakdown.financedFees
   return Math.max(0, Math.round(maxPrice))
 }
 
@@ -211,7 +218,8 @@ export function analyzeMaxPurchase(
 
   const feeBreakdown = calcAcquisitionFees(maxPurchasePrice, config.fees, ownershipType, financeAllFees)
   const effEq = calcEffectiveEquity(equity, feeBreakdown.totalFees)
-  const maxLoanAmount = Math.max(0, maxPurchasePrice + sharedDebt - effEq + feeBreakdown.financedFees)
+  // Eget banklån ved makspris — fellesgjelden er borettslagets lån og holdes utenfor
+  const maxLoanAmount = Math.max(0, maxPurchasePrice - effEq + feeBreakdown.financedFees)
 
   const kausjonCeiling = Math.min(maxByDebtRatio, maxByAffordability)
   const maxPriceWithoutKausjon = Math.min(maxByEquityNoKausjon, maxByDebtRatio, maxByAffordability)

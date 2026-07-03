@@ -213,6 +213,7 @@ export function HouseholdForm({ scenario, section = 'all' }: Props) {
               <div className="space-y-1 flex-1">
                 <Label className="text-xs">Kjøpsår</Label>
                 <NumberInput
+                  grouping={false}
                   value={scenario.purchaseYear ?? new Date().getFullYear()}
                   onChange={(v) => {
                     update(scenario.id, { purchaseYear: v })
