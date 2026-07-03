@@ -1,4 +1,7 @@
-import { fetchFinnAd, isValidFinnkode, FinnLookupError } from '../src/domain/finn/finnAdParser'
+// NB: .js-endelsen er PÅKREVD: package.json har "type":"module", så Vercel
+// kjører funksjonen som ESM — Node-ESM krever eksplisitt endelse i relative
+// imports (uten den: ERR_MODULE_NOT_FOUND i /var/task). TS mapper .js → .ts.
+import { fetchFinnAd, isValidFinnkode, FinnLookupError } from '../src/domain/finn/finnAdParser.js'
 
 // Minimal strukturell typing — unngår @vercel/node-avhengighet.
 // (api/ ligger utenfor tsconfig-include; Vercel bygger funksjonen med esbuild.)
