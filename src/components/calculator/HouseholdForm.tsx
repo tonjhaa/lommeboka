@@ -22,107 +22,104 @@ interface Props {
   section?: 'essential' | 'advanced' | 'all'
 }
 
-/** Kompakt søker-kort: navn + nøkkeltall, klikk for å redigere */
+/**
+ * Søker-kort: navn + nøkkeltall. I redigeringsmodus ekspanderer kortet til
+ * full bredde med feltene INNI seg — redigeringen skjer i kortet det gjelder.
+ */
 function ApplicantCard({
   name,
   applicant,
   editing,
   onToggleEdit,
+  onChange,
 }: {
   name: string
   applicant: ApplicantInput
   editing: boolean
   onToggleEdit: () => void
-}) {
-  return (
-    <button
-      onClick={onToggleEdit}
-      className={cn(
-        'rounded-lg border p-3 text-left transition-colors w-full',
-        editing ? 'border-primary/50 bg-primary/5' : 'border-border bg-card/60 hover:border-border hover:bg-muted/30',
-      )}
-    >
-      <div className="flex items-center justify-between gap-1 mb-1.5">
-        <span className="flex items-center gap-1.5 min-w-0">
-          <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <span className="text-sm font-medium truncate" title={name}>{name}</span>
-        </span>
-        <Pencil className={cn('h-3 w-3 shrink-0', editing ? 'text-primary' : 'text-muted-foreground/50')} />
-      </div>
-      <div className="space-y-0.5 text-xs">
-        <div className="flex justify-between gap-2">
-          <span className="text-muted-foreground">Brutto/år</span>
-          <span className="font-mono tabular-nums whitespace-nowrap">{formatCurrency(applicant.grossIncome + (applicant.otherIncome ?? 0))}</span>
-        </div>
-        <div className="flex justify-between gap-2">
-          <span className="text-muted-foreground">Gjeld</span>
-          <span className="font-mono tabular-nums whitespace-nowrap">{formatCurrency(applicant.existingDebt ?? 0)}</span>
-        </div>
-      </div>
-    </button>
-  )
-}
-
-/** Redigeringsfelter for én søker — vises under kort-griden */
-function ApplicantEditor({
-  name,
-  applicant,
-  onChange,
-}: {
-  name: string
-  applicant: ApplicantInput
   onChange: (patch: Partial<ApplicantInput>) => void
 }) {
   return (
-    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3">
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Rediger {name}</p>
-      <div className="space-y-1.5">
-        <Label className="text-xs">Navn</Label>
-        <Input
-          value={applicant.label ?? ''}
-          onChange={(e) => onChange({ label: e.target.value })}
-          placeholder={name}
-          className="h-9 text-sm"
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label className="text-xs">Bruttoinntekt per år</Label>
-          <NumberInput
-            value={applicant.grossIncome}
-            onChange={(v) => onChange({ grossIncome: v })}
-            suffix="kr"
-            min={0}
-            step={10_000}
-          />
+    <div
+      className={cn(
+        'rounded-lg border transition-colors',
+        editing ? 'col-span-full border-primary/50 bg-primary/5' : 'border-border bg-card/60 hover:bg-muted/30',
+      )}
+    >
+      {/* Header + nøkkeltall er klikkflaten — feltene under skal ikke toggle */}
+      <button onClick={onToggleEdit} className="w-full p-3 text-left">
+        <div className="flex items-center justify-between gap-1 mb-1.5">
+          <span className="flex items-center gap-1.5 min-w-0">
+            <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <span className="text-sm font-medium truncate" title={name}>{name}</span>
+          </span>
+          {editing
+            ? <ChevronUp className="h-3.5 w-3.5 shrink-0 text-primary" />
+            : <Pencil className="h-3 w-3 shrink-0 text-muted-foreground/50" />}
         </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs flex items-center">
-            Annen inntekt/år
-            <HelpTooltip content="Leieinntekter, biinntekt o.l. Teller i både gjeldsgrad og betjeningsevne." />
-          </Label>
-          <NumberInput
-            value={applicant.otherIncome ?? 0}
-            onChange={(v) => onChange({ otherIncome: v })}
-            suffix="kr"
-            min={0}
-            step={5_000}
-          />
+        <div className="space-y-0.5 text-xs">
+          <div className="flex justify-between gap-2">
+            <span className="text-muted-foreground">Brutto/år</span>
+            <span className="font-mono tabular-nums whitespace-nowrap">{formatCurrency(applicant.grossIncome + (applicant.otherIncome ?? 0))}</span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span className="text-muted-foreground">Gjeld</span>
+            <span className="font-mono tabular-nums whitespace-nowrap">{formatCurrency(applicant.existingDebt ?? 0)}</span>
+          </div>
         </div>
-      </div>
-      <div className="space-y-1.5">
-        <Label className="text-xs flex items-center">
-          Eksisterende gjeld
-          <HelpTooltip content="Billån, studielån, kredittkort osv. Telles i gjeldsgraden og betjenes automatisk i stresstesten." />
-        </Label>
-        <NumberInput
-          value={applicant.existingDebt ?? 0}
-          onChange={(v) => onChange({ existingDebt: v })}
-          suffix="kr"
-          min={0}
-          step={10_000}
-        />
-      </div>
+      </button>
+
+      {editing && (
+        <div className="border-t border-primary/20 px-3 pb-3 pt-3 space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Navn</Label>
+            <Input
+              value={applicant.label ?? ''}
+              onChange={(e) => onChange({ label: e.target.value })}
+              placeholder={name}
+              className="h-9 text-sm"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Bruttoinntekt per år</Label>
+              <NumberInput
+                value={applicant.grossIncome}
+                onChange={(v) => onChange({ grossIncome: v })}
+                suffix="kr"
+                min={0}
+                step={10_000}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs flex items-center">
+                Annen inntekt/år
+                <HelpTooltip content="Leieinntekter, biinntekt o.l. Teller i både gjeldsgrad og betjeningsevne." />
+              </Label>
+              <NumberInput
+                value={applicant.otherIncome ?? 0}
+                onChange={(v) => onChange({ otherIncome: v })}
+                suffix="kr"
+                min={0}
+                step={5_000}
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs flex items-center">
+              Eksisterende gjeld
+              <HelpTooltip content="Billån, studielån, kredittkort osv. Telles i gjeldsgraden og betjenes automatisk i stresstesten." />
+            </Label>
+            <NumberInput
+              value={applicant.existingDebt ?? 0}
+              onChange={(v) => onChange({ existingDebt: v })}
+              suffix="kr"
+              min={0}
+              step={10_000}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -359,12 +356,16 @@ export function HouseholdForm({ scenario, section = 'all' }: Props) {
               </p>
             )}
 
-            <div className={cn('grid gap-2', hasCoApplicant ? 'grid-cols-2' : 'grid-cols-1')}>
+            {/* items-start: kortet i redigering vokser uten å strekke naboen */}
+            <div className={cn('grid gap-2 items-start', hasCoApplicant ? 'grid-cols-2' : 'grid-cols-1')}>
               <ApplicantCard
                 name={primaryName}
                 applicant={household.primaryApplicant}
                 editing={editingApplicant === 'primary'}
                 onToggleEdit={() => setEditingApplicant((e) => (e === 'primary' ? null : 'primary'))}
+                onChange={(patch) =>
+                  setHousehold({ primaryApplicant: { ...household.primaryApplicant, ...patch } })
+                }
               />
               {hasCoApplicant && household.coApplicant && (
                 <ApplicantCard
@@ -372,28 +373,12 @@ export function HouseholdForm({ scenario, section = 'all' }: Props) {
                   applicant={household.coApplicant}
                   editing={editingApplicant === 'co'}
                   onToggleEdit={() => setEditingApplicant((e) => (e === 'co' ? null : 'co'))}
+                  onChange={(patch) =>
+                    setHousehold({ coApplicant: { ...household.coApplicant!, ...patch } })
+                  }
                 />
               )}
             </div>
-
-            {editingApplicant === 'primary' && (
-              <ApplicantEditor
-                name={primaryName}
-                applicant={household.primaryApplicant}
-                onChange={(patch) =>
-                  setHousehold({ primaryApplicant: { ...household.primaryApplicant, ...patch } })
-                }
-              />
-            )}
-            {editingApplicant === 'co' && household.coApplicant && (
-              <ApplicantEditor
-                name={coName}
-                applicant={household.coApplicant}
-                onChange={(patch) =>
-                  setHousehold({ coApplicant: { ...household.coApplicant!, ...patch } })
-                }
-              />
-            )}
 
             {hasCoApplicant && (
               <p className="text-[11px] text-muted-foreground">
