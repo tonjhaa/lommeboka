@@ -1,12 +1,75 @@
 import { useState } from 'react'
-import { Plus, Trash2, Copy, Home } from 'lucide-react'
+import { Plus, Trash2, Copy, Home, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 import { useNewScenario } from '@/hooks/useNewScenario'
 import { useCalculator } from '@/hooks/useCalculator'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import type { ScenarioInput } from '@/types'
+
+/** Smal stripe-variant: scenario-prikker + nytt-knapp. Hover viser navn. */
+function CollapsedRail() {
+  const scenarios = useAppStore((s) => s.scenarios)
+  const activeId = useAppStore((s) => s.activeScenarioId)
+  const setActive = useAppStore((s) => s.setActiveScenario)
+  const setCollapsed = useAppStore((s) => s.setSidebarCollapsed)
+  const { createScenario } = useNewScenario()
+
+  return (
+    <aside className="flex flex-col items-center w-12 shrink-0 border-r border-sidebar-border bg-sidebar h-full py-2 gap-1">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={() => setCollapsed(false)}
+        title="Vis scenarioer"
+        aria-label="Vis scenarioliste"
+      >
+        <PanelLeftOpen className="h-4 w-4" />
+      </Button>
+      <div className="flex-1 flex flex-col items-center gap-1 overflow-y-auto pt-1">
+        {scenarios.map((s) => (
+          <RailDot key={s.id} scenario={s} active={activeId === s.id} onSelect={() => setActive(s.id)} />
+        ))}
+      </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={createScenario}
+        title="Nytt scenario"
+        aria-label="Nytt scenario"
+      >
+        <Plus className="h-4 w-4" />
+      </Button>
+    </aside>
+  )
+}
+
+function RailDot({ scenario, active, onSelect }: { scenario: ScenarioInput; active: boolean; onSelect: () => void }) {
+  const { analysis } = useCalculator(scenario.id)
+  const approved = analysis?.status.approved
+  return (
+    <button
+      onClick={onSelect}
+      title={scenario.label}
+      aria-label={`Velg scenario ${scenario.label}`}
+      className={cn(
+        'flex items-center justify-center h-8 w-8 rounded-md transition-colors shrink-0',
+        active ? 'bg-primary/15 ring-1 ring-primary/40' : 'hover:bg-accent',
+      )}
+    >
+      <span
+        className={cn(
+          'h-2.5 w-2.5 rounded-full',
+          approved === undefined ? 'bg-muted-foreground' : approved ? 'bg-green-400' : 'bg-red-400',
+        )}
+      />
+    </button>
+  )
+}
 
 function ScenarioItem({ scenario }: { scenario: ScenarioInput }) {
   const activeId = useAppStore((s) => s.activeScenarioId)
@@ -98,7 +161,13 @@ function ScenarioItem({ scenario }: { scenario: ScenarioInput }) {
 
 export function Sidebar() {
   const scenarios = useAppStore((s) => s.scenarios)
+  const collapsed = useAppStore((s) => s.sidebarCollapsed)
+  const setCollapsed = useAppStore((s) => s.setSidebarCollapsed)
   const { createScenario } = useNewScenario()
+  const isMobile = useIsMobile()
+
+  // Stripe-modus gjelder kun desktop — mobil-overlayet viser alltid full liste
+  if (collapsed && !isMobile) return <CollapsedRail />
 
   return (
     <aside className="flex flex-col w-64 shrink-0 border-r border-sidebar-border bg-sidebar h-full">
@@ -107,15 +176,29 @@ export function Sidebar() {
           <Home className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-semibold text-sidebar-foreground">Scenarioer</span>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={createScenario}
-          title="Nytt scenario"
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={createScenario}
+            title="Nytt scenario"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+          {!isMobile && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setCollapsed(true)}
+              title="Kollaps scenarioliste"
+              aria-label="Kollaps scenarioliste"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-2 space-y-1">

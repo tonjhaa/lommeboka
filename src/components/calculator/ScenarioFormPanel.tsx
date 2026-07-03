@@ -117,7 +117,7 @@ export function ScenarioFormPanel({ scenario }: Props) {
 
           <details className="rounded-lg border border-border/50 bg-card/40">
             <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium hover:bg-muted/30">
-              Husstand & medsøker
+              Husstand (barn og voksne)
             </summary>
             <div className="px-3 pb-3 pt-1"><HouseholdForm scenario={scenario} section="advanced" /></div>
           </details>

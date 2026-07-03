@@ -23,6 +23,9 @@ interface AppState {
   distributionPlans: Record<string, DistributionPlan>
   theme: 'dark' | 'light' | 'system'
   sidebarOpen: boolean
+  /** Scenario-sidebaren i boligkalkulatoren: kollapset til smal stripe (desktop) */
+  sidebarCollapsed: boolean
+  setSidebarCollapsed: (collapsed: boolean) => void
   currentView: AppView
   currentEconomyPage: EconomySubPage
   savingsTab: 'kontoer' | 'fond' | 'måneder' | 'råd'
@@ -82,6 +85,9 @@ export const useAppStore = create<AppState>()(
             [id]: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
           },
         })),
+
+      sidebarCollapsed: false,
+      setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
 
       setTheme: (theme) => set({ theme }),
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
@@ -204,6 +210,7 @@ export const useAppStore = create<AppState>()(
         prosjektTab: state.prosjektTab,
         scenarioLevers: state.scenarioLevers,
         dismissedChips: state.dismissedChips,
+        sidebarCollapsed: state.sidebarCollapsed,
       }),
     }
   )
