@@ -2,10 +2,10 @@ import type { EquityAnalysis, LendingRulesConfig, FeesConfig } from '@/types'
 import { calcAcquisitionFees, calcEffectiveEquity } from './property'
 
 /**
- * Egenkapitalanalyse i henhold til Bolilaansforskriften.
+ * Egenkapitalanalyse i henhold til utlaansforskriften.
  *
- * Kravet: Effektiv egenkapital >= 15% av (kjopspris + fellesgjeld)
- * Effektiv EK = tilgjengelig EK - kjoepsgebyrer betalt kontant
+ * Kravet: Effektiv egenkapital >= minEquityPercent (10% fra 2025) av
+ * (kjopspris + fellesgjeld). Effektiv EK = tilgjengelig EK - kontantgebyrer.
  */
 export function analyzeEquity(
   purchasePrice: number,

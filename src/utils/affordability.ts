@@ -41,6 +41,20 @@ export function calcExistingDebtServicing(
 }
 
 /**
+ * Rentestress på andel fellesgjeld.
+ * Dagens betjening av fellesgjelden ligger allerede i felleskostnadene
+ * (monthlyFee) — stresstesten skal i tillegg tåle at renten på fellesgjelden
+ * øker med stresspåslaget. Månedlig merkostnad = fellesgjeld × påslag / 12.
+ */
+export function calcSharedDebtStress(
+  sharedDebt: number,
+  rules: LendingRulesConfig
+): number {
+  if (sharedDebt <= 0) return 0
+  return (sharedDebt * (rules.stressTestAddition / 100)) / 12
+}
+
+/**
  * Beregner stresstestrenten som er bindende.
  */
 export function calcStressTestRate(
@@ -80,15 +94,20 @@ export function analyzeAffordability(
   propertyTaxAnnual: number | undefined,
   extraMonthlyExpenses: number | undefined,
   config: AppConfig,
-  existingDebt = 0
+  existingDebt = 0,
+  sharedDebt = 0
 ): AffordabilityAnalysis {
   const stressTestRate = calcStressTestRate(nominalRate, config.lendingRules)
 
   const monthlyPaymentNormal = annuityPayment(loanAmount, nominalRate, termYears)
   const monthlyPaymentStress = annuityPayment(loanAmount, stressTestRate, termYears)
 
-  const primaryGross = household.primaryApplicant.grossIncome
-  const coGross = household.coApplicant?.grossIncome
+  // Inntekt: brutto + annen inntekt per søker — samme grunnlag som gjeldsgraden,
+  // ellers undervurderes betjeningsevnen for husstander med leieinntekter o.l.
+  const primaryGross = household.primaryApplicant.grossIncome + (household.primaryApplicant.otherIncome ?? 0)
+  const coGross = household.coApplicant
+    ? household.coApplicant.grossIncome + (household.coApplicant.otherIncome ?? 0)
+    : undefined
   const monthlyNetIncome = calcHouseholdMonthlyNetIncome(primaryGross, coGross)
 
   const sifoExpenses = calcSIFOExpenses(household, config.sifo)
@@ -101,9 +120,11 @@ export function analyzeAffordability(
   )
 
   const existingDebtServicing = calcExistingDebtServicing(existingDebt, stressTestRate)
+  const sharedDebtStress = calcSharedDebtStress(sharedDebt, config.lendingRules)
 
   const disposableAmount =
-    monthlyNetIncome - monthlyPaymentStress - sifoExpenses - otherMonthlyExpenses - existingDebtServicing
+    monthlyNetIncome - monthlyPaymentStress - sifoExpenses - otherMonthlyExpenses -
+    existingDebtServicing - sharedDebtStress
 
   const approved = disposableAmount >= MINIMUM_DISPOSABLE
 
@@ -115,6 +136,7 @@ export function analyzeAffordability(
     sifoExpenses: Math.round(sifoExpenses),
     otherMonthlyExpenses: Math.round(otherMonthlyExpenses),
     existingDebtServicing: Math.round(existingDebtServicing),
+    sharedDebtStress: Math.round(sharedDebtStress),
     disposableAmount: Math.round(disposableAmount),
     approved,
     minimumDisposable: MINIMUM_DISPOSABLE,

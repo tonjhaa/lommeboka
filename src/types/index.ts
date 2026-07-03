@@ -26,6 +26,8 @@ export interface PropertyInput {
   municipalityName?: string
   /** Andel fellesgjeld (for seksjon/andel) */
   sharedDebt?: number
+  /** FINN-kode annonsen ble hentet fra (proveniens for auto-utfylte felt) */
+  finnkode?: string
   /** Andel fellesformue */
   sharedAssets?: number
   /** Fellesutgifter per måned i NOK */
@@ -218,6 +220,8 @@ export interface AffordabilityAnalysis {
   otherMonthlyExpenses: number
   /** Beregnet månedlig betjening av eksisterende gjeld ved stressrente (annuitet) */
   existingDebtServicing: number
+  /** Rentestress på andel fellesgjeld (påslag × fellesgjeld / 12) — dagens betjening ligger i felleskost */
+  sharedDebtStress: number
   /** Beregnet disponibelt beløp etter alle kostnader (stresstest) */
   disposableAmount: number
   /** Godkjent: positiv betjeningsevne ved stresstest */

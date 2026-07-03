@@ -231,6 +231,15 @@ export function AffordabilityCard({ analysis }: CardProps) {
             <span>−{formatCurrency(aff.existingDebtServicing)}</span>
           </div>
         )}
+        {(aff.sharedDebtStress ?? 0) > 0 && (
+          <div className="flex justify-between text-muted-foreground">
+            <span className="flex items-center">
+              Fellesgjeld (rentestress)
+              <HelpTooltip content="Renteøkning på andel fellesgjeld ved stresspåslaget. Dagens betjening av fellesgjelden ligger allerede i felleskostnadene — dette er tillegget banken stresstester." side="right" />
+            </span>
+            <span>−{formatCurrency(aff.sharedDebtStress)}</span>
+          </div>
+        )}
         <div
           className={cn(
             'flex justify-between border-t border-border pt-1.5 font-bold text-sm',

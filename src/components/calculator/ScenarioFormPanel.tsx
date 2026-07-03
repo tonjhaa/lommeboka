@@ -6,7 +6,7 @@ import { HouseholdForm } from './HouseholdForm'
 import { LoanForm } from './LoanForm'
 import { Pencil, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { formatCurrency } from '@/lib/utils'
+import { cn, formatCurrency } from '@/lib/utils'
 import { calcAcquisitionFees } from '@/utils/property'
 import { annuityPayment } from '@/utils/loan'
 import { calcStressTestRate } from '@/utils/affordability'
@@ -28,30 +28,29 @@ function MiniSummary({ scenario }: { scenario: ScenarioInput }) {
     loanParameters.financeAllFees ?? false
   )
   const effEq = Math.max(0, loanParameters.equity - fees.totalFees)
-  const total = property.price + (property.sharedDebt ?? 0)
-  const loan = Math.max(0, total - effEq + fees.financedFees)
+  // Eget banklån — fellesgjeld betjenes via felleskost og holdes utenfor (samme motor som calculator.ts)
+  const loan = Math.max(0, property.price - effEq + fees.financedFees)
   const stressRate = calcStressTestRate(loanParameters.interestRate, config.lendingRules)
   const normal = annuityPayment(loan, loanParameters.interestRate, loanParameters.loanTermYears)
   const stress = annuityPayment(loan, stressRate, loanParameters.loanTermYears)
 
+  // Stablede label-over-verdi-celler: verdiene kan aldri kollidere med
+  // nabokolonnens label uansett beløpsstørrelse (jf. tidligere overlapp-bug).
+  const cells: { label: string; value: string; className?: string }[] = [
+    { label: 'Lånebeløp', value: formatCurrency(loan), className: 'text-primary font-medium' },
+    { label: 'Effektiv EK', value: formatCurrency(effEq) },
+    { label: 'Terminbeløp', value: `${formatCurrency(normal)}/mnd`, className: 'font-medium' },
+    { label: `Ved ${stressRate.toFixed(1).replace('.', ',')} % stress`, value: `${formatCurrency(stress)}/mnd`, className: 'text-amber-400' },
+  ]
+
   return (
-    <div className="shrink-0 border-t border-border bg-muted/30 px-4 py-2.5 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-      <div className="flex justify-between gap-2">
-        <span className="text-muted-foreground">Lånebeløp</span>
-        <span className="font-mono font-medium text-primary">{formatCurrency(loan)}</span>
-      </div>
-      <div className="flex justify-between gap-2">
-        <span className="text-muted-foreground">Effektiv EK</span>
-        <span className="font-mono">{formatCurrency(effEq)}</span>
-      </div>
-      <div className="flex justify-between gap-2">
-        <span className="text-muted-foreground">Terminbeløp</span>
-        <span className="font-mono font-medium">{formatCurrency(normal)}/mnd</span>
-      </div>
-      <div className="flex justify-between gap-2">
-        <span className="text-muted-foreground">Ved {stressRate.toFixed(1)} % stress</span>
-        <span className="font-mono text-amber-400">{formatCurrency(stress)}/mnd</span>
-      </div>
+    <div className="shrink-0 border-t border-border bg-muted/30 px-4 py-2.5 grid grid-cols-2 gap-x-4 gap-y-2">
+      {cells.map(({ label, value, className }) => (
+        <div key={label} className="min-w-0">
+          <p className="text-[10px] leading-tight text-muted-foreground truncate" title={label}>{label}</p>
+          <p className={cn('font-mono text-xs tabular-nums whitespace-nowrap', className)}>{value}</p>
+        </div>
+      ))}
     </div>
   )
 }

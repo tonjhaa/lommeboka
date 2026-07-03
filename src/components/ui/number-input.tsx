@@ -14,6 +14,8 @@ interface NumberInputProps {
   disabled?: boolean
   id?: string
   error?: string
+  /** Tusenskilletegn i visning (default true). Slå av for årstall o.l. */
+  grouping?: boolean
 }
 
 /**
@@ -33,6 +35,7 @@ export function NumberInput({
   disabled,
   id,
   error,
+  grouping = true,
 }: NumberInputProps) {
   const [focused, setFocused] = React.useState(false)
   const toRaw = (v: number) => (v === 0 ? '' : v.toString())
@@ -46,8 +49,9 @@ export function NumberInput({
 
   const formatted = React.useMemo(() => {
     if (value === 0 && placeholder) return ''
+    if (!grouping) return String(value)
     return new Intl.NumberFormat('nb-NO', { maximumFractionDigits: 2 }).format(value)
-  }, [value, placeholder])
+  }, [value, placeholder, grouping])
 
   function handleFocus() {
     setFocused(true)

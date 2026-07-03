@@ -5,6 +5,16 @@
 > Effort: **S** = timer, **M** = en økt, **L** = flere økter / eget delprosjekt.
 
 ## Levert nylig (kontekst)
+**Boligkalkulator-revisjon + FINN-oppslag (2026-07-03):** Kritisk modellgjennomgang mot
+utlånsforskriften. Fikset: fellesgjeld var bakt inn i eget lån (dobbelttelte betjening,
+feil lånebeløp/amortisering — nå: eget lån separat, fellesgjeld i gjeldsgrad/LTV +
+rentestress 3pp/12 i betjeningsevnen), otherIncome talte i gjeldsgrad men ikke
+betjeningsevne, oppdiktet 10 % SIFO-«stordriftsrabatt» fjernet (banker regner full SIFO).
+UI: kjøpsår uten tusenskilletegn, MiniSummary-tekstkollisjon fikset (stablede celler),
+«1 advarsler»-grammatikk. NYTT: FINN-kode-oppslag (`api/finn.ts` + parser i
+`src/domain/finn/` + vite-dev-middleware) — lim inn FINN-kode/lenke i kalkulatoren,
+alle felt fylles og «har dere råd»-verdikt vises mot maks kjøpsbeløp.
+
 **IA-ombygging (2026-07-02):** gruppert to-nivå-navigasjon (Oversikt/Inntekt/Utgifter/
 Sparing & gjeld/Fremtid/Livet) eier nå ALL navigasjon i `MainNav.tsx`; EconomyPage har ingen
 egen fanerad. Tynne faner slått sammen: Forbruk + Treffsikkerhet → visninger i Budsjett,
