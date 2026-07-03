@@ -5,6 +5,14 @@
 > Effort: **S** = timer, **M** = en økt, **L** = flere økter / eget delprosjekt.
 
 ## Levert nylig (kontekst)
+**«Vei til råd» i boligkalkulatoren (2026-07-03):** Kalkulatoren er koblet til Lommebokas
+faktiske kontoer/spareplaner/gjeld (`analyzeAffordabilityPath` i `utils/affordabilityPath.ts`
+— gjenbruker projectSavingsGrowth/buildRepaymentPlan). Nytt kort viser NÅR alle tre
+forskriftskravene blir oppfylt for scenarioets bolig (EK-projeksjon m/ renter, BSU-tak,
+fond, partner) + hva som mangler i dag: EK-gap, nødvendig kausjon (m/ tak-sjekk) og
+lønnsgap for gjeldsgrad/betjeningsevne (invers progressiv skatt). Erstattet det naive
+lineære Sparemål-kortet.
+
 **Boligkalkulator-revisjon + FINN-oppslag (2026-07-03):** Kritisk modellgjennomgang mot
 utlånsforskriften. Fikset: fellesgjeld var bakt inn i eget lån (dobbelttelte betjening,
 feil lånebeløp/amortisering — nå: eget lån separat, fellesgjeld i gjeldsgrad/LTV +

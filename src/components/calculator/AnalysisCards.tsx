@@ -1,34 +1,9 @@
-import { useState } from 'react'
-import { TrendingUp, Building2, Target, PiggyBank, ShieldCheck, ShieldX } from 'lucide-react'
+import { TrendingUp, Building2, Target, ShieldCheck, ShieldX } from 'lucide-react'
 import type { LoanAnalysis } from '@/types'
 import { formatCurrency, formatPercent, formatNumber } from '@/lib/utils'
 import { Progress } from '@/components/ui/progress'
-import { NumberInput } from '@/components/ui/number-input'
-import { Label } from '@/components/ui/label'
 import { HelpTooltip } from '@/components/ui/help-tooltip'
 import { cn } from '@/lib/utils'
-import { useEconomyStore } from '@/application/useEconomyStore'
-import { getBaseContribForPeriod } from '@/domain/economy/savingsCalculator'
-
-/** Samlet planlagt månedssparing fra Lommeboka (kontoer + fond) for inneværende måned */
-function currentMonthlySavingsPlan(): number {
-  const { savingsAccounts, fondPortfolio } = useEconomyStore.getState()
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = now.getMonth() + 1
-  const accSum = savingsAccounts.reduce((s, a) => s + getBaseContribForPeriod(a, y, m), 0)
-  let fond = 0
-  if (fondPortfolio) {
-    const ym = `${y}-${String(m).padStart(2, '0')}`
-    const period = fondPortfolio.contributionPeriods?.find(p => {
-      const from = p.fromDate ? p.fromDate.slice(0, 7) : '0000-00'
-      const to = p.toDate ? p.toDate.slice(0, 7) : '9999-99'
-      return ym >= from && ym <= to
-    })
-    fond = period ? Math.round(period.amount) : Math.round(fondPortfolio.monthlyDeposit)
-  }
-  return Math.round(accSum + fond)
-}
 
 interface CardProps {
   analysis: LoanAnalysis
@@ -374,72 +349,6 @@ export function MaxPurchaseCard({ analysis }: CardProps) {
             </p>
           )}
         </div>
-      )}
-    </div>
-  )
-}
-
-/** Sparemål-kort: vises når EK er utilstrekkelig */
-export function SavingsGoalCard({ analysis }: CardProps) {
-  const { equity } = analysis
-  // Forhåndsutfyll med faktisk spareplan fra Lommeboka når den finnes
-  const [planFromLommeboka] = useState(() => currentMonthlySavingsPlan())
-  const [monthlySavings, setMonthlySavings] = useState(() => planFromLommeboka > 0 ? planFromLommeboka : 5_000)
-
-  // Vises kun når EK-kravet ikke er oppfylt
-  if (equity.approved) return null
-
-  const shortfall = Math.max(0, -equity.equityBuffer)
-  const monthsToGoal = monthlySavings > 0 ? Math.ceil(shortfall / monthlySavings) : Infinity
-  const yearsToGoal = monthsToGoal / 12
-
-  return (
-    <div className="rounded-lg border border-yellow-500/30 bg-yellow-400/5 p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <PiggyBank className="h-4 w-4 text-yellow-400" />
-        <span className="text-sm font-medium text-foreground">Sparemål</span>
-      </div>
-
-      <p className="text-sm text-foreground">
-        Du mangler{' '}
-        <span className="font-semibold text-red-400">{formatCurrency(shortfall)}</span>
-        {' '}i egenkapital.
-      </p>
-
-      <div className="space-y-1.5">
-        <Label className="text-xs flex items-center">
-          Månedlig sparing
-          <HelpTooltip content="Beløpet du kan spare per måned. Resultatet viser når du har nok EK til å oppfylle kravet." />
-        </Label>
-        <NumberInput
-          value={monthlySavings}
-          onChange={setMonthlySavings}
-          suffix="kr/mnd"
-          min={500}
-          step={500}
-        />
-        {planFromLommeboka > 0 && monthlySavings === planFromLommeboka && (
-          <p className="text-[11px] text-muted-foreground">
-            Forhåndsutfylt fra spareplanen din i Lommeboka ({formatCurrency(planFromLommeboka)}/mnd)
-          </p>
-        )}
-      </div>
-
-      {isFinite(monthsToGoal) ? (
-        <div className="rounded-md bg-muted/50 px-3 py-2 text-sm">
-          <p className="text-foreground font-medium">
-            Klar om{' '}
-            <span className="text-yellow-400">
-              {monthsToGoal} måneder
-              {yearsToGoal >= 1 ? ` (${yearsToGoal.toFixed(1)} år)` : ''}
-            </span>
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Totalt spart: {formatCurrency(monthlySavings * monthsToGoal)} — inkl. nødvendig buffer
-          </p>
-        </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">Angi månedlig sparing for å se resultat.</p>
       )}
     </div>
   )
