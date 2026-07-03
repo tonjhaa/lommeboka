@@ -8,8 +8,8 @@ import {
   DebtRatioCard,
   AffordabilityCard,
   MaxPurchaseCard,
-  SavingsGoalCard,
 } from './AnalysisCards'
+import { AffordabilityPathCard } from './AffordabilityPathCard'
 import { DistributionPlanSection } from './DistributionPlanCard'
 import { Separator } from '@/components/ui/separator'
 import { NumberInput } from '@/components/ui/number-input'
@@ -133,7 +133,10 @@ export function ResultsPanel({ scenarioId }: Props) {
       {/* 2. Maks kjøpsbeløp */}
       <MaxPurchaseCard analysis={analysis} />
 
-      {/* 3–5. Detaljkort (kollapsede) */}
+      {/* 3. Vei til råd — når blir boligen oppnåelig med Lommeboka-spareplanen */}
+      {scenario && <AffordabilityPathCard scenario={scenario} />}
+
+      {/* 4–6. Detaljkort (kollapsede) */}
       <details className="rounded-lg border border-border/50 bg-card/40">
         <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium hover:bg-muted/30">
           Vis detaljer
@@ -144,7 +147,6 @@ export function ResultsPanel({ scenarioId }: Props) {
             <EquityCard analysis={analysis} />
             <DebtRatioCard analysis={analysis} />
           </div>
-          <SavingsGoalCard analysis={analysis} />
         </div>
       </details>
 
