@@ -239,3 +239,55 @@ describe('projectSavingsGrowth — BSU rente krediteres yearly', () => {
     expect(novemberBalance).toBe(100_000)
   })
 })
+
+import { computeAccountHistory } from '../savingsCalculator'
+
+describe('computeAccountHistory', () => {
+  it('returnerer tom liste når kontoen ble opprettet i toMonth selv', () => {
+    const account = makeBSUAccount({ openingDate: '2026-07-01', openingBalance: 50_000 })
+    const history = computeAccountHistory(account, { year: 2026, month: 7 })
+    expect(history).toEqual([])
+  })
+
+  it('returnerer tom liste hvis toMonth er før kontoen ble opprettet', () => {
+    const account = makeBSUAccount({ openingDate: '2026-06-01' })
+    const history = computeAccountHistory(account, { year: 2026, month: 1 })
+    expect(history).toEqual([])
+  })
+
+  it('beregner saldo og innskudd måned for måned basert på faktiske innskudd', () => {
+    const account = makeBSUAccount({
+      openingDate: '2026-01-01',
+      openingBalance: 100_000,
+      contributions: [
+        { id: 'c1', date: '2026-01-15', amount: 2_000 },
+        { id: 'c2', date: '2026-02-15', amount: 2_000 },
+      ],
+    })
+    const history = computeAccountHistory(account, { year: 2026, month: 3 })
+    expect(history).toHaveLength(2)
+    expect(history[0]).toMatchObject({ year: 2026, month: 1, balance: 102_000, contribution: 2_000, interest: 0 })
+    expect(history[1]).toMatchObject({ year: 2026, month: 2, balance: 104_000, contribution: 2_000, interest: 0 })
+  })
+
+  it('viser rente/avvik som residual når saldoen øker mer enn registrerte innskudd', () => {
+    const account = makeBSUAccount({
+      openingDate: '2026-01-01',
+      openingBalance: 100_000,
+      balanceHistory: [{ year: 2026, month: 1, balance: 100_500, isManual: false }],
+    })
+    const history = computeAccountHistory(account, { year: 2026, month: 2 })
+    expect(history).toHaveLength(1)
+    expect(history[0]).toMatchObject({ year: 2026, month: 1, balance: 100_500, contribution: 0, interest: 500 })
+  })
+
+  it('tar med uttak (negativt beløp) i innskuddstallet', () => {
+    const account = makeBSUAccount({
+      openingDate: '2026-01-01',
+      openingBalance: 100_000,
+      withdrawals: [{ id: 'w1', date: '2026-01-10', amount: -10_000 }],
+    })
+    const history = computeAccountHistory(account, { year: 2026, month: 2 })
+    expect(history[0]).toMatchObject({ year: 2026, month: 1, balance: 90_000, contribution: -10_000, interest: 0 })
+  })
+})
