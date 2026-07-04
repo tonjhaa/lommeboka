@@ -1054,6 +1054,7 @@ function MånedsoversiktTable({
         debtBalance: Math.round(debtBalance),
         myDebtBalance,
         partnerDebtBalance: Math.round(partnerDebt),
+        isPast: false,
       }
     })
 
