@@ -697,7 +697,15 @@ function MånedsoversiktTable({
   const { savingsOverrides: contribOverrides, setSavingsOverride, clearAllSavingsOverrides } = useActiveEconomyStore()
   const [editingRateId, setEditingRateId] = useState<string | null>(null)
   const [horizonMonths, setHorizonMonths] = useState(72)
-  const [collapsedYears, setCollapsedYears] = useState<Set<number>>(new Set())
+  const [collapsedYears, setCollapsedYears] = useState<Set<number>>(() => {
+    const currentYear = now.getFullYear()
+    const accountStarts = accounts.map(a => new Date(a.openingDate).getFullYear())
+    const fondStartYear = fondPortfolio?.startDate ? new Date(fondPortfolio.startDate).getFullYear() : currentYear
+    const earliestYear = Math.min(currentYear, ...accountStarts, fondStartYear)
+    const initiallyCollapsed = new Set<number>()
+    for (let y = earliestYear; y < currentYear; y++) initiallyCollapsed.add(y)
+    return initiallyCollapsed
+  })
 
   const setCurrentView = useAppStore((s) => s.setCurrentView)
   const partnerStatus = usePartnershipStore((s) => s.status)
