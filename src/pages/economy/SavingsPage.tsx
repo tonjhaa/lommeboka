@@ -1159,7 +1159,7 @@ function MånedsoversiktTable({
       if (m > 12) { m = 1; y++ }
     }
     return rows
-  }, [accounts, fondPortfolio, partnerAccMeta, now, monthRows])
+  }, [accounts, fondPortfolio, partnerAccMeta, now])
 
   const allRows = [...pastRows, ...monthRows]
   const years = [...new Set(allRows.map(r => r.year))]
@@ -1840,9 +1840,11 @@ function MånedsoversiktTable({
                     {hasPartner && hasBsu && (
                       <td colSpan={2} className="border-r border-border p-0">
                         <div className="grid grid-cols-[6rem_1fr] items-center">
-                          <span className="flex-1 px-3 py-1 text-right text-muted-foreground whitespace-nowrap">{Math.round(row.partnerBsuContrib).toLocaleString('no-NO')}</span>
+                          <span className="flex-1 px-3 py-1 text-right text-muted-foreground whitespace-nowrap">
+                            {row.isPast ? '—' : Math.round(row.partnerBsuContrib).toLocaleString('no-NO')}
+                          </span>
                           <span className="flex-1 px-3 py-1 flex items-baseline justify-end font-mono text-violet-300 whitespace-nowrap">
-                            <span>{fmtNOK(row.partnerBsuBalance)}</span>
+                            <span>{row.isPast ? '—' : fmtNOK(row.partnerBsuBalance)}</span>
                             <span className="text-[10px] text-green-400/60 ml-1 inline-block min-w-[3.5rem] text-right shrink-0">
                               {row.partnerBsuInterest > 0 ? `(+${row.partnerBsuInterest.toLocaleString('no-NO')})` : ''}
                             </span>
@@ -1854,9 +1856,9 @@ function MånedsoversiktTable({
                       <td colSpan={2} className="border-r border-border p-0">
                         <div className="grid grid-cols-[6rem_1fr] items-center">
                           <span className="flex-1 px-3 py-1 text-right text-muted-foreground whitespace-nowrap">
-                            {row.partnerFondContrib > 0 ? row.partnerFondContrib.toLocaleString('no-NO') : '—'}
+                            {row.isPast ? '—' : row.partnerFondContrib > 0 ? row.partnerFondContrib.toLocaleString('no-NO') : '—'}
                           </span>
-                          <span className="flex-1 px-3 py-1 text-right font-mono text-violet-300 whitespace-nowrap">{fmtNOK(row.partnerFondBalance)}</span>
+                          <span className="flex-1 px-3 py-1 text-right font-mono text-violet-300 whitespace-nowrap">{row.isPast ? '—' : fmtNOK(row.partnerFondBalance)}</span>
                         </div>
                       </td>
                     )}
@@ -1864,15 +1866,19 @@ function MånedsoversiktTable({
                         <td key={ab.id} colSpan={2} className="border-r border-border p-0">
                           <div className="grid grid-cols-[6rem_1fr] items-center">
                             <span className="flex-1 px-3 py-1 flex items-center justify-end">
-                              <InnskuddCell
-                                value={ab.contribution}
-                                isOverridden={ab.overrideKey in contribOverrides}
-                                onChange={v => setSavingsOverride(ab.overrideKey, v)}
-                                onFillDown={v => fillDown(`p-${ab.id}`, row.year, row.month, v)}
-                              />
+                              {row.isPast ? (
+                                <span className="text-muted-foreground">—</span>
+                              ) : (
+                                <InnskuddCell
+                                  value={ab.contribution}
+                                  isOverridden={ab.overrideKey in contribOverrides}
+                                  onChange={v => setSavingsOverride(ab.overrideKey, v)}
+                                  onFillDown={v => fillDown(`p-${ab.id}`, row.year, row.month, v)}
+                                />
+                              )}
                             </span>
                             <span className="flex-1 px-3 py-1 flex items-baseline justify-end font-mono text-violet-300 whitespace-nowrap">
-                              <span>{fmtNOK(ab.balance)}</span>
+                              <span>{row.isPast ? '—' : fmtNOK(ab.balance)}</span>
                               <span className="text-[10px] text-green-400/60 ml-1 inline-block min-w-[3.5rem] text-right shrink-0">
                                 {ab.interest > 0 ? `(+${Math.round(ab.interest).toLocaleString('no-NO')})` : ''}
                               </span>
