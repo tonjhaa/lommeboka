@@ -1736,7 +1736,7 @@ function MånedsoversiktTable({
                     key={`${row.year}-${row.month}`}
                     className={cn(
                       '[&>td]:border-b [&>td]:border-border/20 hover:bg-muted/10 group/mrow',
-                      row.isPast && 'opacity-60',
+                      row.isPast && 'bg-muted/5',
                     )}
                   >
                     <td className="sticky left-0 bg-background px-3 py-1 text-muted-foreground border-r border-border whitespace-nowrap">
