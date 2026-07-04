@@ -1732,7 +1732,13 @@ function MånedsoversiktTable({
                 </tr>
                 {/* Monthly rows — skjules når året er kollapset */}
                 {!collapsedYears.has(year) && yearData.map(row => (
-                  <tr key={`${row.year}-${row.month}`} className="[&>td]:border-b [&>td]:border-border/20 hover:bg-muted/10 group/mrow">
+                  <tr
+                    key={`${row.year}-${row.month}`}
+                    className={cn(
+                      '[&>td]:border-b [&>td]:border-border/20 hover:bg-muted/10 group/mrow',
+                      row.isPast && 'opacity-60',
+                    )}
+                  >
                     <td className="sticky left-0 bg-background px-3 py-1 text-muted-foreground border-r border-border whitespace-nowrap">
                       <span className="flex items-center justify-between gap-1.5">
                         {FULL_MONTH_NAMES[row.month - 1]}
@@ -1753,12 +1759,18 @@ function MånedsoversiktTable({
                         <td key={acc.id} colSpan={2} className="border-r border-border p-0">
                           <div className="grid grid-cols-[6rem_1fr] items-center">
                             <span className="flex-1 px-3 py-1 flex items-center justify-end">
-                              <InnskuddCell
-                                value={ab.contribution}
-                                isOverridden={ab.overrideKey in contribOverrides}
-                                onChange={v => setMonthOverride(acc.id, row.year, row.month, v)}
-                                onFillDown={v => fillDown(acc.id, row.year, row.month, v)}
-                              />
+                              {row.isPast ? (
+                                <span className="tabular-nums text-right text-muted-foreground">
+                                  {Math.round(ab.contribution).toLocaleString('no-NO')}
+                                </span>
+                              ) : (
+                                <InnskuddCell
+                                  value={ab.contribution}
+                                  isOverridden={ab.overrideKey in contribOverrides}
+                                  onChange={v => setMonthOverride(acc.id, row.year, row.month, v)}
+                                  onFillDown={v => fillDown(acc.id, row.year, row.month, v)}
+                                />
+                              )}
                             </span>
                             <span className="flex-1 px-3 py-1 flex items-baseline justify-end font-mono whitespace-nowrap">
                               <span>{fmtNOK(ab.balance)}</span>
@@ -1774,7 +1786,11 @@ function MånedsoversiktTable({
                       <td colSpan={2} className="border-r border-border p-0">
                         <div className="grid grid-cols-[6rem_1fr] items-center">
                           <span className="flex-1 px-3 py-1 flex items-center justify-end">
-                            {row.fondPeriod && !(`fond-${row.year}-${row.month}` in contribOverrides) ? (
+                            {row.isPast ? (
+                              <span className="tabular-nums text-right text-muted-foreground">
+                                {Math.round(row.fondContrib).toLocaleString('no-NO')}
+                              </span>
+                            ) : row.fondPeriod && !(`fond-${row.year}-${row.month}` in contribOverrides) ? (
                               <span
                                 className="relative w-full flex items-center justify-end"
                                 title={`Spareperiode: ${Math.round(row.fondPeriod.amount).toLocaleString('no-NO')} kr/mnd${row.fondPeriod.fromDate ? ` · fra ${row.fondPeriod.fromDate.slice(0, 7)}` : ''}${row.fondPeriod.toDate ? ` → ${row.fondPeriod.toDate.slice(0, 7)}` : ''}`}
@@ -1869,7 +1885,7 @@ function MånedsoversiktTable({
                       {goalRow && goalRow.year === row.year && goalRow.month === row.month && (
                         <span className="mr-1" title={`Sparemålet (${fmtNOK(savingsPlanTarget)}) nås denne måneden`}>🎯</span>
                       )}
-                      {fmtNOK(row.totalEK)}
+                      {row.isPast ? '—' : fmtNOK(row.totalEK)}
                     </td>
                   </tr>
                 ))}
