@@ -1153,9 +1153,11 @@ function MånedsoversiktTable({
     return rows
   }, [accounts, fondPortfolio, partnerAccMeta, now, monthRows])
 
-  const years = [...new Set(monthRows.map(r => r.year))]
+  const allRows = [...pastRows, ...monthRows]
+  const years = [...new Set(allRows.map(r => r.year))]
 
-  // Første måned der sparemålet nås (🎯-markør i Total EK-kolonnen)
+  // Første måned der sparemålet nås (🎯-markør i Total EK-kolonnen) — kun i
+  // fremtidsprognosen, aldri en passert måned
   const goalRow = savingsPlanTarget > 0 ? monthRows.find(r => r.totalEK >= savingsPlanTarget) : undefined
 
   // Åpne en fremtidsmåned som ferdig utfylt scenario i boligkalkulatoren
@@ -1502,9 +1504,10 @@ function MånedsoversiktTable({
         </thead>
         <tbody>
           {years.map(year => {
-            const yearData = monthRows.filter(r => r.year === year)
+            const yearData = allRows.filter(r => r.year === year)
             const isFirstYear = year === years[0]
-            const prevYearRows = isFirstYear ? [] : monthRows.filter(r => r.year === year - 1)
+            const isCurrentYear = year === now.getFullYear()
+            const prevYearRows = isFirstYear ? [] : allRows.filter(r => r.year === year - 1)
             const prevYearLast = prevYearRows[prevYearRows.length - 1]
             return (
               <Fragment key={year}>
@@ -1528,7 +1531,7 @@ function MånedsoversiktTable({
                     </span>
                   </td>
                   {accMeta.map(acc => {
-                    if (isFirstYear) {
+                    if (isCurrentYear) {
                       return (
                         <td key={acc.id} colSpan={2} className="border-r border-border p-0">
                           <div className="grid grid-cols-[6rem_1fr] items-center">
@@ -1544,9 +1547,12 @@ function MånedsoversiktTable({
                         </td>
                       )
                     }
-                    const openingBal = prevYearLast?.accountBalances.find(a => a.id === acc.id)?.balance ?? 0
-                    const prevRente = Math.round(prevYearRows.reduce((s, r) => s + (r.accountBalances.find(a => a.id === acc.id)?.interest ?? 0), 0))
-                    const prevInnskudd = Math.round(prevYearRows.reduce((s, r) => s + (r.accountBalances.find(a => a.id === acc.id)?.contribution ?? 0), 0))
+                    const rawAcc = accounts.find(a => a.id === acc.id)
+                    const openingBal = isFirstYear
+                      ? (rawAcc ? Math.round(computeEffectiveBalance(rawAcc, new Date(year - 1, 11, 31, 12))) : 0)
+                      : prevYearLast?.accountBalances.find(a => a.id === acc.id)?.balance ?? 0
+                    const prevRente = isFirstYear ? 0 : Math.round(prevYearRows.reduce((s, r) => s + (r.accountBalances.find(a => a.id === acc.id)?.interest ?? 0), 0))
+                    const prevInnskudd = isFirstYear ? 0 : Math.round(prevYearRows.reduce((s, r) => s + (r.accountBalances.find(a => a.id === acc.id)?.contribution ?? 0), 0))
                     return (
                       <td key={acc.id} colSpan={2} className="border-r border-border p-0">
                         <div className="grid grid-cols-[6rem_1fr] items-baseline">
@@ -1564,7 +1570,7 @@ function MånedsoversiktTable({
                     )
                   })}
                   {hasFond && (() => {
-                    if (isFirstYear) {
+                    if (isCurrentYear) {
                       return (
                         <td colSpan={2} className="border-r border-border p-0">
                           <div className="grid grid-cols-[6rem_1fr] items-center">
@@ -1580,7 +1586,7 @@ function MånedsoversiktTable({
                         </td>
                       )
                     }
-                    const fondOpening = prevYearLast?.fondBalance ?? 0
+                    const fondOpening = isFirstYear ? 0 : prevYearLast?.fondBalance ?? 0
                     const prevFondRente = Math.round(prevYearRows.reduce((s, r) => s + r.fondInterest, 0))
                     const prevFondInnskudd = Math.round(prevYearRows.reduce((s, r) => s + r.fondContrib, 0))
                     return (
@@ -1601,7 +1607,7 @@ function MånedsoversiktTable({
                   })()}
                   {(() => {
                     // Sum innskudd (egne kontoer + fond) — forrige års totaler
-                    if (isFirstYear) return <td className="border-r-2 border-r-primary/30 px-3 py-2" />
+                    if (isCurrentYear) return <td className="border-r-2 border-r-primary/30 px-3 py-2" />
                     const prevSum = Math.round(prevYearRows.reduce((s, r) =>
                       s + r.accountBalances.reduce((x, a) => x + a.contribution, 0) + (hasFond ? r.fondContrib : 0), 0))
                     return (
@@ -1611,7 +1617,7 @@ function MånedsoversiktTable({
                     )
                   })()}
                   {hasPartner && hasBsu && (() => {
-                    if (isFirstYear) {
+                    if (isCurrentYear) {
                       return (
                         <td colSpan={2} className="border-r border-border p-0">
                           <div className="grid grid-cols-[6rem_1fr] items-center">
@@ -1627,7 +1633,7 @@ function MånedsoversiktTable({
                         </td>
                       )
                     }
-                    const bsuOpening = prevYearLast?.partnerBsuBalance ?? 0
+                    const bsuOpening = isFirstYear ? 0 : prevYearLast?.partnerBsuBalance ?? 0
                     const prevBsuInnskudd = Math.round(prevYearRows.reduce((s, r) => s + r.partnerBsuContrib, 0))
                     const prevBsuRente = Math.round(prevYearRows.reduce((s, r) => s + (r.partnerBsuInterest ?? 0), 0))
                     return (
@@ -1647,7 +1653,7 @@ function MånedsoversiktTable({
                     )
                   })()}
                   {hasPartnerFond && (() => {
-                    if (isFirstYear) {
+                    if (isCurrentYear) {
                       return (
                         <td colSpan={2} className="border-r border-border p-0">
                           <div className="grid grid-cols-[6rem_1fr] items-center">
@@ -1663,7 +1669,7 @@ function MånedsoversiktTable({
                         </td>
                       )
                     }
-                    const fondOpening = prevYearLast?.partnerFondBalance ?? 0
+                    const fondOpening = isFirstYear ? 0 : prevYearLast?.partnerFondBalance ?? 0
                     const prevFondInnskudd = Math.round(prevYearRows.reduce((s, r) => s + r.partnerFondContrib, 0))
                     return (
                       <td colSpan={2} className="border-r border-border p-0">
@@ -1677,7 +1683,7 @@ function MånedsoversiktTable({
                     )
                   })()}
                   {partnerAccMeta.map(acc => {
-                    if (isFirstYear) {
+                    if (isCurrentYear) {
                       return (
                         <td key={acc.id} colSpan={2} className="border-r border-border p-0">
                           <div className="grid grid-cols-[6rem_1fr] items-center">
@@ -1693,7 +1699,7 @@ function MånedsoversiktTable({
                         </td>
                       )
                     }
-                    const openingBal = prevYearLast?.partnerAccBalances.find(a => a.id === acc.id)?.balance ?? 0
+                    const openingBal = isFirstYear ? 0 : prevYearLast?.partnerAccBalances.find(a => a.id === acc.id)?.balance ?? 0
                     const prevRente = Math.round(prevYearRows.reduce((s, r) => s + (r.partnerAccBalances.find(a => a.id === acc.id)?.interest ?? 0), 0))
                     const prevInnskudd = Math.round(prevYearRows.reduce((s, r) => s + (r.partnerAccBalances.find(a => a.id === acc.id)?.contribution ?? 0), 0))
                     return (
