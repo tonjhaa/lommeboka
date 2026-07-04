@@ -1089,6 +1089,7 @@ function MånedsoversiktTable({
     // Fond: siste kjente verdi (snapshot eller 0 før første snapshot) — ingen
     // antatt vekst bakover i tid mellom snapshots, kun ekte datapunkter.
     let fondCarry = 0
+    let fondContribSinceSnapshot = 0
 
     while (y < currentYear || (y === currentYear && m < currentMonth)) {
       const accountBalances = accounts.map((acc, idx) => {
@@ -1109,9 +1110,11 @@ function MånedsoversiktTable({
         const ym = `${y}-${String(m).padStart(2, '0')}`
         const snapshot = fondPortfolio.snapshots?.find(s => s.date.slice(0, 7) === ym)
         fondContrib = getFondContribForMonth(fondPortfolio, y, m)
+        fondContribSinceSnapshot += fondContrib
         if (snapshot) {
-          fondInterest = Math.round(snapshot.totalValue - fondCarry - fondContrib)
+          fondInterest = Math.round(snapshot.totalValue - fondCarry - fondContribSinceSnapshot)
           fondCarry = snapshot.totalValue
+          fondContribSinceSnapshot = 0
         }
         fondBalance = fondCarry
       }
