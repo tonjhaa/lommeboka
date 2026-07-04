@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { checkBSULimits, calculateGoalProgress, projectSavingsGrowth } from '../savingsCalculator'
+import { checkBSULimits, calculateGoalProgress, projectSavingsGrowth, computeAccountHistory } from '../savingsCalculator'
 import type { SavingsAccount, SavingsGoal } from '@/types/economy'
 
 function makeBSUAccount(overrides: Partial<SavingsAccount> = {}): SavingsAccount {
@@ -239,8 +239,6 @@ describe('projectSavingsGrowth — BSU rente krediteres yearly', () => {
     expect(novemberBalance).toBe(100_000)
   })
 })
-
-import { computeAccountHistory } from '../savingsCalculator'
 
 describe('computeAccountHistory', () => {
   it('returnerer tom liste når kontoen ble opprettet i toMonth selv', () => {
