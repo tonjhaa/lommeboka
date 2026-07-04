@@ -26,6 +26,7 @@ import {
   computeYearlyInterestIncome,
   computeBSUForecast,
   computeEffectiveBalance,
+  computeAccountHistory,
   getEffectiveRateFromTiers,
   getActiveTiersForDate,
 } from '@/domain/economy/savingsCalculator'
@@ -1060,6 +1061,94 @@ function MånedsoversiktTable({
 
     return { accMeta, partnerAccMeta: partnerAccMeta as PartnerAccount[], monthRows }
   }, [accounts, fondCurrentValue, fondPortfolio, fondMonthlyDeposit, debts, annualIncome, myAnnualIncome, partnerOnlyAnnualIncome, salaryGrowthPct, hasFond, hasPartner, hasPartnerFond, partnerFondMonthly, partnerVeikart, now, contribOverrides, includeInterest, horizonMonths])
+
+  const pastRows = useMemo(() => {
+    type MonthRow = (typeof monthRows)[number]
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth() + 1
+
+    const accountStarts = accounts.map(a => new Date(a.openingDate))
+    const fondStart = fondPortfolio?.startDate ? new Date(fondPortfolio.startDate) : null
+    const allStarts = fondStart ? [...accountStarts, fondStart] : accountStarts
+    if (allStarts.length === 0) return [] as MonthRow[]
+    const earliest = allStarts.reduce((min, d) => (d < min ? d : min), allStarts[0])
+
+    // Ingen reell fortid å vise (konto(er)/fond opprettet denne måneden eller senere)
+    if (earliest.getFullYear() > currentYear || (earliest.getFullYear() === currentYear && earliest.getMonth() + 1 >= currentMonth)) {
+      return [] as MonthRow[]
+    }
+
+    // Hent hele historikken per konto én gang (ikke per måned i loopen)
+    const accountHistories = accounts.map(acc =>
+      computeAccountHistory(acc, { year: currentYear, month: currentMonth })
+    )
+
+    const rows: MonthRow[] = []
+    let y = earliest.getFullYear()
+    let m = earliest.getMonth() + 1
+    // Fond: siste kjente verdi (snapshot eller 0 før første snapshot) — ingen
+    // antatt vekst bakover i tid mellom snapshots, kun ekte datapunkter.
+    let fondCarry = 0
+
+    while (y < currentYear || (y === currentYear && m < currentMonth)) {
+      const accountBalances = accounts.map((acc, idx) => {
+        const entry = accountHistories[idx].find(h => h.year === y && h.month === m)
+        return {
+          id: acc.id,
+          balance: entry?.balance ?? 0,
+          contribution: entry?.contribution ?? 0,
+          overrideKey: `${acc.id}-${y}-${m}`,
+          interest: entry?.interest ?? 0,
+        }
+      })
+
+      let fondBalance = 0
+      let fondContrib = 0
+      let fondInterest = 0
+      if (fondPortfolio) {
+        const ym = `${y}-${String(m).padStart(2, '0')}`
+        const snapshot = fondPortfolio.snapshots?.find(s => s.date.slice(0, 7) === ym)
+        fondContrib = getFondContribForMonth(fondPortfolio, y, m)
+        if (snapshot) {
+          fondInterest = Math.round(snapshot.totalValue - fondCarry - fondContrib)
+          fondCarry = snapshot.totalValue
+        }
+        fondBalance = fondCarry
+      }
+
+      rows.push({
+        year: y,
+        month: m,
+        accountBalances,
+        fondBalance,
+        fondContrib,
+        fondInterest,
+        fondPeriod: null,
+        partnerAccBalances: partnerAccMeta.map(acc => ({
+          id: acc.id, balance: 0, contribution: 0, overrideKey: `p-${acc.id}-${y}-${m}`, interest: 0,
+        })),
+        partnerBsuBalance: 0,
+        partnerBsuContrib: 0,
+        partnerBsuInterest: 0,
+        partnerFondBalance: 0,
+        partnerFondContrib: 0,
+        totalEK: 0,
+        myEK: 0,
+        partnerEK: 0,
+        maxKjøpesum: 0,
+        maxKjøpesumMeg: 0,
+        maxKjøpesumPartner: 0,
+        debtBalance: 0,
+        myDebtBalance: 0,
+        partnerDebtBalance: 0,
+        isPast: true,
+      })
+
+      m++
+      if (m > 12) { m = 1; y++ }
+    }
+    return rows
+  }, [accounts, fondPortfolio, partnerAccMeta, now, monthRows])
 
   const years = [...new Set(monthRows.map(r => r.year))]
 
