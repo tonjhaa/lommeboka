@@ -26,6 +26,7 @@ import {
   computeYearlyInterestIncome,
   computeBSUForecast,
   computeEffectiveBalance,
+  computeAccountHistory,
   getEffectiveRateFromTiers,
   getActiveTiersForDate,
 } from '@/domain/economy/savingsCalculator'
@@ -696,7 +697,15 @@ function MånedsoversiktTable({
   const { savingsOverrides: contribOverrides, setSavingsOverride, clearAllSavingsOverrides } = useActiveEconomyStore()
   const [editingRateId, setEditingRateId] = useState<string | null>(null)
   const [horizonMonths, setHorizonMonths] = useState(72)
-  const [collapsedYears, setCollapsedYears] = useState<Set<number>>(new Set())
+  const [collapsedYears, setCollapsedYears] = useState<Set<number>>(() => {
+    const currentYear = now.getFullYear()
+    const accountStarts = accounts.map(a => new Date(a.openingDate).getFullYear())
+    const fondStartYear = fondPortfolio?.startDate ? new Date(fondPortfolio.startDate).getFullYear() : currentYear
+    const earliestYear = Math.min(currentYear, ...accountStarts, fondStartYear)
+    const initiallyCollapsed = new Set<number>()
+    for (let y = earliestYear; y < currentYear; y++) initiallyCollapsed.add(y)
+    return initiallyCollapsed
+  })
 
   const setCurrentView = useAppStore((s) => s.setCurrentView)
   const partnerStatus = usePartnershipStore((s) => s.status)
@@ -1054,15 +1063,109 @@ function MånedsoversiktTable({
         debtBalance: Math.round(debtBalance),
         myDebtBalance,
         partnerDebtBalance: Math.round(partnerDebt),
+        isPast: false,
       }
     })
 
     return { accMeta, partnerAccMeta: partnerAccMeta as PartnerAccount[], monthRows }
   }, [accounts, fondCurrentValue, fondPortfolio, fondMonthlyDeposit, debts, annualIncome, myAnnualIncome, partnerOnlyAnnualIncome, salaryGrowthPct, hasFond, hasPartner, hasPartnerFond, partnerFondMonthly, partnerVeikart, now, contribOverrides, includeInterest, horizonMonths])
 
-  const years = [...new Set(monthRows.map(r => r.year))]
+  const pastRows = useMemo(() => {
+    type MonthRow = (typeof monthRows)[number]
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth() + 1
 
-  // Første måned der sparemålet nås (🎯-markør i Total EK-kolonnen)
+    const accountStarts = accounts.map(a => new Date(a.openingDate))
+    const fondStart = fondPortfolio?.startDate ? new Date(fondPortfolio.startDate) : null
+    const allStarts = fondStart ? [...accountStarts, fondStart] : accountStarts
+    if (allStarts.length === 0) return [] as MonthRow[]
+    const earliest = allStarts.reduce((min, d) => (d < min ? d : min), allStarts[0])
+
+    // Ingen reell fortid å vise (konto(er)/fond opprettet denne måneden eller senere)
+    if (earliest.getFullYear() > currentYear || (earliest.getFullYear() === currentYear && earliest.getMonth() + 1 >= currentMonth)) {
+      return [] as MonthRow[]
+    }
+
+    // Hent hele historikken per konto én gang (ikke per måned i loopen)
+    const accountHistories = accounts.map(acc =>
+      computeAccountHistory(acc, { year: currentYear, month: currentMonth })
+    )
+
+    const rows: MonthRow[] = []
+    let y = earliest.getFullYear()
+    let m = earliest.getMonth() + 1
+    // Fond: siste kjente verdi (snapshot eller 0 før første snapshot) — ingen
+    // antatt vekst bakover i tid mellom snapshots, kun ekte datapunkter.
+    let fondCarry = 0
+    let fondContribSinceSnapshot = 0
+
+    while (y < currentYear || (y === currentYear && m < currentMonth)) {
+      const accountBalances = accounts.map((acc, idx) => {
+        const entry = accountHistories[idx].find(h => h.year === y && h.month === m)
+        return {
+          id: acc.id,
+          balance: entry?.balance ?? 0,
+          contribution: entry?.contribution ?? 0,
+          overrideKey: `${acc.id}-${y}-${m}`,
+          interest: entry?.interest ?? 0,
+        }
+      })
+
+      let fondBalance = 0
+      let fondContrib = 0
+      let fondInterest = 0
+      if (fondPortfolio) {
+        const ym = `${y}-${String(m).padStart(2, '0')}`
+        const snapshot = fondPortfolio.snapshots?.find(s => s.date.slice(0, 7) === ym)
+        fondContrib = getFondContribForMonth(fondPortfolio, y, m)
+        fondContribSinceSnapshot += fondContrib
+        if (snapshot) {
+          fondInterest = Math.round(snapshot.totalValue - fondCarry - fondContribSinceSnapshot)
+          fondCarry = snapshot.totalValue
+          fondContribSinceSnapshot = 0
+        }
+        fondBalance = fondCarry
+      }
+
+      rows.push({
+        year: y,
+        month: m,
+        accountBalances,
+        fondBalance,
+        fondContrib,
+        fondInterest,
+        fondPeriod: null,
+        partnerAccBalances: partnerAccMeta.map(acc => ({
+          id: acc.id, balance: 0, contribution: 0, overrideKey: `p-${acc.id}-${y}-${m}`, interest: 0,
+        })),
+        partnerBsuBalance: 0,
+        partnerBsuContrib: 0,
+        partnerBsuInterest: 0,
+        partnerFondBalance: 0,
+        partnerFondContrib: 0,
+        totalEK: 0,
+        myEK: 0,
+        partnerEK: 0,
+        maxKjøpesum: 0,
+        maxKjøpesumMeg: 0,
+        maxKjøpesumPartner: 0,
+        debtBalance: 0,
+        myDebtBalance: 0,
+        partnerDebtBalance: 0,
+        isPast: true,
+      })
+
+      m++
+      if (m > 12) { m = 1; y++ }
+    }
+    return rows
+  }, [accounts, fondPortfolio, partnerAccMeta, now])
+
+  const allRows = [...pastRows, ...monthRows]
+  const years = [...new Set(allRows.map(r => r.year))]
+
+  // Første måned der sparemålet nås (🎯-markør i Total EK-kolonnen) — kun i
+  // fremtidsprognosen, aldri en passert måned
   const goalRow = savingsPlanTarget > 0 ? monthRows.find(r => r.totalEK >= savingsPlanTarget) : undefined
 
   // Åpne en fremtidsmåned som ferdig utfylt scenario i boligkalkulatoren
@@ -1409,9 +1512,10 @@ function MånedsoversiktTable({
         </thead>
         <tbody>
           {years.map(year => {
-            const yearData = monthRows.filter(r => r.year === year)
+            const yearData = allRows.filter(r => r.year === year)
             const isFirstYear = year === years[0]
-            const prevYearRows = isFirstYear ? [] : monthRows.filter(r => r.year === year - 1)
+            const isCurrentYear = year === now.getFullYear()
+            const prevYearRows = isFirstYear ? [] : allRows.filter(r => r.year === year - 1)
             const prevYearLast = prevYearRows[prevYearRows.length - 1]
             return (
               <Fragment key={year}>
@@ -1435,7 +1539,7 @@ function MånedsoversiktTable({
                     </span>
                   </td>
                   {accMeta.map(acc => {
-                    if (isFirstYear) {
+                    if (isCurrentYear) {
                       return (
                         <td key={acc.id} colSpan={2} className="border-r border-border p-0">
                           <div className="grid grid-cols-[6rem_1fr] items-center">
@@ -1451,9 +1555,12 @@ function MånedsoversiktTable({
                         </td>
                       )
                     }
-                    const openingBal = prevYearLast?.accountBalances.find(a => a.id === acc.id)?.balance ?? 0
-                    const prevRente = Math.round(prevYearRows.reduce((s, r) => s + (r.accountBalances.find(a => a.id === acc.id)?.interest ?? 0), 0))
-                    const prevInnskudd = Math.round(prevYearRows.reduce((s, r) => s + (r.accountBalances.find(a => a.id === acc.id)?.contribution ?? 0), 0))
+                    const rawAcc = accounts.find(a => a.id === acc.id)
+                    const openingBal = isFirstYear
+                      ? (rawAcc ? Math.round(computeEffectiveBalance(rawAcc, new Date(year - 1, 11, 31, 12))) : 0)
+                      : prevYearLast?.accountBalances.find(a => a.id === acc.id)?.balance ?? 0
+                    const prevRente = isFirstYear ? 0 : Math.round(prevYearRows.reduce((s, r) => s + (r.accountBalances.find(a => a.id === acc.id)?.interest ?? 0), 0))
+                    const prevInnskudd = isFirstYear ? 0 : Math.round(prevYearRows.reduce((s, r) => s + (r.accountBalances.find(a => a.id === acc.id)?.contribution ?? 0), 0))
                     return (
                       <td key={acc.id} colSpan={2} className="border-r border-border p-0">
                         <div className="grid grid-cols-[6rem_1fr] items-baseline">
@@ -1471,7 +1578,7 @@ function MånedsoversiktTable({
                     )
                   })}
                   {hasFond && (() => {
-                    if (isFirstYear) {
+                    if (isCurrentYear) {
                       return (
                         <td colSpan={2} className="border-r border-border p-0">
                           <div className="grid grid-cols-[6rem_1fr] items-center">
@@ -1487,7 +1594,7 @@ function MånedsoversiktTable({
                         </td>
                       )
                     }
-                    const fondOpening = prevYearLast?.fondBalance ?? 0
+                    const fondOpening = isFirstYear ? 0 : prevYearLast?.fondBalance ?? 0
                     const prevFondRente = Math.round(prevYearRows.reduce((s, r) => s + r.fondInterest, 0))
                     const prevFondInnskudd = Math.round(prevYearRows.reduce((s, r) => s + r.fondContrib, 0))
                     return (
@@ -1508,7 +1615,7 @@ function MånedsoversiktTable({
                   })()}
                   {(() => {
                     // Sum innskudd (egne kontoer + fond) — forrige års totaler
-                    if (isFirstYear) return <td className="border-r-2 border-r-primary/30 px-3 py-2" />
+                    if (isCurrentYear) return <td className="border-r-2 border-r-primary/30 px-3 py-2" />
                     const prevSum = Math.round(prevYearRows.reduce((s, r) =>
                       s + r.accountBalances.reduce((x, a) => x + a.contribution, 0) + (hasFond ? r.fondContrib : 0), 0))
                     return (
@@ -1518,7 +1625,7 @@ function MånedsoversiktTable({
                     )
                   })()}
                   {hasPartner && hasBsu && (() => {
-                    if (isFirstYear) {
+                    if (isCurrentYear) {
                       return (
                         <td colSpan={2} className="border-r border-border p-0">
                           <div className="grid grid-cols-[6rem_1fr] items-center">
@@ -1534,7 +1641,7 @@ function MånedsoversiktTable({
                         </td>
                       )
                     }
-                    const bsuOpening = prevYearLast?.partnerBsuBalance ?? 0
+                    const bsuOpening = isFirstYear ? 0 : prevYearLast?.partnerBsuBalance ?? 0
                     const prevBsuInnskudd = Math.round(prevYearRows.reduce((s, r) => s + r.partnerBsuContrib, 0))
                     const prevBsuRente = Math.round(prevYearRows.reduce((s, r) => s + (r.partnerBsuInterest ?? 0), 0))
                     return (
@@ -1554,7 +1661,7 @@ function MånedsoversiktTable({
                     )
                   })()}
                   {hasPartnerFond && (() => {
-                    if (isFirstYear) {
+                    if (isCurrentYear) {
                       return (
                         <td colSpan={2} className="border-r border-border p-0">
                           <div className="grid grid-cols-[6rem_1fr] items-center">
@@ -1570,7 +1677,7 @@ function MånedsoversiktTable({
                         </td>
                       )
                     }
-                    const fondOpening = prevYearLast?.partnerFondBalance ?? 0
+                    const fondOpening = isFirstYear ? 0 : prevYearLast?.partnerFondBalance ?? 0
                     const prevFondInnskudd = Math.round(prevYearRows.reduce((s, r) => s + r.partnerFondContrib, 0))
                     return (
                       <td colSpan={2} className="border-r border-border p-0">
@@ -1584,7 +1691,7 @@ function MånedsoversiktTable({
                     )
                   })()}
                   {partnerAccMeta.map(acc => {
-                    if (isFirstYear) {
+                    if (isCurrentYear) {
                       return (
                         <td key={acc.id} colSpan={2} className="border-r border-border p-0">
                           <div className="grid grid-cols-[6rem_1fr] items-center">
@@ -1600,7 +1707,7 @@ function MånedsoversiktTable({
                         </td>
                       )
                     }
-                    const openingBal = prevYearLast?.partnerAccBalances.find(a => a.id === acc.id)?.balance ?? 0
+                    const openingBal = isFirstYear ? 0 : prevYearLast?.partnerAccBalances.find(a => a.id === acc.id)?.balance ?? 0
                     const prevRente = Math.round(prevYearRows.reduce((s, r) => s + (r.partnerAccBalances.find(a => a.id === acc.id)?.interest ?? 0), 0))
                     const prevInnskudd = Math.round(prevYearRows.reduce((s, r) => s + (r.partnerAccBalances.find(a => a.id === acc.id)?.contribution ?? 0), 0))
                     return (
@@ -1633,7 +1740,13 @@ function MånedsoversiktTable({
                 </tr>
                 {/* Monthly rows — skjules når året er kollapset */}
                 {!collapsedYears.has(year) && yearData.map(row => (
-                  <tr key={`${row.year}-${row.month}`} className="[&>td]:border-b [&>td]:border-border/20 hover:bg-muted/10 group/mrow">
+                  <tr
+                    key={`${row.year}-${row.month}`}
+                    className={cn(
+                      '[&>td]:border-b [&>td]:border-border/20 hover:bg-muted/10 group/mrow',
+                      row.isPast && 'bg-muted/5',
+                    )}
+                  >
                     <td className="sticky left-0 bg-background px-3 py-1 text-muted-foreground border-r border-border whitespace-nowrap">
                       <span className="flex items-center justify-between gap-1.5">
                         {FULL_MONTH_NAMES[row.month - 1]}
@@ -1654,12 +1767,18 @@ function MånedsoversiktTable({
                         <td key={acc.id} colSpan={2} className="border-r border-border p-0">
                           <div className="grid grid-cols-[6rem_1fr] items-center">
                             <span className="flex-1 px-3 py-1 flex items-center justify-end">
-                              <InnskuddCell
-                                value={ab.contribution}
-                                isOverridden={ab.overrideKey in contribOverrides}
-                                onChange={v => setMonthOverride(acc.id, row.year, row.month, v)}
-                                onFillDown={v => fillDown(acc.id, row.year, row.month, v)}
-                              />
+                              {row.isPast ? (
+                                <span className="tabular-nums text-right text-muted-foreground">
+                                  {Math.round(ab.contribution).toLocaleString('no-NO')}
+                                </span>
+                              ) : (
+                                <InnskuddCell
+                                  value={ab.contribution}
+                                  isOverridden={ab.overrideKey in contribOverrides}
+                                  onChange={v => setMonthOverride(acc.id, row.year, row.month, v)}
+                                  onFillDown={v => fillDown(acc.id, row.year, row.month, v)}
+                                />
+                              )}
                             </span>
                             <span className="flex-1 px-3 py-1 flex items-baseline justify-end font-mono whitespace-nowrap">
                               <span>{fmtNOK(ab.balance)}</span>
@@ -1675,7 +1794,11 @@ function MånedsoversiktTable({
                       <td colSpan={2} className="border-r border-border p-0">
                         <div className="grid grid-cols-[6rem_1fr] items-center">
                           <span className="flex-1 px-3 py-1 flex items-center justify-end">
-                            {row.fondPeriod && !(`fond-${row.year}-${row.month}` in contribOverrides) ? (
+                            {row.isPast ? (
+                              <span className="tabular-nums text-right text-muted-foreground">
+                                {Math.round(row.fondContrib).toLocaleString('no-NO')}
+                              </span>
+                            ) : row.fondPeriod && !(`fond-${row.year}-${row.month}` in contribOverrides) ? (
                               <span
                                 className="relative w-full flex items-center justify-end"
                                 title={`Spareperiode: ${Math.round(row.fondPeriod.amount).toLocaleString('no-NO')} kr/mnd${row.fondPeriod.fromDate ? ` · fra ${row.fondPeriod.fromDate.slice(0, 7)}` : ''}${row.fondPeriod.toDate ? ` → ${row.fondPeriod.toDate.slice(0, 7)}` : ''}`}
@@ -1717,9 +1840,11 @@ function MånedsoversiktTable({
                     {hasPartner && hasBsu && (
                       <td colSpan={2} className="border-r border-border p-0">
                         <div className="grid grid-cols-[6rem_1fr] items-center">
-                          <span className="flex-1 px-3 py-1 text-right text-muted-foreground whitespace-nowrap">{Math.round(row.partnerBsuContrib).toLocaleString('no-NO')}</span>
+                          <span className="flex-1 px-3 py-1 text-right text-muted-foreground whitespace-nowrap">
+                            {row.isPast ? '—' : Math.round(row.partnerBsuContrib).toLocaleString('no-NO')}
+                          </span>
                           <span className="flex-1 px-3 py-1 flex items-baseline justify-end font-mono text-violet-300 whitespace-nowrap">
-                            <span>{fmtNOK(row.partnerBsuBalance)}</span>
+                            <span>{row.isPast ? '—' : fmtNOK(row.partnerBsuBalance)}</span>
                             <span className="text-[10px] text-green-400/60 ml-1 inline-block min-w-[3.5rem] text-right shrink-0">
                               {row.partnerBsuInterest > 0 ? `(+${row.partnerBsuInterest.toLocaleString('no-NO')})` : ''}
                             </span>
@@ -1731,9 +1856,9 @@ function MånedsoversiktTable({
                       <td colSpan={2} className="border-r border-border p-0">
                         <div className="grid grid-cols-[6rem_1fr] items-center">
                           <span className="flex-1 px-3 py-1 text-right text-muted-foreground whitespace-nowrap">
-                            {row.partnerFondContrib > 0 ? row.partnerFondContrib.toLocaleString('no-NO') : '—'}
+                            {row.isPast ? '—' : row.partnerFondContrib > 0 ? row.partnerFondContrib.toLocaleString('no-NO') : '—'}
                           </span>
-                          <span className="flex-1 px-3 py-1 text-right font-mono text-violet-300 whitespace-nowrap">{fmtNOK(row.partnerFondBalance)}</span>
+                          <span className="flex-1 px-3 py-1 text-right font-mono text-violet-300 whitespace-nowrap">{row.isPast ? '—' : fmtNOK(row.partnerFondBalance)}</span>
                         </div>
                       </td>
                     )}
@@ -1741,15 +1866,19 @@ function MånedsoversiktTable({
                         <td key={ab.id} colSpan={2} className="border-r border-border p-0">
                           <div className="grid grid-cols-[6rem_1fr] items-center">
                             <span className="flex-1 px-3 py-1 flex items-center justify-end">
-                              <InnskuddCell
-                                value={ab.contribution}
-                                isOverridden={ab.overrideKey in contribOverrides}
-                                onChange={v => setSavingsOverride(ab.overrideKey, v)}
-                                onFillDown={v => fillDown(`p-${ab.id}`, row.year, row.month, v)}
-                              />
+                              {row.isPast ? (
+                                <span className="text-muted-foreground">—</span>
+                              ) : (
+                                <InnskuddCell
+                                  value={ab.contribution}
+                                  isOverridden={ab.overrideKey in contribOverrides}
+                                  onChange={v => setSavingsOverride(ab.overrideKey, v)}
+                                  onFillDown={v => fillDown(`p-${ab.id}`, row.year, row.month, v)}
+                                />
+                              )}
                             </span>
                             <span className="flex-1 px-3 py-1 flex items-baseline justify-end font-mono text-violet-300 whitespace-nowrap">
-                              <span>{fmtNOK(ab.balance)}</span>
+                              <span>{row.isPast ? '—' : fmtNOK(ab.balance)}</span>
                               <span className="text-[10px] text-green-400/60 ml-1 inline-block min-w-[3.5rem] text-right shrink-0">
                                 {ab.interest > 0 ? `(+${Math.round(ab.interest).toLocaleString('no-NO')})` : ''}
                               </span>
@@ -1770,7 +1899,7 @@ function MånedsoversiktTable({
                       {goalRow && goalRow.year === row.year && goalRow.month === row.month && (
                         <span className="mr-1" title={`Sparemålet (${fmtNOK(savingsPlanTarget)}) nås denne måneden`}>🎯</span>
                       )}
-                      {fmtNOK(row.totalEK)}
+                      {row.isPast ? '—' : fmtNOK(row.totalEK)}
                     </td>
                   </tr>
                 ))}

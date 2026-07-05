@@ -125,6 +125,49 @@ export function computeMonthWithdrawals(account: SavingsAccount, year: number, m
     .reduce((s, w) => s + w.amount, 0) // amount er negativ
 }
 
+export interface HistoricalAccountMonth {
+  year: number
+  month: number
+  balance: number
+  contribution: number
+  interest: number
+}
+
+/**
+ * Faktisk saldo/innskudd måned for måned fra kontoens openingDate til
+ * (eksklusiv) `toMonth` — ingen simulering, kun ekte transaksjonsdata.
+ * Brukes til å vise historikk i månedsoversikten, i motsetning til
+ * projectSavingsGrowth som projiserer fremover med planlagt innskudd/rente.
+ */
+export function computeAccountHistory(
+  account: SavingsAccount,
+  toMonth: { year: number; month: number }
+): HistoricalAccountMonth[] {
+  const opening = new Date(account.openingDate)
+  let y = opening.getFullYear()
+  let m = opening.getMonth() + 1
+  const result: HistoricalAccountMonth[] = []
+  let prevBalance = account.openingBalance
+
+  while (y < toMonth.year || (y === toMonth.year && m < toMonth.month)) {
+    const monthEnd = new Date(y, m, 0, 12)
+    const balance = computeEffectiveBalance(account, monthEnd)
+    const contribution = computeMonthContributions(account, y, m) + computeMonthWithdrawals(account, y, m)
+    const interest = Math.round(balance - prevBalance - contribution)
+    result.push({
+      year: y,
+      month: m,
+      balance: Math.round(balance),
+      contribution: Math.round(contribution),
+      interest,
+    })
+    prevBalance = balance
+    m++
+    if (m > 12) { m = 1; y++ }
+  }
+  return result
+}
+
 export function getBaseContribForPeriod(acc: SavingsAccount, year: number, month: number): number {
   const periods = acc.contributionPeriods
   if (periods && periods.length > 0) {
