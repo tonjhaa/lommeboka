@@ -2311,22 +2311,16 @@ function AccountCard({
             {[...account.contributionPeriods!]
               .sort((a, b) => (b.fromDate ?? '').localeCompare(a.fromDate ?? ''))
               .map((p) => (
-                <div key={p.id} className="flex items-center justify-between px-3 py-1.5 text-xs border-t border-border/30">
-                  <span className="font-mono">{Math.round(p.amount).toLocaleString('no-NO')} kr/mnd</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">
-                      {p.fromDate ? fmtDate(p.fromDate) : 'Start'}
-                      {' → '}
-                      {p.toDate ? fmtDate(p.toDate) : 'Ingen slutt'}
-                    </span>
-                    <button
-                      onClick={() => onUpdate({ contributionPeriods: account.contributionPeriods!.filter(x => x.id !== p.id) })}
-                      className="text-muted-foreground hover:text-red-400 transition-colors"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                </div>
+                <ContributionPeriodRow
+                  key={p.id}
+                  period={p}
+                  onSave={(updated) => onUpdate({
+                    contributionPeriods: account.contributionPeriods!.map(x => x.id === updated.id ? updated : x),
+                  })}
+                  onRemove={() => onUpdate({
+                    contributionPeriods: account.contributionPeriods!.filter(x => x.id !== p.id),
+                  })}
+                />
               ))}
           </div>
         )}
@@ -2981,6 +2975,80 @@ function SummaryCard({ label, value, subvalue }: { label: string; value: string;
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="font-mono font-semibold text-sm">{value}</p>
       {subvalue && <p className="text-xs text-muted-foreground">{subvalue}</p>}
+    </div>
+  )
+}
+
+function ContributionPeriodRow({
+  period,
+  onSave,
+  onRemove,
+}: {
+  period: ContributionPeriod
+  onSave: (p: ContributionPeriod) => void
+  onRemove: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [amount, setAmount] = useState(String(period.amount))
+  const [fromDate, setFromDate] = useState(period.fromDate ?? '')
+  const [toDate, setToDate] = useState(period.toDate ?? '')
+
+  if (editing) {
+    return (
+      <div className="flex flex-wrap items-end gap-2 px-3 py-2 text-xs border-t border-border/30 bg-muted/10">
+        <div className="space-y-0.5">
+          <Label className="text-[10px]">Beløp/mnd</Label>
+          <Input type="number" className="h-7 text-xs w-24" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+        </div>
+        <div className="space-y-0.5">
+          <Label className="text-[10px]">Fra</Label>
+          <Input type="date" className="h-7 text-xs w-32" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+        </div>
+        <div className="space-y-0.5">
+          <Label className="text-[10px]">Til</Label>
+          <Input type="date" className="h-7 text-xs w-32" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+        </div>
+        <Button
+          size="sm"
+          className="h-7 text-xs"
+          onClick={() => {
+            const amt = parseFloat(amount)
+            if (!amt) return
+            onSave({ ...period, amount: amt, fromDate: fromDate || undefined, toDate: toDate || undefined })
+            setEditing(false)
+          }}
+        >
+          Lagre
+        </Button>
+        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditing(false)}>Avbryt</Button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center justify-between px-3 py-1.5 text-xs border-t border-border/30">
+      <span className="font-mono">{Math.round(period.amount).toLocaleString('no-NO')} kr/mnd</span>
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground">
+          {period.fromDate ? fmtDate(period.fromDate) : 'Start'}
+          {' → '}
+          {period.toDate ? fmtDate(period.toDate) : 'Ingen slutt'}
+        </span>
+        <button
+          onClick={() => {
+            setAmount(String(period.amount))
+            setFromDate(period.fromDate ?? '')
+            setToDate(period.toDate ?? '')
+            setEditing(true)
+          }}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
+        <button onClick={onRemove} className="text-muted-foreground hover:text-red-400 transition-colors">
+          <X className="h-3 w-3" />
+        </button>
+      </div>
     </div>
   )
 }
