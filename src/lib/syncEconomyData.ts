@@ -130,8 +130,13 @@ export async function loadFromSupabase(): Promise<boolean> {
 export async function saveToSupabase(): Promise<void> {
   const state = useEconomyStore.getState()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  // Viktig: IKKE returner stille her. Denne feilen ble tidligere svelget, slik at
+  // startAutoSync sitt .then(() => setSyncStatus('saved')) fyrte selv om INGENTING
+  // ble lagret — brukeren så "Lagret" mens data aldri nådde Supabase (f.eks. ved et
+  // forbigående nettverksglipp i getUser()-kallet, eller en reelt utløpt økt).
+  if (userError) throw new Error(`Kunne ikke bekrefte innlogging: ${userError.message}`)
+  if (!user) throw new Error('Ikke innlogget — lagring til Supabase hoppet over')
 
   const monthHistoryUtenPDF = state.monthHistory.map(({ slipPdfBase64: _, ...rest }) => rest)
 
@@ -189,21 +194,45 @@ export function setImporting(v: boolean) { isImporting = v }
 /**
  * Starter automatisk synkronisering til Supabase ved endringer i storen.
  * Lagrer maks én gang per 3 sekunder. Oppdaterer synkstatus for UI.
+ *
+ * Flusher en ventende lagring umiddelbart når fanen skjules (bytte fane,
+ * minimere, lukke). Uten dette kan en endring gjort rett før fanen lukkes
+ * aldri nå Supabase — og bli overskrevet av den gamle skydataen ved neste
+ * åpning (loadFromSupabase kaller importData ubetinget).
  */
 export function startAutoSync(): () => void {
+  const flush = () => {
+    if (!saveTimer) return
+    clearTimeout(saveTimer)
+    saveTimer = null
+    setSyncStatus('saving')
+    saveToSupabase()
+      .then(() => setSyncStatus('saved'))
+      .catch(() => setSyncStatus('error'))
+  }
+
   const unsubscribe = useEconomyStore.subscribe(() => {
     if (isImporting) return  // ikke lagre mens vi importerer data
     if (saveTimer) clearTimeout(saveTimer)
     setSyncStatus('saving')
     saveTimer = setTimeout(() => {
+      saveTimer = null
       saveToSupabase()
         .then(() => setSyncStatus('saved'))
         .catch(() => setSyncStatus('error'))
     }, 3000)
   })
 
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'hidden') flush()
+  }
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  window.addEventListener('pagehide', flush)
+
   return () => {
     unsubscribe()
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+    window.removeEventListener('pagehide', flush)
     if (saveTimer) clearTimeout(saveTimer)
   }
 }
