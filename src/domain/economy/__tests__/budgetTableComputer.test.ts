@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { computeBudgetTable } from '../budgetTableComputer'
-import type { EmploymentProfile, BudgetTemplate, BudgetLine, LonnsoppgjorRecord } from '@/types/economy'
+import type { EmploymentProfile, BudgetTemplate, BudgetLine, LonnsoppgjorRecord, SavingsAccount } from '@/types/economy'
 
 const profile: EmploymentProfile = {
   employer: 'forsvaret',
@@ -31,6 +31,7 @@ function compute(opts: {
   template?: BudgetTemplate
   employmentStartDate?: string | null
   lonnsoppgjor?: LonnsoppgjorRecord[]
+  savingsAccounts?: SavingsAccount[]
 } = {}) {
   return computeBudgetTable(
     opts.year ?? 2026,
@@ -38,7 +39,7 @@ function compute(opts: {
     opts.template ?? emptyTemplate,
     [], // monthHistory
     [], // atfEntries
-    [], // savingsAccounts
+    opts.savingsAccounts ?? [], // savingsAccounts
     [], // debts
     [], // subscriptions
     [], // insurances
@@ -193,6 +194,57 @@ describe('computeBudgetTable — delsummer', () => {
     expect(fasteSum.isBold).toBe(true)
     expect(fasteSum.cells[0].budget).toBe(-9_000)
     expect(varSum.cells[0].budget).toBe(-4_000)
+  })
+})
+
+function mkSavingsAccount(partial: Partial<SavingsAccount> & Pick<SavingsAccount, 'id' | 'label'>): SavingsAccount {
+  return {
+    type: 'BSU',
+    openingBalance: 0,
+    openingDate: '2026-01-01',
+    monthlyContribution: 0,
+    interestCreditFrequency: 'yearly',
+    rateHistory: [],
+    balanceHistory: [],
+    withdrawals: [],
+    contributions: [],
+    ...partial,
+  }
+}
+
+describe('computeBudgetTable — SPARING (spareperioder i Faktisk-kolonnen)', () => {
+  it('Faktisk viser planbeløpet fra spareperioden når ingen ekte innskudd er logget den måneden', () => {
+    const acc = mkSavingsAccount({
+      id: 'bsu1',
+      label: 'BSU',
+      contributionPeriods: [{ id: 'p1', amount: 1_000, fromDate: '2026-07-01', toDate: '2026-11-12' }],
+    })
+    const data = compute({ savingsAccounts: [acc] })
+    const row = data.sections.find((s) => s.key === 'SPARING')!.rows.find((r) => r.id === 'sav-bsu1')!
+    expect(row.cells[6].actual).toBe(-1_000) // juli (index 6) — ingen loggført innskudd, faller tilbake på planen
+  })
+
+  it('Faktisk kombinerer ekte innskudd og plan når begge finnes samme måned', () => {
+    const acc = mkSavingsAccount({
+      id: 'bsu1',
+      label: 'BSU',
+      contributionPeriods: [{ id: 'p1', amount: 1_000, fromDate: '2026-07-01', toDate: '2026-11-12' }],
+      contributions: [{ id: 'c1', date: '2026-07-15', amount: 500 }],
+    })
+    const data = compute({ savingsAccounts: [acc] })
+    const row = data.sections.find((s) => s.key === 'SPARING')!.rows.find((r) => r.id === 'sav-bsu1')!
+    expect(row.cells[6].actual).toBe(-1_500) // 500 loggført + 1000 plan
+  })
+
+  it('Faktisk er null (ingen data) utenfor spareperioden og uten loggført innskudd', () => {
+    const acc = mkSavingsAccount({
+      id: 'bsu1',
+      label: 'BSU',
+      contributionPeriods: [{ id: 'p1', amount: 1_000, fromDate: '2026-07-01', toDate: '2026-11-12' }],
+    })
+    const data = compute({ savingsAccounts: [acc] })
+    const row = data.sections.find((s) => s.key === 'SPARING')!.rows.find((r) => r.id === 'sav-bsu1')!
+    expect(row.cells[0].actual).toBeNull() // januar — før perioden, ingen innskudd
   })
 })
 

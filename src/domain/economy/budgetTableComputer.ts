@@ -679,9 +679,15 @@ export function computeBudgetTable(
       },
       (m) => {
         const oneTime = computeMonthContributions(acc, year, m)
-        if (oneTime <= 0) return null
         const monthly = getBaseContribForPeriod(acc, year, m)
-        return -(oneTime + monthly)
+        // Ekte loggført innskudd finnes: Faktisk = det + evt. plan samme måned.
+        if (oneTime > 0) return -(oneTime + monthly)
+        // Ingen ekte innskudd logget ennå, men en aktiv spareperiode/fast beløp
+        // dekker måneden: vis planen som Faktisk (samme fallback som KRON-fond
+        // under) i stedet for tomt — brukeren skal ikke måtte logge hver måned
+        // manuelt for at en allerede aktiv spareplan skal vises.
+        if (monthly > 0) return -monthly
+        return null
       },
     )))
   }
