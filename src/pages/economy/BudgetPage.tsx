@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Lock, LockOpen, Upload, Plus, LayoutDashboard, Table2, Pencil, Undo2, ChevronDown, ChevronRight, X, Wallet, Target } from 'lucide-react'
+import { Lock, LockOpen, Upload, Plus, LayoutDashboard, Table2, Pencil, Undo2, ChevronDown, ChevronRight, X, Wallet, Target, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -700,6 +700,7 @@ export function BudgetPage() {
         <AddBudgetLineModal
           activeYear={activeYear}
           prefill={editingLine}
+          existingLines={budgetTemplate.lines}
           editMode
           onSave={(saved) => {
             updateBudgetLine(editingLine.id, {
@@ -726,6 +727,7 @@ export function BudgetPage() {
         <AddBudgetLineModal
           activeYear={activeYear}
           prefill={addingLinePrefill}
+          existingLines={budgetTemplate.lines}
           onSave={(line) => { addBudgetLine(line); setAddingLinePrefill(null) }}
           onCancel={() => setAddingLinePrefill(null)}
         />
@@ -1532,18 +1534,44 @@ function DataRow({
 
 const MONTH_NAMES = ['Januar', 'Februar', 'Mars', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Desember']
 
+export function budgetLineDupWarning(
+  label: string,
+  category: BudgetCategory,
+  isRecurring: boolean,
+  specificMonth: number | undefined,
+  specificYear: number | undefined,
+  existing: BudgetLine[],
+  excludeId?: string
+): string | null {
+  const norm = label.trim().toLowerCase()
+  if (!norm) return null
+  const hit = existing.find((l) => {
+    if (l.id === excludeId) return false
+    if (l.category !== category) return false
+    if (l.label.trim().toLowerCase() !== norm) return false
+    if (l.isRecurring !== isRecurring) return false
+    if (!isRecurring && (l.specificYear !== specificYear || l.specificMonth !== specificMonth)) return false
+    return true
+  })
+  return hit
+    ? `Det finnes allerede en linje som heter «${label.trim()}» i samme kategori${isRecurring ? '' : ' og måned'}`
+    : null
+}
+
 function AddBudgetLineModal({
   activeYear,
   onSave,
   onCancel,
   prefill,
   editMode,
+  existingLines = [],
 }: {
   activeYear: number
   onSave: (line: BudgetLine) => void
   onCancel: () => void
   prefill?: Partial<BudgetLine>
   editMode?: boolean
+  existingLines?: BudgetLine[]
 }) {
   const now = new Date()
   const [label, setLabel] = useState(prefill?.label ?? '')
@@ -1560,6 +1588,10 @@ function AddBudgetLineModal({
   const [periodAmount, setPeriodAmount] = useState(prefill?.periodOverride ? String(prefill.periodOverride.amount) : '')
   const [periodFrom, setPeriodFrom] = useState(prefill?.periodOverride?.from ?? '')
   const [periodTo, setPeriodTo] = useState(prefill?.periodOverride?.to ?? '')
+
+  const dupWarning = budgetLineDupWarning(
+    label, category, isRecurring, specificMonth, specificYear, existingLines, editMode ? prefill?.id : undefined
+  )
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onCancel() }}>
@@ -1731,6 +1763,12 @@ function AddBudgetLineModal({
               </div>
             )}
           </div>
+        )}
+
+        {dupWarning && (
+          <p className="flex items-center gap-1 text-[11px] text-amber-400 mt-2">
+            <AlertTriangle className="h-3 w-3 shrink-0" />{dupWarning}
+          </p>
         )}
 
         <div className="flex gap-2 justify-end mt-4">
