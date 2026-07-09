@@ -89,9 +89,14 @@ async function doReparse(): Promise<ReparseResult> {
     }
   }
 
+  // Versjonsflagget settes KUN når ingen nedlastinger/parsinger faktisk feilet
+  // (result.failed) — en glemt sjekk her lot forbigående nettverksfeil sette
+  // flagget likevel så lenge brukeren var innlogget, og de berørte slippene
+  // ble aldri prøvd på nytt (fant faktisk juni-2026-slipp med manglende
+  // feriepenger/ferietrekk/ATF som følge av nettopp dette).
   // missingPdf uten innlogging = prøv igjen neste økt; ellers er vi ferdige
   // (PDF-er som ikke finnes i bucketen dukker ikke opp ved retry uansett)
-  if (user || result.missingPdf === 0) {
+  if (result.failed === 0 && (user || result.missingPdf === 0)) {
     useEconomyStore.getState().setSlipParserVersion(SLIP_PARSER_VERSION)
     result.completed = true
   }
