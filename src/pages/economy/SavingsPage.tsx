@@ -2304,6 +2304,33 @@ function AccountCard({
           </div>
         )}
 
+        {/* Spareperioder — kontoens contributionPeriods, ikke synlig noe annet sted på kortet */}
+        {(account.contributionPeriods?.length ?? 0) > 0 && (
+          <div className="rounded-md border border-border/50 overflow-hidden">
+            <div className="bg-muted/20 px-3 py-1.5 text-xs font-medium text-muted-foreground">Spareperioder</div>
+            {[...account.contributionPeriods!]
+              .sort((a, b) => (b.fromDate ?? '').localeCompare(a.fromDate ?? ''))
+              .map((p) => (
+                <div key={p.id} className="flex items-center justify-between px-3 py-1.5 text-xs border-t border-border/30">
+                  <span className="font-mono">{Math.round(p.amount).toLocaleString('no-NO')} kr/mnd</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">
+                      {p.fromDate ? fmtDate(p.fromDate) : 'Start'}
+                      {' → '}
+                      {p.toDate ? fmtDate(p.toDate) : 'Ingen slutt'}
+                    </span>
+                    <button
+                      onClick={() => onUpdate({ contributionPeriods: account.contributionPeriods!.filter(x => x.id !== p.id) })}
+                      className="text-muted-foreground hover:text-red-400 transition-colors"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+
         {/* BSU-spesifikk */}
         {bsuStatus && (
           <div className="space-y-1.5">
