@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
+import { parseFlexibleNumber } from '@/utils/parseFlexibleNumber'
 
 interface NumberInputProps {
   value: number
@@ -60,8 +61,8 @@ export function NumberInput({
 
   function handleBlur() {
     setFocused(false)
-    const cleaned = rawValue.replace(/\s/g, '').replace(',', '.')
-    const parsed = parseFloat(cleaned)
+    // Tolerant parsing: "kr 350 000", "350.000", "4,5 %" osv. tolkes riktig
+    const parsed = parseFlexibleNumber(rawValue) ?? NaN
     if (!isNaN(parsed)) {
       const clamped = min !== undefined ? Math.max(min, parsed) : parsed
       const clampedMax = max !== undefined ? Math.min(max, clamped) : clamped
