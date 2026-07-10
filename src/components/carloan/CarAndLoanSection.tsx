@@ -1,13 +1,16 @@
-import { RotateCcw } from 'lucide-react'
+import { useState } from 'react'
+import { RotateCcw, Loader2, ScanLine } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { NumberInput } from '@/components/ui/number-input'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Field, fmtNOK } from './carloanShared'
 import { CarPresetPicker } from './CarPresetPicker'
 import { useCarLoanCalculatorStore } from '@/store/useCarLoanCalculatorStore'
 import { FUEL_TYPE_LABELS, resolveAnnualRate, type FuelType } from '@/utils/carLoanCalculator'
+import { isValidRegnr, type KjoretoyData } from '@/domain/vehicle/kjoretoyMapper'
 
 /**
  * Bil + lån — kun de valgene som faktisk trengs. Gebyrer, girkasse og
@@ -21,6 +24,38 @@ export function CarAndLoanSection() {
   const effectiveRate = resolveAnnualRate(inputs)
   const rateIsEstimate = inputs.annualRateOverride === null
 
+  const [regnr, setRegnr] = useState('')
+  const [regnrLoading, setRegnrLoading] = useState(false)
+  const [regnrError, setRegnrError] = useState<string | null>(null)
+  const [euDeadline, setEuDeadline] = useState<string | null>(null)
+
+  async function handleRegnrLookup() {
+    if (!isValidRegnr(regnr)) {
+      setRegnrError('Ugyldig registreringsnummer — f.eks. EK12345.')
+      return
+    }
+    setRegnrLoading(true)
+    setRegnrError(null)
+    try {
+      const res = await fetch(`/api/kjoretoy?regnr=${encodeURIComponent(regnr.replace(/\s/g, ''))}`)
+      const data = (await res.json()) as KjoretoyData | { error: string }
+      if (!res.ok || 'error' in data) {
+        setRegnrError('error' in data ? data.error : 'Klarte ikke å slå opp kjøretøyet.')
+        return
+      }
+      setInputs({
+        modelName: data.modelName ?? inputs.modelName,
+        year: data.year ?? inputs.year,
+        fuelType: data.fuelType ?? inputs.fuelType,
+      })
+      setEuDeadline(data.euControlDeadline)
+    } catch {
+      setRegnrError('Klarte ikke å nå oppslagstjenesten. Fyll inn manuelt.')
+    } finally {
+      setRegnrLoading(false)
+    }
+  }
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -28,6 +63,29 @@ export function CarAndLoanSection() {
       </CardHeader>
       <CardContent className="space-y-4">
         <CarPresetPicker />
+
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <Field label="Eller slå opp registreringsnummer" help="Henter modell, årsmodell, drivstoff og EU-kontrollfrist fra Statens vegvesen.">
+              <Input
+                value={regnr}
+                onChange={(e) => setRegnr(e.target.value)}
+                placeholder="f.eks. EK12345"
+              />
+            </Field>
+          </div>
+          <Button variant="outline" onClick={handleRegnrLookup} disabled={regnrLoading}>
+            {regnrLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <ScanLine className="h-4 w-4 mr-1.5" />}
+            Slå opp
+          </Button>
+        </div>
+        {regnrError && <p className="text-xs text-red-500">{regnrError}</p>}
+        {euDeadline && (
+          <p className="text-xs text-muted-foreground">
+            Neste EU-kontroll: <span className="text-foreground font-medium">{new Date(euDeadline).toLocaleDateString('no-NO')}</span>
+            {' '}— husk å ha buffer for den i kostnadene.
+          </p>
+        )}
 
         {inputs.modelName && (
           <div className="w-full">

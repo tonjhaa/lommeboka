@@ -19,7 +19,7 @@ import { fmtNOK } from '@/components/carloan/carloanShared'
 export function CarLoanCalculatorPage() {
   const inputs = useCarLoanCalculatorStore((s) => s.inputs)
   const resetAll = useCarLoanCalculatorStore((s) => s.resetAll)
-  const { result } = useCarLoanCalculator()
+  const { result, currentSurplus } = useCarLoanCalculator()
 
   const [confirmReset, setConfirmReset] = useState(false)
 
@@ -85,7 +85,7 @@ export function CarLoanCalculatorPage() {
 
           {/* Høyre: sticky resultatpanel */}
           <div className="lg:col-span-5 lg:sticky lg:top-4 min-w-0">
-            <ResultsSection result={result} />
+            <ResultsSection result={result} currentSurplus={currentSurplus} />
           </div>
         </div>
       </div>

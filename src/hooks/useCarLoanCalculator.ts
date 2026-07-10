@@ -11,7 +11,7 @@ import { calculateCarLoan, type CarLoanResult } from '@/utils/carLoanCalculator'
  * (`availableMonthlyBudgetIsManual`), da respekteres det manuelle tallet
  * og overstyres ikke igjen automatisk ved senere besøk.
  */
-export function useCarLoanCalculator(): { result: CarLoanResult } {
+export function useCarLoanCalculator(): { result: CarLoanResult; currentSurplus: number } {
   const inputs = useCarLoanCalculatorStore((s) => s.inputs)
   const isManual = useCarLoanCalculatorStore((s) => s.availableMonthlyBudgetIsManual)
   const setAvailableMonthlyBudget = useCarLoanCalculatorStore((s) => s.setAvailableMonthlyBudget)
@@ -34,5 +34,8 @@ export function useCarLoanCalculator(): { result: CarLoanResult } {
 
   const result = useMemo(() => calculateCarLoan(inputs), [inputs])
 
-  return { result }
+  // Overskuddet eksponeres også rått, slik at resultatpanelet kan vise
+  // «budsjett-overskudd i dag → etter bilkjøpet» uavhengig av om brukeren
+  // har overstyrt disponibelt-feltet manuelt.
+  return { result, currentSurplus: suggestedBudget }
 }

@@ -10,6 +10,7 @@ import { HelpTooltip } from '@/components/ui/help-tooltip'
 import { AmortizationTable } from '@/components/charts/AmortizationTable'
 import { AmortizationChart } from '@/components/charts/AmortizationChart'
 import { fmtNOK } from './carloanShared'
+import { AddToLommeboka } from './AddToLommeboka'
 import { useCarLoanCalculatorStore } from '@/store/useCarLoanCalculatorStore'
 import { resolveAnnualRate, type CarLoanResult } from '@/utils/carLoanCalculator'
 
@@ -41,7 +42,7 @@ function KeyFigure({ label, value, help }: { label: string; value: string; help?
  * kostnadsstacken: månedskostnaden som én fargekodet søyle delt i
  * lån/energi/faste/bom, som oppdaterer seg live mens man justerer.
  */
-export function ResultsSection({ result }: { result: CarLoanResult }) {
+export function ResultsSection({ result, currentSurplus }: { result: CarLoanResult; currentSurplus: number }) {
   const inputs = useCarLoanCalculatorStore((s) => s.inputs)
   const setAvailableMonthlyBudget = useCarLoanCalculatorStore((s) => s.setAvailableMonthlyBudget)
 
@@ -168,6 +169,16 @@ export function ResultsSection({ result }: { result: CarLoanResult }) {
               Vurdert mot din andel: <span className="font-mono text-foreground">{fmtNOK(result.myShareMonthly)}</span>
             </p>
           )}
+          {currentSurplus > 0 && (
+            <p className="text-[11px] text-muted-foreground border-t border-border/40 pt-2">
+              Budsjett-overskuddet ditt: <span className="font-mono text-foreground">{fmtNOK(currentSurplus)}</span>
+              {' → '}
+              <span className={`font-mono ${currentSurplus - result.myShareMonthly < 0 ? 'text-red-400' : 'text-foreground'}`}>
+                {fmtNOK(currentSurplus - result.myShareMonthly)}
+              </span>{' '}
+              etter bilen
+            </p>
+          )}
         </div>
 
         {/* Nøkkeltall */}
@@ -215,6 +226,8 @@ export function ResultsSection({ result }: { result: CarLoanResult }) {
             )}
           </div>
         )}
+
+        {result.totalMonthlyCost > 0 && <AddToLommeboka result={result} />}
 
         <Alert>
           <Info className="h-4 w-4" />

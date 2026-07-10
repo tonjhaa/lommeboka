@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, RotateCcw, SlidersHorizontal } from 'lucide-react'
+import { ChevronDown, ChevronUp, Loader2, RotateCcw, SlidersHorizontal, Zap } from 'lucide-react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { NumberInput } from '@/components/ui/number-input'
 import { Switch } from '@/components/ui/switch'
@@ -14,6 +14,13 @@ import {
   computeEnergyCostMonthly,
 } from '@/utils/carLoanCalculator'
 import { COST_ITEM_DEFAULTS, COST_KEYS, type CostKey } from '@/config/carCost.config'
+import {
+  fetchTodaysAverageSpotPrice,
+  GRID_FEE_ESTIMATE,
+  SPOT_ZONE_LABELS,
+  SPOT_ZONES,
+  type SpotZone,
+} from '@/domain/energy/spotPrice'
 
 /**
  * «Juster detaljer» — alle antakelsene samlet: enkeltposter for faste
@@ -34,6 +41,23 @@ export function DetailsSection() {
   const ft = inputs.fuelType
   const hasFossil = ft === 'bensin' || ft === 'diesel' || ft === 'hybrid' || ft === 'ladbar_hybrid'
   const hasElectric = ft === 'el' || ft === 'ladbar_hybrid'
+
+  const [spotZone, setSpotZone] = useState<SpotZone>('NO1')
+  const [spotLoading, setSpotLoading] = useState(false)
+  const [spotError, setSpotError] = useState(false)
+
+  async function handleFetchSpotPrice() {
+    setSpotLoading(true)
+    setSpotError(false)
+    const avg = await fetchTodaysAverageSpotPrice(spotZone)
+    setSpotLoading(false)
+    if (avg === null) {
+      setSpotError(true)
+      return
+    }
+    // Spot + grovt nettleie-/påslagsestimat, rundet til 2 desimaler
+    setFuelEconomy({ homePricePerKwh: Math.round((avg + GRID_FEE_ESTIMATE) * 100) / 100 })
+  }
 
   return (
     <Card>
@@ -96,6 +120,30 @@ export function DetailsSection() {
                       </Field>
                     </>
                   )}
+                </div>
+              )}
+              {hasElectric && !inputs.energyOverride.enabled && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Select value={spotZone} onValueChange={(v) => setSpotZone(v as SpotZone)}>
+                    <SelectTrigger className="h-8 text-xs w-40"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {SPOT_ZONES.map((z) => (
+                        <SelectItem key={z} value={z} className="text-xs">{SPOT_ZONE_LABELS[z]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <button
+                    className="flex items-center gap-1 text-xs text-primary/80 hover:text-primary transition-colors disabled:opacity-50"
+                    onClick={handleFetchSpotPrice}
+                    disabled={spotLoading}
+                  >
+                    {spotLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                    Bruk dagens spotpris + nettleie-estimat
+                  </button>
+                  {spotError && <span className="text-xs text-red-500">Klarte ikke å hente prisen.</span>}
+                  <span className="w-full text-[10px] text-muted-foreground">
+                    Strømpriser levert av Hva koster strømmen.no
+                  </span>
                 </div>
               )}
               {hasElectric && !inputs.energyOverride.enabled && (
