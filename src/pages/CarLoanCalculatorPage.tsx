@@ -53,17 +53,20 @@ export function CarLoanCalculatorPage() {
         setFinnError('error' in data ? data.error : 'Klarte ikke å hente annonsen.')
         return
       }
+      const mergedYear = data.year ?? inputs.year
+      const mergedMileageKm = data.mileageKm ?? inputs.mileageKm
+      const mergedFuelType = data.fuelType ?? inputs.fuelType
       setInputs({
         price: data.price ?? inputs.price,
-        year: data.year ?? inputs.year,
-        mileageKm: data.mileageKm ?? inputs.mileageKm,
-        fuelType: data.fuelType ?? inputs.fuelType,
+        year: mergedYear,
+        mileageKm: mergedMileageKm,
+        fuelType: mergedFuelType,
       })
-      // Foreslå drivstoffkostnad ut fra de nye tallene, men ikke overskriv
-      // et beløp brukeren allerede har justert manuelt inn i feltet under.
+      // Foreslå drivstoffkostnad ut fra de sammenslåtte tallene, men ikke
+      // overskriv et beløp brukeren allerede har justert manuelt.
       if (!inputs.runningCosts.fuel.enabled) {
         setRunningCostToggle('fuel', {
-          monthlyAmount: estimateFuelCost(data.fuelType, data.mileageKm, data.year),
+          monthlyAmount: estimateFuelCost(mergedFuelType, mergedMileageKm, mergedYear),
         })
       }
     } catch {
@@ -160,7 +163,7 @@ export function CarLoanCalculatorPage() {
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Årsmodell</Label>
-            <NumberInput value={inputs.year ?? 0} onChange={(v) => setInputs({ year: v || null })} />
+            <NumberInput value={inputs.year ?? 0} onChange={(v) => setInputs({ year: v || null })} grouping={false} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Kilometerstand</Label>
