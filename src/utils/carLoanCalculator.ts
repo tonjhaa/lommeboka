@@ -137,6 +137,10 @@ export interface CarLoanResult {
   affordability: 'ok' | 'stramt' | 'ikke-rad'
   /** De største kostnadspostene, sortert synkende — «hva påvirker mest» */
   topCostDrivers: CostDriver[]
+  /** Estimert bilverdi når lånet er nedbetalt */
+  residualValueAtLoanEnd: number
+  /** Siste måned der restgjelden er høyere enn bilens verdi (null = aldri) */
+  underwaterUntilMonth: number | null
 }
 
 // ------------------------------------------------------------
@@ -209,6 +213,46 @@ export function resolveDepreciationPct(inputs: CarLoanInputs): number {
 }
 
 /**
+ * Estimert bilverdi etter `month` måneder — geometrisk kurve (prosent av
+ * GJENSTÅENDE verdi per år, ikke av kjøpesum). Det gir størst tap i kroner
+ * de første årene, slik bruktbilmarkedet faktisk oppfører seg.
+ */
+export function estimatedValueAtMonth(inputs: CarLoanInputs, month: number): number {
+  if (!inputs.depreciation.enabled) return inputs.price
+  const r = resolveDepreciationPct(inputs) / 100
+  return inputs.price * Math.pow(1 - r, month / 12)
+}
+
+export interface ValuePoint {
+  month: number
+  value: number
+  remainingDebt: number
+}
+
+/**
+ * Bilens estimerte verdi mot restgjeld måned for måned over låneperioden.
+ * Brukes til verdi/gjeld-grafen og «under vann»-deteksjonen.
+ */
+export function buildValueVsDebtCurve(
+  inputs: CarLoanInputs,
+  amortization: AmortizationPlan
+): ValuePoint[] {
+  const months = inputs.termYears * 12
+  const points: ValuePoint[] = []
+  for (let m = 0; m <= months; m++) {
+    const remainingDebt = m === 0
+      ? amortization.loanAmount
+      : amortization.rows[m - 1]?.balance ?? 0
+    points.push({
+      month: m,
+      value: Math.round(estimatedValueAtMonth(inputs, m)),
+      remainingDebt: Math.round(remainingDebt),
+    })
+  }
+  return points
+}
+
+/**
  * Effektiv nominell rente: brukerens overstyring, ellers trinnbasert
  * estimat etter egenkapitalandel (mer EK → lavere rente — slik banker
  * faktisk priser billån etter belåningsgrad).
@@ -247,8 +291,11 @@ export function calculateCarLoan(inputs: CarLoanInputs): CarLoanResult {
   )
   const operatingCostMonthly = energyCostMonthly + tollCostMonthly + fixedCostsMonthly
 
+  // Snitt månedlig verditap over låneperioden fra den geometriske kurven —
+  // matcher totalkostnads-/per-km-perspektivet bedre enn et rent førsteårstap.
+  const termMonthsForDepreciation = Math.max(1, inputs.termYears * 12)
   const depreciationMonthly = inputs.depreciation.enabled
-    ? Math.round((inputs.price * resolveDepreciationPct(inputs)) / 100 / 12)
+    ? Math.round((inputs.price - estimatedValueAtMonth(inputs, termMonthsForDepreciation)) / termMonthsForDepreciation)
     : 0
 
   const totalMonthlyCost = monthlyLoanCost + operatingCostMonthly
@@ -312,6 +359,15 @@ export function calculateCarLoan(inputs: CarLoanInputs): CarLoanResult {
     .sort((a, b) => b.monthly - a.monthly)
     .slice(0, 4)
 
+  const residualValueAtLoanEnd = Math.round(estimatedValueAtMonth(inputs, termMonths))
+  let underwaterUntilMonth: number | null = null
+  if (loanAmount > 0 && inputs.depreciation.enabled) {
+    const curve = buildValueVsDebtCurve(inputs, amortization)
+    for (const point of curve) {
+      if (point.remainingDebt > point.value) underwaterUntilMonth = point.month
+    }
+  }
+
   return {
     loanAmount,
     amortization,
@@ -334,6 +390,8 @@ export function calculateCarLoan(inputs: CarLoanInputs): CarLoanResult {
     costPerDay,
     affordability,
     topCostDrivers,
+    residualValueAtLoanEnd,
+    underwaterUntilMonth,
   }
 }
 

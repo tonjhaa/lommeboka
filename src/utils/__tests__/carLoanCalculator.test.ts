@@ -3,6 +3,7 @@ import {
   calculateCarLoan,
   computeEnergyCostMonthly,
   defaultCarLoanInputs,
+  estimatedValueAtMonth,
   resolveAnnualRate,
   resolveCostAmount,
   type CarLoanInputs,
@@ -179,16 +180,47 @@ describe('bompenger', () => {
 })
 
 describe('verditap', () => {
-  it('holdes utenfor kontantkostnaden men med i inkl.-totalen og per km', () => {
+  it('geometrisk kurve: snitt over låneperioden, utenfor kontantkostnaden men i inkl.-totalen', () => {
     const inputs = loanOnly()
     inputs.depreciation = { enabled: true, annualPct: 12 }
     const result = calculateCarLoan(inputs)
-    expect(result.depreciationMonthly).toBe(3000) // 300 000 × 12 % / 12
-    expect(result.totalMonthlyCostInclDepreciation).toBe(result.totalMonthlyCost + 3000)
+    // Verdi etter 5 år: 300 000 × 0.88^5 ≈ 158 320; tap ≈ 141 680 / 60 mnd ≈ 2 361
+    expect(result.depreciationMonthly).toBe(2361)
+    expect(result.totalMonthlyCostInclDepreciation).toBe(result.totalMonthlyCost + 2361)
+    expect(result.residualValueAtLoanEnd).toBe(158_320)
   })
 
-  it('avslått verditap gir 0', () => {
-    expect(calculateCarLoan(loanOnly()).depreciationMonthly).toBe(0)
+  it('mest verditap i kroner de første årene (geometrisk, ikke lineær)', () => {
+    const inputs = loanOnly()
+    inputs.depreciation = { enabled: true, annualPct: 12 }
+    const year1Loss = inputs.price - estimatedValueAtMonth(inputs, 12)
+    const year5Loss = estimatedValueAtMonth(inputs, 48) - estimatedValueAtMonth(inputs, 60)
+    expect(year1Loss).toBeGreaterThan(year5Loss)
+  })
+
+  it('«under vann»-deteksjon: full finansiering + lang løpetid gir undervannsperiode', () => {
+    // Med 10 års løpetid er avdraget (~1 800/mnd) lavere enn verditapet
+    // (~3 200/mnd første år) → restgjelden overstiger bilens verdi en periode.
+    const financed = loanOnly({ price: 300_000, equity: 0, termYears: 10 })
+    financed.depreciation = { enabled: true, annualPct: 12 }
+    const r1 = calculateCarLoan(financed)
+    expect(r1.underwaterUntilMonth).not.toBeNull()
+    expect(r1.underwaterUntilMonth!).toBeGreaterThan(0)
+
+    // Kort løpetid (5 år): nedbetalingen slår verditapet — aldri under vann
+    const shortTerm = loanOnly({ price: 300_000, equity: 0, termYears: 5 })
+    shortTerm.depreciation = { enabled: true, annualPct: 12 }
+    expect(calculateCarLoan(shortTerm).underwaterUntilMonth).toBeNull()
+
+    const highEquity = loanOnly({ price: 300_000, equity: 200_000, termYears: 10 })
+    highEquity.depreciation = { enabled: true, annualPct: 12 }
+    expect(calculateCarLoan(highEquity).underwaterUntilMonth).toBeNull()
+  })
+
+  it('avslått verditap gir 0 og full restverdi', () => {
+    const result = calculateCarLoan(loanOnly())
+    expect(result.depreciationMonthly).toBe(0)
+    expect(result.underwaterUntilMonth).toBeNull()
   })
 })
 

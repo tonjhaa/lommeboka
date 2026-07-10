@@ -16,6 +16,9 @@ interface CarLoanCalculatorState {
   /** Har brukeren selv skrevet inn "disponibelt til bil"? Hvis true, slutter
    *  useCarLoanCalculator å overstyre feltet med budsjett-forslaget. */
   availableMonthlyBudgetIsManual: boolean
+  /** Frosset oppsett for A/B-sammenligning (null = ingen sammenligning aktiv) */
+  comparisonSnapshot: { label: string; inputs: CarLoanInputs } | null
+  setComparisonSnapshot: (snapshot: { label: string; inputs: CarLoanInputs } | null) => void
   setInputs: (patch: Partial<CarLoanInputs>) => void
   setFuelEconomy: (patch: Partial<FuelEconomyOverrides>) => void
   setEnergyOverride: (patch: Partial<{ enabled: boolean; monthlyAmount: number }>) => void
@@ -53,6 +56,9 @@ export const useCarLoanCalculatorStore = create<CarLoanCalculatorState>()(
     (set) => ({
       inputs: defaultCarLoanInputs(),
       availableMonthlyBudgetIsManual: false,
+      comparisonSnapshot: null,
+
+      setComparisonSnapshot: (snapshot) => set({ comparisonSnapshot: snapshot }),
 
       setInputs: (patch) => set((s) => ({ inputs: { ...s.inputs, ...patch } })),
 
@@ -85,7 +91,11 @@ export const useCarLoanCalculatorStore = create<CarLoanCalculatorState>()(
           availableMonthlyBudgetIsManual: isManual,
         })),
 
-      resetAll: () => set({ inputs: defaultCarLoanInputs(), availableMonthlyBudgetIsManual: false }),
+      resetAll: () => set({
+        inputs: defaultCarLoanInputs(),
+        availableMonthlyBudgetIsManual: false,
+        comparisonSnapshot: null,
+      }),
     }),
     {
       name: 'lommeboka-bilkalkulator-v1',
