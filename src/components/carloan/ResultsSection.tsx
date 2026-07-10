@@ -19,16 +19,28 @@ export const AFFORDABILITY_STYLE = {
   'ikke-rad': { icon: XCircle, className: 'text-red-500', label: 'Over det du har å avse' },
 } as const
 
-function KeyFigure({ label, value, sub, help }: { label: string; value: string; sub?: string; help?: string }) {
+/** Fargekoding for kostnadsstacken — gjenbrukes i legend */
+const STACK_SEGMENTS = [
+  { key: 'loan', label: 'Lån', className: 'bg-primary' },
+  { key: 'energy', label: 'Drivstoff/strøm', className: 'bg-amber-500/80' },
+  { key: 'fixed', label: 'Faste kostnader', className: 'bg-emerald-500/70' },
+  { key: 'toll', label: 'Bompenger', className: 'bg-rose-500/70' },
+] as const
+
+function KeyFigure({ label, value, help }: { label: string; value: string; help?: string }) {
   return (
-    <div>
-      <p className="text-xs text-muted-foreground flex items-center">{label}{help && <HelpTooltip content={help} />}</p>
-      <p className="font-mono font-medium">{value}</p>
-      {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
+    <div className="flex items-baseline justify-between gap-2">
+      <span className="text-xs text-muted-foreground flex items-center shrink-0">{label}{help && <HelpTooltip content={help} />}</span>
+      <span className="font-mono text-sm text-right">{value}</span>
     </div>
   )
 }
 
+/**
+ * Resultatpanel — sticky på desktop (høyre kolonne). Signaturelementet er
+ * kostnadsstacken: månedskostnaden som én fargekodet søyle delt i
+ * lån/energi/faste/bom, som oppdaterer seg live mens man justerer.
+ */
 export function ResultsSection({ result }: { result: CarLoanResult }) {
   const inputs = useCarLoanCalculatorStore((s) => s.inputs)
   const setAvailableMonthlyBudget = useCarLoanCalculatorStore((s) => s.setAvailableMonthlyBudget)
@@ -39,6 +51,14 @@ export function ResultsSection({ result }: { result: CarLoanResult }) {
   const sharingActive = inputs.sharing.mode !== 'alene'
   const style = AFFORDABILITY_STYLE[result.affordability]
   const AffordabilityIcon = style.icon
+
+  const stackValues: Record<(typeof STACK_SEGMENTS)[number]['key'], number> = {
+    loan: result.monthlyLoanCost,
+    energy: result.energyCostMonthly,
+    fixed: result.fixedCostsMonthly,
+    toll: result.tollCostMonthly,
+  }
+  const stackTotal = result.totalMonthlyCost
 
   async function copySummary() {
     const lines = [
@@ -62,7 +82,7 @@ export function ResultsSection({ result }: { result: CarLoanResult }) {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      // Utklippstavle utilgjengelig (eldre nettleser/HTTP) — knappen forblir uendret
+      // Utklippstavle utilgjengelig — knappen forblir uendret
     }
   }
 
@@ -70,108 +90,116 @@ export function ResultsSection({ result }: { result: CarLoanResult }) {
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">Resultat</CardTitle>
+          <CardTitle className="text-sm">Månedskostnad</CardTitle>
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={copySummary}>
             {copied ? <Check className="h-3.5 w-3.5 mr-1" /> : <Copy className="h-3.5 w-3.5 mr-1" />}
-            {copied ? 'Kopiert!' : 'Kopier oppsummering'}
+            {copied ? 'Kopiert!' : 'Kopier'}
           </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Hovedtall */}
-        <div className="rounded-lg border border-border p-4 grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
-          <div className="sm:col-span-2">
-            <p className="text-xs text-muted-foreground">Total månedskostnad (lån + drift)</p>
-            <p className="font-mono font-bold text-3xl">{fmtNOK(result.totalMonthlyCost)}</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Lån {fmtNOK(result.monthlyLoanCost)} + drift {fmtNOK(result.operatingCostMonthly)}
-              {result.depreciationMonthly > 0 && (
-                <> · {fmtNOK(result.totalMonthlyCostInclDepreciation)} inkl. verditap</>
-              )}
-            </p>
-          </div>
+        <div>
+          <p className="font-mono font-bold text-4xl leading-tight">{fmtNOK(result.totalMonthlyCost)}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            per måned
+            {result.depreciationMonthly > 0 && (
+              <> · {fmtNOK(result.totalMonthlyCostInclDepreciation)} inkl. verditap</>
+            )}
+          </p>
+        </div>
+
+        {/* Kostnadsstack */}
+        {stackTotal > 0 && (
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <AffordabilityIcon className={`h-4 w-4 shrink-0 ${style.className}`} />
-              <span className={`text-sm font-medium ${style.className}`}>{style.label}</span>
+            <div className="flex h-4 rounded-full overflow-hidden border border-border/40">
+              {STACK_SEGMENTS.map((seg) => {
+                const value = stackValues[seg.key]
+                if (value <= 0) return null
+                return (
+                  <div
+                    key={seg.key}
+                    className={seg.className}
+                    style={{ width: `${(value / stackTotal) * 100}%` }}
+                    title={`${seg.label}: ${fmtNOK(value)}/mnd`}
+                  />
+                )
+              })}
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-muted-foreground whitespace-nowrap">
-                Disponibelt/mnd
-                <HelpTooltip content="Forhåndsutfylt med inneværende måneds overskudd fra budsjettet ditt. Skriv inn et eget tall for å overstyre — da holder det seg." />
-              </span>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+              {STACK_SEGMENTS.map((seg) => {
+                const value = stackValues[seg.key]
+                if (value <= 0) return null
+                return (
+                  <div key={seg.key} className="flex items-center justify-between text-xs">
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <span className={`h-2 w-2 rounded-full ${seg.className}`} />
+                      {seg.label}
+                    </span>
+                    <span className="font-mono">{fmtNOK(value)}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Råd-vurdering */}
+        <div className="rounded-lg border border-border p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <AffordabilityIcon className={`h-4 w-4 shrink-0 ${style.className}`} />
+            <span className={`text-sm font-medium ${style.className}`}>{style.label}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+              Disponibelt/mnd
+              <HelpTooltip content="Forhåndsutfylt med inneværende måneds overskudd fra budsjettet ditt. Skriv inn et eget tall for å overstyre — da holder det seg." />
+            </span>
+            <div className="w-32">
               <NumberInput
                 value={inputs.availableMonthlyBudget}
                 onChange={(v) => setAvailableMonthlyBudget(v, true)}
                 suffix="kr"
               />
             </div>
-            {sharingActive && (
-              <p className="text-[11px] text-muted-foreground">Vurdert mot din andel: {fmtNOK(result.myShareMonthly)}</p>
-            )}
           </div>
+          {sharingActive && (
+            <p className="text-[11px] text-muted-foreground">
+              Vurdert mot din andel: <span className="font-mono text-foreground">{fmtNOK(result.myShareMonthly)}</span>
+            </p>
+          )}
         </div>
 
         {/* Nøkkeltall */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div className="space-y-1.5 border-t border-border/40 pt-3">
           <KeyFigure label="Lånebeløp" value={fmtNOK(result.loanAmount)} />
-          <KeyFigure
-            label="Terminbeløp"
-            value={fmtNOK(result.monthlyLoanCost)}
-            sub={result.loanAmount > 0 ? `inkl. ${fmtNOK(inputs.termingebyr)} termingebyr` : undefined}
-            help={inputs.loanType === 'serie' ? 'Serielån: viser første termin — beløpet synker utover i løpetiden.' : undefined}
-          />
           <KeyFigure
             label="Første måned"
             value={fmtNOK(result.firstMonthCost)}
-            help="Total månedskostnad pluss engangskostnader: etableringsgebyr og omregistrering."
+            help="Månedskostnad pluss engangskostnader: etableringsgebyr og omregistrering."
           />
-          <KeyFigure label="Kostnad per år" value={fmtNOK(result.annualCost)} />
+          <KeyFigure label="Per år" value={fmtNOK(result.annualCost)} />
           <KeyFigure
-            label="Over låneperioden"
+            label={`Over ${inputs.termYears} år`}
             value={fmtNOK(result.totalCostOverLoanTerm)}
-            sub={`${inputs.termYears} år inkl. drift`}
+            help="Alle terminer og gebyrer pluss driftskostnader over hele låneperioden."
           />
           <KeyFigure label="Renter totalt" value={fmtNOK(result.totalInterestCost)} />
           <KeyFigure
             label="Verditap"
             value={`${fmtNOK(result.depreciationMonthly)}/mnd`}
-            help="Ikke penger ut av konto, men reduksjon i bilens verdi. Holdes utenfor månedskostnaden."
+            help="Ikke penger ut av konto, men reduksjon i bilens verdi — holdes utenfor månedskostnaden."
           />
           <KeyFigure
             label="Per km / per dag"
             value={`${result.costPerKm.toFixed(1).replace('.', ',')} kr / ${fmtNOK(result.costPerDay)}`}
-            help="Per km inkluderer verditap (reell totalkostnad ved kjøring). Per dag er kontantkostnaden fordelt på årets dager."
+            help="Per km inkluderer verditap. Per dag er kontantkostnaden fordelt på årets dager."
           />
         </div>
 
-        {/* Hva påvirker kostnaden mest */}
-        {result.topCostDrivers.length > 0 && (
-          <div className="rounded-md border border-border/60 overflow-hidden">
-            <div className="bg-muted/20 px-3 py-1.5 text-xs font-medium text-muted-foreground">
-              Hva påvirker kostnaden mest?
-            </div>
-            {result.topCostDrivers.map((d) => {
-              const maxMonthly = result.topCostDrivers[0].monthly
-              const widthPct = maxMonthly > 0 ? Math.max(4, Math.round((d.monthly / maxMonthly) * 100)) : 0
-              return (
-                <div key={d.label} className="px-3 py-1.5 border-t border-border/30">
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span>{d.label}</span>
-                    <span className="font-mono">{fmtNOK(d.monthly)}/mnd</span>
-                  </div>
-                  <div className="h-1.5 rounded bg-muted/40 overflow-hidden">
-                    <div className="h-full bg-primary/60 rounded" style={{ width: `${widthPct}%` }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
         {/* Nedbetalingsplan */}
         {result.amortization.rows.length > 0 && (
-          <div className="space-y-3">
+          <div className="space-y-3 border-t border-border/40 pt-3">
             <button
               className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
               onClick={() => setShowAmortization((v) => !v)}
@@ -191,10 +219,8 @@ export function ResultsSection({ result }: { result: CarLoanResult }) {
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription className="text-xs">
-            Beregningene bygger på tallene du har lagt inn pluss merkede estimater, og er ment som
-            beslutningsstøtte — ikke et bindende lånetilbud. Terminbeløpet bruker standard
-            annuitets-/serieformel på nominell rente; gebyrer vises separat. Sjekk alltid effektiv
-            rente og totalkostnad i bankens eget tilbud.
+            Beregningene bygger på tallene dine pluss merkede estimater og er beslutningsstøtte —
+            ikke et bindende lånetilbud. Sjekk effektiv rente og totalkostnad i bankens tilbud.
           </AlertDescription>
         </Alert>
       </CardContent>

@@ -16,7 +16,9 @@ function finnDevApi(): Plugin {
         void (async () => {
           const url = new URL(req.url ?? '', 'http://localhost')
           const finnkode = (url.searchParams.get('finnkode') ?? '').trim()
+          const type = url.searchParams.get('type')
           const { fetchFinnAd, isValidFinnkode, FinnLookupError } = await import('./src/domain/finn/finnAdParser')
+          const { fetchFinnCarAd, FinnCarLookupError } = await import('./src/domain/finn/finnCarAdParser')
           res.setHeader('Content-Type', 'application/json')
           if (!isValidFinnkode(finnkode)) {
             res.statusCode = 400
@@ -24,13 +26,14 @@ function finnDevApi(): Plugin {
             return
           }
           try {
-            const data = await fetchFinnAd(finnkode)
+            // Samme type-ruting som api/finn.ts: type=car → bilannonse-parser
+            const data = type === 'car' ? await fetchFinnCarAd(finnkode) : await fetchFinnAd(finnkode)
             res.statusCode = 200
             res.end(JSON.stringify(data))
           } catch (err) {
-            const isLookupErr = err instanceof FinnLookupError
-            res.statusCode = isLookupErr ? err.statusCode : 502
-            res.end(JSON.stringify({ error: isLookupErr ? err.message : 'Klarte ikke å hente annonsen fra FINN.' }))
+            const isLookupErr = err instanceof FinnLookupError || err instanceof FinnCarLookupError
+            res.statusCode = isLookupErr ? (err as { statusCode: number }).statusCode : 502
+            res.end(JSON.stringify({ error: isLookupErr ? (err as Error).message : 'Klarte ikke å hente annonsen fra FINN.' }))
           }
         })()
       })
