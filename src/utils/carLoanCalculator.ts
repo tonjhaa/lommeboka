@@ -396,6 +396,50 @@ export function calculateCarLoan(inputs: CarLoanInputs): CarLoanResult {
 }
 
 // ------------------------------------------------------------
+// REVERS: MAKS KJØPSPRIS FRA DISPONIBELT BELØP
+// ------------------------------------------------------------
+
+/**
+ * Finner høyeste kjøpspris der MIN månedsandel holder seg innenfor
+ * disponibelt beløp, med alle øvrige innstillinger som de står
+ * (egenkapital som fast beløp, EK-avhengige rentetrinn, gebyrer,
+ * driftskostnader, partnerdeling).
+ *
+ * Binærsøk over calculateCarLoan — kostnaden er monotont ikke-avtagende
+ * i pris (høyere pris → større lån, og lavere EK-andel kan i tillegg
+ * hoppe OPP et rentetrinn), så søket er trygt. Ingen lukket formel
+ * finnes pga. rentetrinnene.
+ *
+ * Returnerer 0 når selv driftskostnadene alene overstiger budsjettet.
+ */
+export function computeMaxAffordablePrice(inputs: CarLoanInputs): number {
+  const budget = inputs.availableMonthlyBudget
+  if (budget <= 0) return 0
+
+  const shareAt = (price: number) =>
+    calculateCarLoan({ ...inputs, price }).myShareMonthly
+
+  // Driftskostnadene er prisuavhengige — er de alene over budsjettet, er svaret 0
+  if (shareAt(0) > budget) return 0
+
+  let lo = 0
+  let hi = 20_000_000
+  if (shareAt(hi) <= budget) return hi // urealistisk høyt budsjett — capped
+
+  // 31 iterasjoner gir < 1 kr presisjon på 20 mill-intervallet
+  for (let i = 0; i < 31; i++) {
+    const mid = (lo + hi) / 2
+    if (shareAt(mid) <= budget) {
+      lo = mid
+    } else {
+      hi = mid
+    }
+  }
+  // Rund ned til nærmeste 1 000 kr — «ca.»-svar, ikke falsk presisjon
+  return Math.floor(lo / 1_000) * 1_000
+}
+
+// ------------------------------------------------------------
 // STANDARDINPUT (brukes av store som utgangstilstand)
 // ------------------------------------------------------------
 

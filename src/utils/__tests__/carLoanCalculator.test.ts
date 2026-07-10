@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   calculateCarLoan,
   computeEnergyCostMonthly,
+  computeMaxAffordablePrice,
   defaultCarLoanInputs,
   estimatedValueAtMonth,
   resolveAnnualRate,
@@ -281,5 +282,44 @@ describe('nøkkeltall', () => {
     const result = calculateCarLoan(defaultCarLoanInputs())
     expect(result.loanAmount).toBe(0)
     expect(Number.isFinite(result.totalMonthlyCost)).toBe(true)
+  })
+})
+
+describe('computeMaxAffordablePrice — revers-modus', () => {
+  it('funnet pris holder seg innenfor budsjettet, neste trinn opp gjør ikke', () => {
+    const inputs = loanOnly({ equity: 50_000, availableMonthlyBudget: 5_000, annualRateOverride: null })
+    const maxPrice = computeMaxAffordablePrice(inputs)
+    expect(maxPrice).toBeGreaterThan(50_000)
+    expect(calculateCarLoan({ ...inputs, price: maxPrice }).myShareMonthly).toBeLessThanOrEqual(5_000)
+    expect(calculateCarLoan({ ...inputs, price: maxPrice + 10_000 }).myShareMonthly).toBeGreaterThan(5_000)
+  })
+
+  it('høyere budsjett gir høyere maks pris (monotoni)', () => {
+    const base = loanOnly({ equity: 0, annualRateOverride: null })
+    const low = computeMaxAffordablePrice({ ...base, availableMonthlyBudget: 3_000 })
+    const high = computeMaxAffordablePrice({ ...base, availableMonthlyBudget: 8_000 })
+    expect(high).toBeGreaterThan(low)
+  })
+
+  it('driftskostnader alene over budsjettet gir 0', () => {
+    const inputs = baseInputs({ fuelType: 'bensin', availableMonthlyBudget: 500 })
+    // Faste poster + drivstoff er godt over 500 kr/mnd
+    expect(computeMaxAffordablePrice(inputs)).toBe(0)
+  })
+
+  it('partnerdeling 50/50 dobler (ca.) kjøpekraften', () => {
+    const alone = loanOnly({ equity: 0, availableMonthlyBudget: 4_000, annualRateOverride: 6 })
+    const shared = loanOnly({
+      equity: 0, availableMonthlyBudget: 4_000, annualRateOverride: 6,
+      sharing: { mode: 'femtifemti', myPct: 50, myFixedAmount: 0 },
+    })
+    const alonePrice = computeMaxAffordablePrice(alone)
+    const sharedPrice = computeMaxAffordablePrice(shared)
+    expect(sharedPrice).toBeGreaterThan(alonePrice * 1.9)
+    expect(sharedPrice).toBeLessThan(alonePrice * 2.1)
+  })
+
+  it('0 i budsjett gir 0', () => {
+    expect(computeMaxAffordablePrice(loanOnly({ availableMonthlyBudget: 0 }))).toBe(0)
   })
 })

@@ -19,6 +19,7 @@ import { useCarLoanCalculatorStore } from '@/store/useCarLoanCalculatorStore'
 import {
   buildValueVsDebtCurve,
   calculateCarLoan,
+  computeMaxAffordablePrice,
   resolveAnnualRate,
   type CarLoanResult,
 } from '@/utils/carLoanCalculator'
@@ -60,6 +61,7 @@ const INSIGHT_STYLE = {
 
 export function ResultsSection({ result, currentSurplus }: { result: CarLoanResult; currentSurplus: number }) {
   const inputs = useCarLoanCalculatorStore((s) => s.inputs)
+  const setInputs = useCarLoanCalculatorStore((s) => s.setInputs)
   const setAvailableMonthlyBudget = useCarLoanCalculatorStore((s) => s.setAvailableMonthlyBudget)
   const comparisonSnapshot = useCarLoanCalculatorStore((s) => s.comparisonSnapshot)
   const setComparisonSnapshot = useCarLoanCalculatorStore((s) => s.setComparisonSnapshot)
@@ -88,6 +90,10 @@ export function ResultsSection({ result, currentSurplus }: { result: CarLoanResu
     () => (comparisonSnapshot ? calculateCarLoan(comparisonSnapshot.inputs) : null),
     [comparisonSnapshot]
   )
+
+  // Revers-modus: maks kjøpspris innenfor disponibelt beløp, med alle
+  // øvrige innstillinger som de står
+  const maxAffordablePrice = useMemo(() => computeMaxAffordablePrice(inputs), [inputs])
 
   const stackValues: Record<(typeof STACK_SEGMENTS)[number]['key'], number> = {
     loan: result.monthlyLoanCost,
@@ -242,6 +248,23 @@ export function ResultsSection({ result, currentSurplus }: { result: CarLoanResu
               </span>{' '}
               etter bilen
             </p>
+          )}
+          {inputs.availableMonthlyBudget > 0 && maxAffordablePrice > 0 && (
+            <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-2">
+              <p className="text-[11px] text-muted-foreground">
+                Med {fmtNOK(inputs.availableMonthlyBudget)}/mnd har du råd til bil til{' '}
+                <span className="font-mono font-medium text-foreground">ca. {fmtNOK(maxAffordablePrice)}</span>
+                <HelpTooltip content="Høyeste kjøpspris der din månedsandel holder seg innenfor disponibelt beløp — med egenkapitalen, løpetiden, driftskostnadene og delingen slik de står nå. Endrer du forutsetningene, endres svaret." />
+              </p>
+              {Math.abs(maxAffordablePrice - inputs.price) > 1_000 && (
+                <Button
+                  variant="outline" size="sm" className="h-6 text-[11px] px-2 shrink-0"
+                  onClick={() => setInputs({ price: maxAffordablePrice })}
+                >
+                  Bruk som pris
+                </Button>
+              )}
+            </div>
           )}
         </div>
 
