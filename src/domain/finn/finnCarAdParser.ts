@@ -51,9 +51,9 @@ function parseFuelType(text: string | null): FinnCarFuelType | null {
   if (!text) return null
   const t = text.toLowerCase()
   if (t.includes('hybrid')) return 'hybrid'
-  if (t.includes('el')) return 'el'
   if (t.includes('diesel')) return 'diesel'
   if (t.includes('bensin')) return 'bensin'
+  if (t.includes('el')) return 'el'
   return null
 }
 

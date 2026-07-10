@@ -70,4 +70,16 @@ describe('parseFinnCarAd', () => {
     const d = parseFinnCarAd(FIXTURE_EL, '469404429')
     expect(d.price).toBe(129_532)
   })
+
+  it('skiller diesel fra el (diesel inneholder substrengen "el")', () => {
+    const fixtureDiesel = `
+<html><head><meta property="og:title" content="Diesel til salgs"/></head><body>
+<div><span class="s-text-subtle">Modellår</span><p class="m-0 font-bold">2017</p></div>
+<div><span class="s-text-subtle">Kilometerstand</span><p class="m-0 font-bold">120 000 km</p></div>
+<div><span class="s-text-subtle">Drivstoff</span><p class="m-0 font-bold">Diesel</p></div>
+<script type="application/ld+json">{"@type":"Product","@context":"https://schema.org","offers":{"@type":"Offer","price":150000}}</script>
+</body></html>`
+    const d = parseFinnCarAd(fixtureDiesel, '111111111')
+    expect(d.fuelType).toBe('diesel')
+  })
 })
