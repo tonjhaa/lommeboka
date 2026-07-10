@@ -55,9 +55,9 @@ export function CarLoanCalculatorPage() {
       }
       setInputs({
         price: data.price ?? inputs.price,
-        year: data.year,
-        mileageKm: data.mileageKm,
-        fuelType: data.fuelType,
+        year: data.year ?? inputs.year,
+        mileageKm: data.mileageKm ?? inputs.mileageKm,
+        fuelType: data.fuelType ?? inputs.fuelType,
       })
       // Foreslå drivstoffkostnad ut fra de nye tallene, men ikke overskriv
       // et beløp brukeren allerede har justert manuelt inn i feltet under.
@@ -176,13 +176,15 @@ export function CarLoanCalculatorPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              checked={inputs.runningCosts.insurance.enabled}
-              onChange={(e) => setRunningCostToggle('insurance', { enabled: e.target.checked })}
-              className="h-4 w-4"
-            />
-            <span className="text-sm flex-1">Forsikring</span>
+            <label className="flex items-center gap-3 cursor-pointer flex-1">
+              <input
+                type="checkbox"
+                checked={inputs.runningCosts.insurance.enabled}
+                onChange={(e) => setRunningCostToggle('insurance', { enabled: e.target.checked })}
+                className="h-4 w-4"
+              />
+              <span className="text-sm">Forsikring</span>
+            </label>
             <NumberInput
               value={inputs.runningCosts.insurance.monthlyAmount}
               onChange={(v) => setRunningCostToggle('insurance', { monthlyAmount: v })}
@@ -192,13 +194,15 @@ export function CarLoanCalculatorPage() {
             />
           </div>
           <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              checked={inputs.runningCosts.fuel.enabled}
-              onChange={(e) => setRunningCostToggle('fuel', { enabled: e.target.checked })}
-              className="h-4 w-4"
-            />
-            <span className="text-sm flex-1">Drivstoff/lading</span>
+            <label className="flex items-center gap-3 cursor-pointer flex-1">
+              <input
+                type="checkbox"
+                checked={inputs.runningCosts.fuel.enabled}
+                onChange={(e) => setRunningCostToggle('fuel', { enabled: e.target.checked })}
+                className="h-4 w-4"
+              />
+              <span className="text-sm">Drivstoff/lading</span>
+            </label>
             <NumberInput
               value={inputs.runningCosts.fuel.monthlyAmount}
               onChange={(v) => setRunningCostToggle('fuel', { monthlyAmount: v })}
@@ -208,13 +212,15 @@ export function CarLoanCalculatorPage() {
             />
           </div>
           <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              checked={inputs.runningCosts.maintenance.enabled}
-              onChange={(e) => setMaintenanceToggle({ enabled: e.target.checked })}
-              className="h-4 w-4"
-            />
-            <span className="text-sm flex-1">Service/vedlikehold + årsavgift</span>
+            <label className="flex items-center gap-3 cursor-pointer flex-1">
+              <input
+                type="checkbox"
+                checked={inputs.runningCosts.maintenance.enabled}
+                onChange={(e) => setMaintenanceToggle({ enabled: e.target.checked })}
+                className="h-4 w-4"
+              />
+              <span className="text-sm">Service/vedlikehold + årsavgift</span>
+            </label>
             <NumberInput
               value={inputs.runningCosts.maintenance.yearlyAmount}
               onChange={(v) => setMaintenanceToggle({ yearlyAmount: v })}
