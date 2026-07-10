@@ -1,7 +1,15 @@
 // src/store/useCarLoanCalculatorStore.ts
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { CarLoanInputs } from '@/utils/carLoanCalculator'
+import {
+  defaultCarLoanInputs,
+  type CarLoanInputs,
+  type CostItem,
+  type FuelEconomyOverrides,
+  type SharingMode,
+} from '@/utils/carLoanCalculator'
+import type { CostKey } from '@/config/carCost.config'
+import type { TollInputs } from '@/domain/toll/tollEstimator'
 
 interface CarLoanCalculatorState {
   inputs: CarLoanInputs
@@ -9,35 +17,67 @@ interface CarLoanCalculatorState {
    *  useCarLoanCalculator å overstyre feltet med budsjett-forslaget. */
   availableMonthlyBudgetIsManual: boolean
   setInputs: (patch: Partial<CarLoanInputs>) => void
+  setFuelEconomy: (patch: Partial<FuelEconomyOverrides>) => void
+  setEnergyOverride: (patch: Partial<{ enabled: boolean; monthlyAmount: number }>) => void
+  setCost: (key: CostKey, patch: Partial<CostItem>) => void
+  setToll: (patch: Partial<TollInputs>) => void
+  setDepreciation: (patch: Partial<{ enabled: boolean; annualPct: number | null }>) => void
+  setSharing: (patch: Partial<{ mode: SharingMode; myPct: number; myFixedAmount: number }>) => void
   setAvailableMonthlyBudget: (amount: number, isManual: boolean) => void
-  setRunningCostToggle: (key: 'insurance' | 'fuel', patch: Partial<{ enabled: boolean; monthlyAmount: number }>) => void
-  setMaintenanceToggle: (patch: Partial<{ enabled: boolean; yearlyAmount: number }>) => void
+  resetAll: () => void
 }
 
-const DEFAULT_INPUTS: CarLoanInputs = {
-  price: 0,
-  equity: 0,
-  annualRate: 6.5,
-  termYears: 5,
-  loanType: 'annuitet',
-  fuelType: null,
-  year: null,
-  mileageKm: null,
-  runningCosts: {
-    insurance: { enabled: false, monthlyAmount: 0 },
-    fuel: { enabled: false, monthlyAmount: 0 },
-    maintenance: { enabled: false, yearlyAmount: 12_000 },
-  },
-  availableMonthlyBudget: 0,
+/** Gammel v1-form (før persist-versjonering) — kun for migrering */
+interface LegacyV1State {
+  inputs?: {
+    price?: number
+    equity?: number
+    annualRate?: number
+    termYears?: number
+    loanType?: 'annuitet' | 'serie'
+    fuelType?: 'bensin' | 'diesel' | 'el' | 'hybrid' | null
+    year?: number | null
+    mileageKm?: number | null
+    availableMonthlyBudget?: number
+    runningCosts?: {
+      insurance?: { enabled?: boolean; monthlyAmount?: number }
+      fuel?: { enabled?: boolean; monthlyAmount?: number }
+      maintenance?: { enabled?: boolean; yearlyAmount?: number }
+    }
+  }
+  availableMonthlyBudgetIsManual?: boolean
 }
 
 export const useCarLoanCalculatorStore = create<CarLoanCalculatorState>()(
   persist(
     (set) => ({
-      inputs: DEFAULT_INPUTS,
+      inputs: defaultCarLoanInputs(),
       availableMonthlyBudgetIsManual: false,
 
       setInputs: (patch) => set((s) => ({ inputs: { ...s.inputs, ...patch } })),
+
+      setFuelEconomy: (patch) =>
+        set((s) => ({ inputs: { ...s.inputs, fuelEconomy: { ...s.inputs.fuelEconomy, ...patch } } })),
+
+      setEnergyOverride: (patch) =>
+        set((s) => ({ inputs: { ...s.inputs, energyOverride: { ...s.inputs.energyOverride, ...patch } } })),
+
+      setCost: (key, patch) =>
+        set((s) => ({
+          inputs: {
+            ...s.inputs,
+            costs: { ...s.inputs.costs, [key]: { ...s.inputs.costs[key], ...patch } },
+          },
+        })),
+
+      setToll: (patch) =>
+        set((s) => ({ inputs: { ...s.inputs, toll: { ...s.inputs.toll, ...patch } } })),
+
+      setDepreciation: (patch) =>
+        set((s) => ({ inputs: { ...s.inputs, depreciation: { ...s.inputs.depreciation, ...patch } } })),
+
+      setSharing: (patch) =>
+        set((s) => ({ inputs: { ...s.inputs, sharing: { ...s.inputs.sharing, ...patch } } })),
 
       setAvailableMonthlyBudget: (amount, isManual) =>
         set((s) => ({
@@ -45,28 +85,54 @@ export const useCarLoanCalculatorStore = create<CarLoanCalculatorState>()(
           availableMonthlyBudgetIsManual: isManual,
         })),
 
-      setRunningCostToggle: (key, patch) =>
-        set((s) => ({
-          inputs: {
-            ...s.inputs,
-            runningCosts: {
-              ...s.inputs.runningCosts,
-              [key]: { ...s.inputs.runningCosts[key], ...patch },
-            },
-          },
-        })),
-
-      setMaintenanceToggle: (patch) =>
-        set((s) => ({
-          inputs: {
-            ...s.inputs,
-            runningCosts: {
-              ...s.inputs.runningCosts,
-              maintenance: { ...s.inputs.runningCosts.maintenance, ...patch },
-            },
-          },
-        })),
+      resetAll: () => set({ inputs: defaultCarLoanInputs(), availableMonthlyBudgetIsManual: false }),
     }),
-    { name: 'lommeboka-bilkalkulator-v1' }
+    {
+      name: 'lommeboka-bilkalkulator-v1',
+      version: 2,
+      migrate: (persisted: unknown, fromVersion: number) => {
+        if (fromVersion >= 2) return persisted as CarLoanCalculatorState
+        // v0/v1 → v2: behold skalarer, map gamle driftskostnad-toggles.
+        const old = (persisted ?? {}) as LegacyV1State
+        const oi = old.inputs ?? {}
+        const inputs = defaultCarLoanInputs()
+
+        inputs.price = oi.price ?? 0
+        inputs.equity = oi.equity ?? 0
+        inputs.annualRate = oi.annualRate ?? inputs.annualRate
+        inputs.termYears = oi.termYears ?? inputs.termYears
+        inputs.loanType = oi.loanType ?? inputs.loanType
+        inputs.fuelType = oi.fuelType ?? null
+        inputs.year = oi.year ?? null
+        inputs.mileageKm = oi.mileageKm ?? null
+        inputs.availableMonthlyBudget = oi.availableMonthlyBudget ?? 0
+
+        const rc = oi.runningCosts
+        if (rc?.insurance) {
+          inputs.costs.insurance = {
+            enabled: rc.insurance.enabled ?? false,
+            overriddenAmount: (rc.insurance.monthlyAmount ?? 0) > 0 ? rc.insurance.monthlyAmount! : null,
+          }
+        }
+        // Gammel flat drivstoffkostnad blir flat overstyring i ny modell
+        if (rc?.fuel?.enabled) {
+          inputs.energyOverride = { enabled: true, monthlyAmount: rc.fuel.monthlyAmount ?? 0 }
+        }
+        // Gammel «service/vedlikehold + årsavgift» (kr/år) blir service-post (kr/mnd)
+        if (rc?.maintenance) {
+          inputs.costs.service = {
+            enabled: rc.maintenance.enabled ?? inputs.costs.service.enabled,
+            overriddenAmount: (rc.maintenance.yearlyAmount ?? 0) > 0
+              ? Math.round(rc.maintenance.yearlyAmount! / 12)
+              : null,
+          }
+        }
+
+        return {
+          inputs,
+          availableMonthlyBudgetIsManual: old.availableMonthlyBudgetIsManual ?? false,
+        }
+      },
+    }
   )
 )
