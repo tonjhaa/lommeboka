@@ -79,5 +79,21 @@ export const LOAN_FEE_DEFAULTS = {
   termingebyr: 65,
 }
 
+/**
+ * Typiske billånsrenter etter egenkapitalandel (nominell %, 2026-estimat).
+ * Banker priser billån i trinn etter belåningsgrad — mer egenkapital gir
+ * lavere rente. Grove estimater; sjekk alltid faktisk tilbud.
+ * Sortert fra høyeste EK-krav og nedover — første trinn som passer brukes.
+ */
+export const LOAN_RATE_TIERS: Array<{ minEquityPct: number; rate: number }> = [
+  { minEquityPct: 35, rate: 6.0 },
+  { minEquityPct: 20, rate: 7.0 },
+  { minEquityPct: 1, rate: 8.0 },
+  { minEquityPct: 0, rate: 9.0 },
+]
+
+/** Rente-estimat når pris ikke er satt ennå (midt-trinn) */
+export const LOAN_RATE_FALLBACK = 7.0
+
 /** Gjennomsnittlig antall uker per måned (365.25 / 7 / 12) — for bompengeberegning */
 export const WEEKS_PER_MONTH = 4.345

@@ -3,18 +3,19 @@ import {
   calculateCarLoan,
   computeEnergyCostMonthly,
   defaultCarLoanInputs,
+  resolveAnnualRate,
   resolveCostAmount,
   type CarLoanInputs,
 } from '../carLoanCalculator'
 
-/** Basisscenario: 300 000 kr bil, 50 000 EK, 6 % rente, 5 år annuitet, 12 000 km/år */
+/** Basisscenario: 300 000 kr bil, 50 000 EK, 6 % rente (overstyrt), 5 år annuitet, 12 000 km/år */
 function baseInputs(overrides: Partial<CarLoanInputs> = {}): CarLoanInputs {
   const d = defaultCarLoanInputs()
   return {
     ...d,
     price: 300_000,
     equity: 50_000,
-    annualRate: 6,
+    annualRateOverride: 6,
     termYears: 5,
     availableMonthlyBudget: 10_000,
     ...overrides,
@@ -107,6 +108,36 @@ describe('computeEnergyCostMonthly — drivlinjer', () => {
   it('ingen drivlinje valgt eller 0 km gir 0', () => {
     expect(computeEnergyCostMonthly(baseInputs({ fuelType: null }))).toBe(0)
     expect(computeEnergyCostMonthly(baseInputs({ fuelType: 'bensin', annualKm: 0 }))).toBe(0)
+  })
+})
+
+describe('resolveAnnualRate — EK-basert rente-estimat', () => {
+  it('mer egenkapital gir lavere rente (trinnvis)', () => {
+    const at = (equity: number) =>
+      resolveAnnualRate(baseInputs({ equity, annualRateOverride: null }))
+    // 300 000 kr bil: 0 EK → 9 %, 10 % EK → 8 %, 20 % EK → 7 %, 35 %+ EK → 6 %
+    expect(at(0)).toBe(9.0)
+    expect(at(30_000)).toBe(8.0)
+    expect(at(60_000)).toBe(7.0)
+    expect(at(105_000)).toBe(6.0)
+    expect(at(300_000)).toBe(6.0)
+  })
+
+  it('brukerens overstyring vinner over estimatet', () => {
+    expect(resolveAnnualRate(baseInputs({ annualRateOverride: 4.9 }))).toBe(4.9)
+  })
+
+  it('uten pris brukes fallback-estimatet', () => {
+    expect(resolveAnnualRate(baseInputs({ price: 0, annualRateOverride: null }))).toBe(7.0)
+  })
+
+  it('calculateCarLoan bruker den EK-baserte renten — mer EK gir lavere terminbeløp per lånte krone', () => {
+    // Samme lånebeløp (200 000), men ulik EK-andel → ulik rente → ulikt terminbeløp
+    const lowEquity = calculateCarLoan(baseInputs({ price: 220_000, equity: 20_000, annualRateOverride: null }))  // ~9 % EK → 8 %
+    const highEquity = calculateCarLoan(baseInputs({ price: 320_000, equity: 120_000, annualRateOverride: null })) // 37.5 % EK → 6 %
+    expect(lowEquity.loanAmount).toBe(200_000)
+    expect(highEquity.loanAmount).toBe(200_000)
+    expect(highEquity.monthlyInstallment).toBeLessThan(lowEquity.monthlyInstallment)
   })
 })
 

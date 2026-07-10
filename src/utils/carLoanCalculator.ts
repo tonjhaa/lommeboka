@@ -9,6 +9,8 @@ import {
   ENERGY_PRICE_DEFAULTS,
   FUEL_DEFAULTS,
   LOAN_FEE_DEFAULTS,
+  LOAN_RATE_FALLBACK,
+  LOAN_RATE_TIERS,
   type CostKey,
   type CostLevel,
 } from '@/config/carCost.config'
@@ -78,7 +80,8 @@ export interface CarLoanInputs {
   gearbox: 'automat' | 'manuell' | null
   // Lån og gebyrer
   equity: number
-  annualRate: number
+  /** null = følg rente-estimatet som avhenger av egenkapitalandelen */
+  annualRateOverride: number | null
   termYears: number
   loanType: 'annuitet' | 'serie'
   etableringsgebyr: number
@@ -205,6 +208,21 @@ export function resolveDepreciationPct(inputs: CarLoanInputs): number {
   return inputs.depreciation.annualPct ?? DEFAULT_DEPRECIATION_PCT
 }
 
+/**
+ * Effektiv nominell rente: brukerens overstyring, ellers trinnbasert
+ * estimat etter egenkapitalandel (mer EK → lavere rente — slik banker
+ * faktisk priser billån etter belåningsgrad).
+ */
+export function resolveAnnualRate(inputs: CarLoanInputs): number {
+  if (inputs.annualRateOverride !== null) return inputs.annualRateOverride
+  if (inputs.price <= 0) return LOAN_RATE_FALLBACK
+  const equityPct = (inputs.equity / inputs.price) * 100
+  for (const tier of LOAN_RATE_TIERS) {
+    if (equityPct >= tier.minEquityPct) return tier.rate
+  }
+  return LOAN_RATE_FALLBACK
+}
+
 // ------------------------------------------------------------
 // HOVEDBEREGNING
 // ------------------------------------------------------------
@@ -214,7 +232,7 @@ export function calculateCarLoan(inputs: CarLoanInputs): CarLoanResult {
   const amortization = buildAmortizationPlan(
     'bilkalkulator',
     loanAmount,
-    inputs.annualRate,
+    resolveAnnualRate(inputs),
     inputs.termYears,
     inputs.loanType
   )
@@ -336,7 +354,7 @@ export function defaultCarLoanInputs(): CarLoanInputs {
     fuelType: null,
     gearbox: null,
     equity: 0,
-    annualRate: 6.5,
+    annualRateOverride: null,
     termYears: 5,
     loanType: 'annuitet',
     etableringsgebyr: LOAN_FEE_DEFAULTS.etableringsgebyr,

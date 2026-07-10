@@ -11,7 +11,7 @@ import { AmortizationTable } from '@/components/charts/AmortizationTable'
 import { AmortizationChart } from '@/components/charts/AmortizationChart'
 import { fmtNOK } from './carloanShared'
 import { useCarLoanCalculatorStore } from '@/store/useCarLoanCalculatorStore'
-import type { CarLoanResult } from '@/utils/carLoanCalculator'
+import { resolveAnnualRate, type CarLoanResult } from '@/utils/carLoanCalculator'
 
 export const AFFORDABILITY_STYLE = {
   ok: { icon: CheckCircle2, className: 'text-green-500', label: 'Innenfor det du har å avse' },
@@ -64,7 +64,7 @@ export function ResultsSection({ result }: { result: CarLoanResult }) {
     const lines = [
       `Bilkalkulator — ${inputs.modelName ?? 'bil'}${inputs.year ? ` (${inputs.year})` : ''}`,
       `Pris: ${fmtNOK(inputs.price)} | Egenkapital: ${fmtNOK(inputs.equity)} | Lån: ${fmtNOK(result.loanAmount)}`,
-      `Lånekostnad: ${fmtNOK(result.monthlyLoanCost)}/mnd (${inputs.annualRate} %, ${inputs.termYears} år, ${inputs.loanType})`,
+      `Lånekostnad: ${fmtNOK(result.monthlyLoanCost)}/mnd (${resolveAnnualRate(inputs)} %, ${inputs.termYears} år, ${inputs.loanType})`,
       `Driftskostnad: ${fmtNOK(result.operatingCostMonthly)}/mnd`,
       `TOTAL MÅNEDSKOSTNAD: ${fmtNOK(result.totalMonthlyCost)}`,
       ...(sharingActive

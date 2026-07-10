@@ -89,17 +89,33 @@ export const useCarLoanCalculatorStore = create<CarLoanCalculatorState>()(
     }),
     {
       name: 'lommeboka-bilkalkulator-v1',
-      version: 2,
+      version: 3,
       migrate: (persisted: unknown, fromVersion: number) => {
-        if (fromVersion >= 2) return persisted as CarLoanCalculatorState
-        // v0/v1 → v2: behold skalarer, map gamle driftskostnad-toggles.
+        if (fromVersion >= 3) return persisted as CarLoanCalculatorState
+
+        // v2 → v3: fast annualRate erstattet av annualRateOverride (null =
+        // følg EK-basert rente-estimat). 6.5 var gammel default → null.
+        if (fromVersion === 2) {
+          const s = persisted as CarLoanCalculatorState & { inputs: { annualRate?: number } }
+          const oldRate = s.inputs.annualRate
+          const inputs: CarLoanCalculatorState['inputs'] = {
+            ...defaultCarLoanInputs(),
+            ...s.inputs,
+            annualRateOverride: oldRate !== undefined && oldRate !== 6.5 ? oldRate : null,
+          }
+          delete (inputs as { annualRate?: number }).annualRate
+          return { ...s, inputs }
+        }
+
+        // v0/v1 → v3: behold skalarer, map gamle driftskostnad-toggles.
         const old = (persisted ?? {}) as LegacyV1State
         const oi = old.inputs ?? {}
         const inputs = defaultCarLoanInputs()
 
         inputs.price = oi.price ?? 0
         inputs.equity = oi.equity ?? 0
-        inputs.annualRate = oi.annualRate ?? inputs.annualRate
+        inputs.annualRateOverride =
+          oi.annualRate !== undefined && oi.annualRate !== 6.5 ? oi.annualRate : null
         inputs.termYears = oi.termYears ?? inputs.termYears
         inputs.loanType = oi.loanType ?? inputs.loanType
         inputs.fuelType = oi.fuelType ?? null
