@@ -84,7 +84,7 @@ export function CarLoanCalculatorPage() {
   const AffordabilityIcon = affordabilityStyle.icon
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <div className="p-6 max-w-4xl mx-auto space-y-6 overflow-y-auto h-full">
       <div>
         <h1 className="text-xl font-semibold">Bilkalkulator</h1>
         <p className="text-sm text-muted-foreground">
