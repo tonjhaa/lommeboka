@@ -35,7 +35,7 @@ function quickFact(html: string, label: string): string | null {
   )
   const m = html.match(re)
   if (!m) return null
-  return m[1].replace(/ |&nbsp;|&#160;/g, ' ').trim()
+  return m[1].replace(/ |&nbsp;|&#160;/g, ' ').trim()
 }
 
 /** Trekker første heltall ut av en tekst som «90 500 km» */
