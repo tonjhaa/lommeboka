@@ -30,6 +30,9 @@ const PartnerPage = lazyWithRetry(() =>
 const IVFPageTop = lazyWithRetry(() =>
   import('@/pages/economy/ProsjektPage').then((m) => ({ default: m.ProsjektPage }))
 )
+const CarLoanCalculatorPage = lazyWithRetry(() =>
+  import('@/pages/CarLoanCalculatorPage').then((m) => ({ default: m.CarLoanCalculatorPage }))
+)
 
 function PageFallback() {
   return (
@@ -65,6 +68,11 @@ function AppContent() {
         {currentView === 'ivf' && (
           <Suspense fallback={<PageFallback />}>
             <IVFPageTop />
+          </Suspense>
+        )}
+        {currentView === 'billan' && (
+          <Suspense fallback={<PageFallback />}>
+            <CarLoanCalculatorPage />
           </Suspense>
         )}
       </div>

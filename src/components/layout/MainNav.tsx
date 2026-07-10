@@ -71,6 +71,7 @@ const GROUPS: NavGroup[] = [
       { label: 'Simulator', target: { kind: 'economy', page: 'scenario' }, requiresTab: 'scenario' },
       { label: 'Pensjon', target: { kind: 'economy', page: 'pension' }, requiresTab: 'pension' },
       { label: 'Boligkalkulator', target: { kind: 'view', view: 'calculator' } },
+      { label: 'Bilkalkulator', target: { kind: 'view', view: 'billan' } },
       { label: 'Skattekalkulator', target: { kind: 'view', view: 'skattekalkulator' } },
     ],
   },
