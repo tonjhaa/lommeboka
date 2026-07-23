@@ -308,7 +308,6 @@ export function SubscriptionsPage() {
                           <EditInsuranceForm
                             ins={ins}
                             currentYear={currentYear}
-                            currentMonthKey={currentMonthKey}
                             onSave={(updates) => { updateInsurance(ins.id, updates); setEditingInsId(null) }}
                             onCancel={() => setEditingInsId(null)}
                           />
@@ -874,13 +873,11 @@ function AddSubscriptionForm({ onSave, onCancel }: { onSave: (s: SubscriptionEnt
 function EditInsuranceForm({
   ins,
   currentYear,
-  currentMonthKey,
   onSave,
   onCancel,
 }: {
   ins: InsuranceEntry
   currentYear: string
-  currentMonthKey: string
   onSave: (updates: Partial<InsuranceEntry>) => void
   onCancel: () => void
 }) {
@@ -950,7 +947,6 @@ function EditInsuranceForm({
           <Input
             type="month"
             className="h-8 text-xs"
-            min={currentMonthKey}
             value={form.activeUntil}
             onChange={(e) => setForm((f) => ({ ...f, activeUntil: e.target.value }))}
           />
@@ -1045,8 +1041,6 @@ function CancelInsuranceForm({
 
 function AddInsuranceForm({ onSave, onCancel }: { onSave: (ins: InsuranceEntry) => void; onCancel: () => void }) {
   const currentYear = String(new Date().getFullYear())
-  const now = new Date()
-  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const [form, setForm] = useState({ provider: '', type: '', yearlyAmount: 0, activeFrom: '', activeUntil: '' })
 
   return (
@@ -1084,7 +1078,6 @@ function AddInsuranceForm({ onSave, onCancel }: { onSave: (ins: InsuranceEntry) 
             <Input
               type="month"
               className="h-8 text-xs"
-              min={currentMonthKey}
               value={form.activeUntil}
               onChange={(e) => setForm((f) => ({ ...f, activeUntil: e.target.value }))}
             />
