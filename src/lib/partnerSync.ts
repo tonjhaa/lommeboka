@@ -150,29 +150,52 @@ export function importPartnerDataToStore(data: object): void {
   useEconomyStore.getState().setPartnerVeikart({ ...existing, ...patch })
 }
 
-/** Abonnerer på sanntidsendringer i partnerens data. Returnerer unsubscribe-funksjon. */
+/** Abonnerer på sanntidsendringer i partnerens data. Returnerer unsubscribe-funksjon.
+ *  Supabase sin realtime-tenant sover ved inaktivitet og river ned kanalen — supabase-js
+ *  re-abonnerer ikke automatisk ved CHANNEL_ERROR/TIMED_OUT, så vi må gjøre det selv. */
 export function subscribeToPartnerData(
   partnerId: string,
   onUpdate: (data: object) => void,
 ): () => void {
-  const channel = supabase
-    .channel(`partner-${partnerId}`)
-    .on(
-      'postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'user_data', filter: `user_id=eq.${partnerId}` },
-      (payload) => {
-        // Sikkerhetskontroll: verifiser at payload tilhører riktig partner
-        if (payload.new?.user_id && payload.new.user_id !== partnerId) return
-        if (payload.new?.economy_data) onUpdate(payload.new.economy_data as object)
-      },
-    )
-    .subscribe((status) => {
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        Sentry.captureMessage(`Realtime partner-data ${status} (partner ${partnerId})`, 'warning')
-      }
-    })
+  let stopped = false
+  let retryTimer: ReturnType<typeof setTimeout> | null = null
+  let attempt = 0
+  let channel: ReturnType<typeof supabase.channel> | null = null
 
-  return () => { supabase.removeChannel(channel) }
+  function connect() {
+    channel = supabase
+      .channel(`partner-${partnerId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'user_data', filter: `user_id=eq.${partnerId}` },
+        (payload) => {
+          // Sikkerhetskontroll: verifiser at payload tilhører riktig partner
+          if (payload.new?.user_id && payload.new.user_id !== partnerId) return
+          if (payload.new?.economy_data) onUpdate(payload.new.economy_data as object)
+        },
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          attempt = 0
+          return
+        }
+        if (status !== 'CHANNEL_ERROR' && status !== 'TIMED_OUT') return
+        Sentry.captureMessage(`Realtime partner-data ${status} (partner ${partnerId})`, 'warning')
+        if (stopped) return
+        if (channel) supabase.removeChannel(channel)
+        attempt += 1
+        const delay = Math.min(30000, 1000 * 2 ** (attempt - 1))
+        retryTimer = setTimeout(connect, delay)
+      })
+  }
+
+  connect()
+
+  return () => {
+    stopped = true
+    if (retryTimer) clearTimeout(retryTimer)
+    if (channel) supabase.removeChannel(channel)
+  }
 }
 
 // ----------------------------------------------------------------
