@@ -60,8 +60,9 @@ export function SubscriptionsPage() {
 
   const monthlySubTotal = activeSubscriptions.reduce((s, sub) => s + effectivePrice(sub, currentMonthKey), 0)
   const yearlySubTotal = monthlySubTotal * 12
-  const yearlyInsTotal = insurances
-    .filter((i) => i.isActive)
+  const activeInsurances = insurances.filter((i) => i.isActive && !isInsuranceExpired(i, currentMonthKey))
+  const expiredInsurances = insurances.filter((i) => i.isActive && isInsuranceExpired(i, currentMonthKey))
+  const yearlyInsTotal = activeInsurances
     .reduce((s, ins) => s + (ins.yearlyAmounts[currentYear] ?? 0), 0)
   const monthlyInsTotal = yearlyInsTotal / 12
 
@@ -285,7 +286,7 @@ export function SubscriptionsPage() {
         </div>
       )}
 
-      {insurances.filter(i => i.status !== 'avsluttet').length > 0 && (
+      {activeInsurances.length > 0 && (
         <Card>
           <CardContent className="p-0">
             <table className="w-full text-sm">
@@ -298,7 +299,7 @@ export function SubscriptionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {insurances.filter(i => i.status !== 'avsluttet').map((ins) => {
+                {activeInsurances.map((ins) => {
                   const yearlyAmt = ins.yearlyAmounts[currentYear] ?? 0
                   if (editingInsId === ins.id) {
                     return (
@@ -337,6 +338,13 @@ export function SubscriptionsPage() {
                             )}
                             {ins.type}
                           </div>
+                          {ins.activeUntil && (
+                            <span className="text-xs text-muted-foreground">
+                              {monthsRemaining(ins.activeUntil, currentMonthKey) === 0
+                                ? 'Siste måned'
+                                : `Utløper om ${monthsRemaining(ins.activeUntil, currentMonthKey)} mnd`}
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2 text-muted-foreground text-xs">{ins.provider}</td>
                         <td className="px-3 py-2 text-right font-mono">
@@ -442,6 +450,53 @@ export function SubscriptionsPage() {
             </table>
           </CardContent>
         </Card>
+      )}
+
+      {expiredInsurances.length > 0 && (
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">Utløpte forsikringer</p>
+          <Card>
+            <CardContent className="p-0">
+              <table className="w-full text-sm opacity-50">
+                <tbody>
+                  {expiredInsurances.map((ins) => (
+                    <tr key={ins.id} className="border-b border-border/50 last:border-0">
+                      <td className="px-3 py-2">
+                        <p>{ins.type}</p>
+                        <span className="text-xs text-muted-foreground">Utløpt {ins.activeUntil}</span>
+                      </td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">{ins.provider}</td>
+                      <td className="px-3 py-2 text-right font-mono">
+                        {fmtNOK(ins.yearlyAmounts[currentYear] ?? 0)}
+                      </td>
+                      <td className="px-2 py-2">
+                        <div className="flex gap-1 justify-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 text-muted-foreground"
+                            onClick={() => updateInsurance(ins.id, { activeUntil: undefined })}
+                            title="Fjern sluttdato (gjør løpende igjen)"
+                          >
+                            <ToggleRight className="h-3.5 w-3.5 text-green-500" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 text-muted-foreground hover:text-red-400"
+                            onClick={() => removeInsurance(ins.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   )
