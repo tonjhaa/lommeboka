@@ -2,6 +2,12 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 import { parseFlexibleNumber } from '@/utils/parseFlexibleNumber'
 
+/** `value` er typet som `number`, men kan i praksis bli undefined/NaN etter en
+ *  persist-rehydrering eller under HMR — vakt mot det før vi kaller .toString(). */
+export function isFiniteNumber(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v)
+}
+
 interface NumberInputProps {
   value: number
   onChange: (value: number) => void
@@ -39,7 +45,7 @@ export function NumberInput({
   grouping = true,
 }: NumberInputProps) {
   const [focused, setFocused] = React.useState(false)
-  const toRaw = (v: number) => (v === 0 ? '' : v.toString())
+  const toRaw = (v: number) => (!isFiniteNumber(v) || v === 0 ? '' : v.toString())
   const [rawValue, setRawValue] = React.useState(() => toRaw(value))
 
   React.useEffect(() => {
@@ -49,6 +55,7 @@ export function NumberInput({
   }, [value, focused])
 
   const formatted = React.useMemo(() => {
+    if (!isFiniteNumber(value)) return ''
     if (value === 0 && placeholder) return ''
     if (!grouping) return String(value)
     return new Intl.NumberFormat('nb-NO', { maximumFractionDigits: 2 }).format(value)
