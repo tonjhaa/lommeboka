@@ -120,6 +120,20 @@ regelen, mens Boligkalkulatorens `analyzeMaxPurchase` også har betjeningsevne (
 Alle bruker samme modul (`utils/maxPurchase.ts`), men tallene kan avvike når betjeningsevnen
 binder. Vurder å la den forenklede varianten ta inn husholdningsdata når de finnes.
 
+### 4.6 Forsikring: activeFrom vises ikke i UI, og forsikringssummen tar ikke hensyn til datogrensene — **S**
+`InsuranceEntry.activeFrom`/`activeUntil` (lagt til 2026-07-23, `SubscriptionsPage.tsx`) er
+korrekt håndtert i selve budsjettmotoren (`insMonthAmount`), men Abo & Fors.-siden har to
+gjenstående display-hull, funnet i sluttgjennomgang av implementeringen:
+1. En forsikring med `activeFrom` i fremtiden vises i hovedlisten uten noen badge (kun
+   `activeUntil` har «Utløper om X mnd»/«Siste måned»-badge) — ser ut som en vanlig aktiv
+   forsikring selv om den ikke er i kraft ennå.
+2. `yearlyInsTotal`/`monthlyInsTotal` (summeringskortet) summerer `yearlyAmounts[currentYear]`
+   for alle i `activeInsurances` uavhengig av om inneværende måned faktisk er innenfor
+   `[activeFrom, activeUntil]` — i motsetning til abonnement, som bruker `effectivePrice(sub,
+   currentMonthKey)`. Kortet kan dermed vise et høyere beløp enn det som faktisk havner i
+   budsjettet via `computeBudgetTable`. Ikke en budsjett-feil (motoren er korrekt), men en
+   visuell inkonsistens som kan forvirre.
+
 ---
 
 ## 5. Nye features (ideer)
