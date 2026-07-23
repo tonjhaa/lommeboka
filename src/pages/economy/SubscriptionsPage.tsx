@@ -307,6 +307,7 @@ export function SubscriptionsPage() {
                           <EditInsuranceForm
                             ins={ins}
                             currentYear={currentYear}
+                            currentMonthKey={currentMonthKey}
                             onSave={(updates) => { updateInsurance(ins.id, updates); setEditingInsId(null) }}
                             onCancel={() => setEditingInsId(null)}
                           />
@@ -814,11 +815,13 @@ function AddSubscriptionForm({ onSave, onCancel }: { onSave: (s: SubscriptionEnt
 function EditInsuranceForm({
   ins,
   currentYear,
+  currentMonthKey,
   onSave,
   onCancel,
 }: {
   ins: InsuranceEntry
   currentYear: string
+  currentMonthKey: string
   onSave: (updates: Partial<InsuranceEntry>) => void
   onCancel: () => void
 }) {
@@ -827,6 +830,8 @@ function EditInsuranceForm({
     type: ins.type,
     year: currentYear,
     yearlyAmount: ins.yearlyAmounts[currentYear] ?? 0,
+    activeFrom: ins.activeFrom ?? '',
+    activeUntil: ins.activeUntil ?? '',
   })
 
   // Oppdater beløpet når år endres
@@ -872,6 +877,25 @@ function EditInsuranceForm({
             onChange={(e) => setForm((f) => ({ ...f, yearlyAmount: parseFloat(e.target.value) || 0 }))}
           />
         </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Aktiv fra (valgfritt)</Label>
+          <Input
+            type="month"
+            className="h-8 text-xs"
+            value={form.activeFrom}
+            onChange={(e) => setForm((f) => ({ ...f, activeFrom: e.target.value }))}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Aktiv t.o.m. (valgfritt)</Label>
+          <Input
+            type="month"
+            className="h-8 text-xs"
+            min={currentMonthKey}
+            value={form.activeUntil}
+            onChange={(e) => setForm((f) => ({ ...f, activeUntil: e.target.value }))}
+          />
+        </div>
       </div>
       {Object.keys(ins.yearlyAmounts).length > 0 && (
         <div className="text-[10px] text-muted-foreground space-y-0.5">
@@ -891,6 +915,8 @@ function EditInsuranceForm({
               provider: form.provider.trim(),
               type: form.type.trim(),
               yearlyAmounts: { ...ins.yearlyAmounts, [form.year]: form.yearlyAmount },
+              activeFrom: form.activeFrom || undefined,
+              activeUntil: form.activeUntil || undefined,
             })
           }
         >
@@ -960,7 +986,9 @@ function CancelInsuranceForm({
 
 function AddInsuranceForm({ onSave, onCancel }: { onSave: (ins: InsuranceEntry) => void; onCancel: () => void }) {
   const currentYear = String(new Date().getFullYear())
-  const [form, setForm] = useState({ provider: '', type: '', yearlyAmount: 0 })
+  const now = new Date()
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const [form, setForm] = useState({ provider: '', type: '', yearlyAmount: 0, activeFrom: '', activeUntil: '' })
 
   return (
     <Card>
@@ -983,6 +1011,26 @@ function AddInsuranceForm({ onSave, onCancel }: { onSave: (ins: InsuranceEntry) 
               onChange={(e) => setForm((f) => ({ ...f, yearlyAmount: parseFloat(e.target.value) || 0 }))}
             />
           </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Aktiv fra (valgfritt)</Label>
+            <Input
+              type="month"
+              className="h-8 text-xs"
+              value={form.activeFrom}
+              onChange={(e) => setForm((f) => ({ ...f, activeFrom: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Aktiv t.o.m. (valgfritt)</Label>
+            <Input
+              type="month"
+              className="h-8 text-xs"
+              min={currentMonthKey}
+              value={form.activeUntil}
+              onChange={(e) => setForm((f) => ({ ...f, activeUntil: e.target.value }))}
+            />
+            <p className="text-xs text-muted-foreground">La stå tom for løpende forsikring</p>
+          </div>
         </div>
         <div className="flex gap-2 justify-end">
           <Button variant="outline" size="sm" onClick={onCancel}>Avbryt</Button>
@@ -996,6 +1044,8 @@ function AddInsuranceForm({ onSave, onCancel }: { onSave: (ins: InsuranceEntry) 
                 type: form.type.trim(),
                 yearlyAmounts: { [currentYear]: form.yearlyAmount },
                 isActive: true,
+                ...(form.activeFrom ? { activeFrom: form.activeFrom } : {}),
+                ...(form.activeUntil ? { activeUntil: form.activeUntil } : {}),
               })
             }
           >
