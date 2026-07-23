@@ -561,6 +561,10 @@ export interface InsuranceEntry {
   bonus?: number
   /** Leverandørhistorikk */
   providerHistory?: InsuranceProviderHistory[]
+  /** Første aktive måned ("YYYY-MM"). Udefinert = har alltid vært aktiv. */
+  activeFrom?: string
+  /** Siste aktive måned ("YYYY-MM"). Udefinert = løpende. */
+  activeUntil?: string
 }
 
 // ------------------------------------------------------------
