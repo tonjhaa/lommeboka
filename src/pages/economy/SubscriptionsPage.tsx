@@ -457,6 +457,10 @@ function monthsRemaining(activeUntil: string, currentMonthKey: string): number {
   return (uy - cy) * 12 + (um - cm)
 }
 
+export function isInsuranceExpired(ins: InsuranceEntry, currentMonthKey: string): boolean {
+  return !!ins.activeUntil && ins.activeUntil < currentMonthKey
+}
+
 function effectivePrice(sub: SubscriptionEntry, monthKey: string): number {
   if (sub.monthlyAmounts[monthKey] !== undefined) return sub.monthlyAmounts[monthKey]
   if (sub.priceChanges && sub.priceChanges.length > 0) {
