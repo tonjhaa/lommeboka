@@ -267,7 +267,7 @@ export function SubscriptionsPage() {
                         <td className="px-2 py-2">
                           <div className="flex gap-1">
                             <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground"
-                              onClick={() => updateInsurance(ins.id, { status: 'aktiv', cancelledDate: undefined })}>
+                              onClick={() => updateInsurance(ins.id, { status: 'aktiv', isActive: true, cancelledDate: undefined })}>
                               <ToggleRight className="h-3.5 w-3.5 text-green-500" />
                             </Button>
                             <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-red-400"
