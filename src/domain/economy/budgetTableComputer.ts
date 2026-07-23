@@ -113,11 +113,11 @@ function subMonthAmount(sub: SubscriptionEntry, year: number, month: number): nu
   return sub.defaultMonthly
 }
 
-function insMonthAmount(ins: InsuranceEntry, year: number, month: number): number {
-  if (ins.cancelledDate) {
-    const monthKey = `${year}-${String(month).padStart(2, '0')}`
-    if (monthKey > ins.cancelledDate.slice(0, 7)) return 0
-  }
+export function insMonthAmount(ins: InsuranceEntry, year: number, month: number): number {
+  const key = `${year}-${String(month).padStart(2, '0')}`
+  if (ins.activeFrom && key < ins.activeFrom) return 0
+  if (ins.activeUntil && key > ins.activeUntil) return 0
+  if (ins.cancelledDate && key > ins.cancelledDate.slice(0, 7)) return 0
   return (ins.yearlyAmounts[String(year)] ?? 0) / 12
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeBudgetTable } from '../budgetTableComputer'
+import { computeBudgetTable, insMonthAmount } from '../budgetTableComputer'
 import type { EmploymentProfile, BudgetTemplate, BudgetLine, LonnsoppgjorRecord, SavingsAccount } from '@/types/economy'
 
 const profile: EmploymentProfile = {
@@ -271,5 +271,48 @@ describe('computeBudgetTable — forventet lønnsoppgjør toggle', () => {
     const data = compute({ lonnsoppgjor: [mkOppgjor({ effectiveDate: '2026-05-01', maanedslonn: 55_000, source: 'manual' })] })
     const lonn = data.sections.find((s) => s.key === 'INNTEKTER')!.rows.find((r) => r.id === 'lonn')!
     expect(lonn.cells[5].budget).toBe(55_000)
+  })
+})
+
+describe('insMonthAmount — activeFrom/activeUntil', () => {
+  function makeIns(overrides: Partial<import('@/types/economy').InsuranceEntry> = {}): import('@/types/economy').InsuranceEntry {
+    return {
+      id: 'ins-1',
+      provider: 'Gjensidige',
+      type: 'MC',
+      yearlyAmounts: { '2026': 7200 },
+      isActive: true,
+      ...overrides,
+    }
+  }
+
+  it('teller vanlig månedsbeløp når ingen grenser er satt', () => {
+    const ins = makeIns()
+    expect(insMonthAmount(ins, 2026, 3)).toBe(600) // 7200 / 12
+  })
+
+  it('returnerer 0 før activeFrom', () => {
+    const ins = makeIns({ activeFrom: '2026-06' })
+    expect(insMonthAmount(ins, 2026, 3)).toBe(0)
+    expect(insMonthAmount(ins, 2026, 6)).toBe(600)
+  })
+
+  it('returnerer 0 etter activeUntil', () => {
+    const ins = makeIns({ activeUntil: '2026-06' })
+    expect(insMonthAmount(ins, 2026, 6)).toBe(600)
+    expect(insMonthAmount(ins, 2026, 7)).toBe(0)
+  })
+
+  it('kombinerer activeFrom og activeUntil til et vindu', () => {
+    const ins = makeIns({ activeFrom: '2026-03', activeUntil: '2026-08' })
+    expect(insMonthAmount(ins, 2026, 2)).toBe(0)
+    expect(insMonthAmount(ins, 2026, 5)).toBe(600)
+    expect(insMonthAmount(ins, 2026, 9)).toBe(0)
+  })
+
+  it('cancelledDate er strengest hvis den inntreffer før activeUntil', () => {
+    const ins = makeIns({ activeUntil: '2026-12', cancelledDate: '2026-05-15' })
+    expect(insMonthAmount(ins, 2026, 5)).toBe(600)
+    expect(insMonthAmount(ins, 2026, 6)).toBe(0)
   })
 })
