@@ -134,6 +134,15 @@ gjenstående display-hull, funnet i sluttgjennomgang av implementeringen:
    budsjettet via `computeBudgetTable`. Ikke en budsjett-feil (motoren er korrekt), men en
    visuell inkonsistens som kan forvirre.
 
+### 4.7 Sparing-månedsoversikt: årsraden blander to år — **S**
+Den sammenslåtte årsraden i `MånedsoversiktTable` (`SavingsPage.tsx`) viser **inngående**
+saldo for året, men i samme rad står `prevInnskudd`/`prevRente` — altså *forrige* års
+innskudd og renter. Raden «2017 · 877 · 34 224 kr (+1 224)» betyr «du gikk inn i 2017 med
+34 224 kr, etter å ha satt inn 877 og fått 1 224 i renter i 2016». Logisk konsistent, men
+årstallet i venstre kolonne leses naturlig som at tallene *gjelder* det året. Ble tydelig da
+BSU fikk 10 år med ekte historikk (2026-08-11). Forslag: merk raden «inn i 2017» eller flytt
+innskudd/rente til året de hører til.
+
 ---
 
 ## 5. Nye features (ideer)
