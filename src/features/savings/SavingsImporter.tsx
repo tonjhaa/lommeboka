@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { parseSavingsStatement } from './savingsStatementParser'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import type { ParsedBankStatement } from '@/domain/economy/bankTransactionParser'
+import { findStatementAccount } from '@/domain/economy/savingsStatementHistory'
 import { cn } from '@/lib/utils'
 
 function fmtNOK(n: number) {
@@ -37,9 +38,7 @@ export function SavingsImporter({ onDone }: { onDone?: () => void }) {
           `Fant ingen kontoinformasjon. Kontroller at dette er en Trøndelag Sparebank transaksjonsrapport.\n\nEkstrahert tekst (start): ${preview}`
         )
       }
-      const isUpdate = parsed.accountNumber
-        ? savingsAccounts.some((a) => a.accountNumber === parsed.accountNumber)
-        : false
+      const isUpdate = findStatementAccount(savingsAccounts, parsed) !== undefined
       setSaldoOverride(String(Math.round(parsed.closingBalance)))
       setState({ stage: 'preview', parsed, isUpdate })
     } catch (err) {
@@ -155,7 +154,9 @@ export function SavingsImporter({ onDone }: { onDone?: () => void }) {
         )}
         {isUpdate && (
           <p className="text-xs text-muted-foreground">
-            Fant eksisterende konto med samme kontonummer. Saldo og transaksjoner oppdateres.
+            Fant eksisterende konto. Utskriften er fasit for perioden den dekker, så
+            innskudd du har lagt inn manuelt der blir erstattet. Planlagte innskudd
+            fram i tid, rentesatser og resten av oppsettet står urørt.
           </p>
         )}
         <div className="flex gap-2">

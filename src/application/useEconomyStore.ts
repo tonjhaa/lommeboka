@@ -45,7 +45,11 @@ import { POLICY_RATE_HISTORY, LONNSVEKST_DEFAULT, GRUNNBELOP_VEKST_DEFAULT } fro
 import { DEFAULT_BANK_PRESETS } from '@/config/bankPresets'
 import { calibrateProfile } from '@/domain/economy/forecastCalibration'
 import { applyCategories, seedCategoryRules } from '@/domain/economy/spendingCategorizer'
-import { buildStatementHistory } from '@/domain/economy/savingsStatementHistory'
+import {
+  buildStatementHistory,
+  findStatementAccount,
+  statementAccountType,
+} from '@/domain/economy/savingsStatementHistory'
 
 // ------------------------------------------------------------
 // STATE INTERFACE
@@ -643,20 +647,19 @@ export const useEconomyStore = create<EconomyState>()(
           const sortBalances = (list: BalanceHistoryEntry[]) =>
             [...list].sort((a, b) => (a.year !== b.year ? a.year - b.year : a.month - b.month))
 
-          // Finn eksisterende konto med same kontonummer
-          const existing = parsed.accountNumber
-            ? s.savingsAccounts.find((a) => a.accountNumber === parsed.accountNumber)
-            : undefined
+          const existing = findStatementAccount(s.savingsAccounts, parsed)
 
           if (existing) {
-            // Fyll på historikk, men la brukerens eget oppsett stå urørt
-            // (månedssparing, trinnrenter, bankpreset, etikett, mål ...).
-            const keepById = <T extends { id: string }>(mine: T[], imported: T[]) => {
-              const importedIds = new Set(imported.map((x) => x.id))
-              return [...mine.filter((x) => !importedIds.has(x.id)), ...imported]
-                .sort((a, b) =>
-                  (a as unknown as { date: string }).date.localeCompare((b as unknown as { date: string }).date))
-            }
+            // Kontoutskriften er fasit for perioden den dekker. Egne innskudd i
+            // samme periode er de samme pengene registrert for hånd, så de må
+            // vike — ellers dobbelttelles de. Alt utenfor perioden (f.eks.
+            // planlagte innskudd fram i tid) står urørt.
+            const from = hist.openingDate
+            const to = parsed.printDate
+            const outsidePeriod = <T extends { date: string }>(list: T[]) =>
+              list.filter((x) => x.date < from || x.date > to)
+            const byDate = <T extends { date: string }>(a: T, b: T) => a.date.localeCompare(b.date)
+
             // Utskriften vinner for de månedene den dekker; egne punkt ellers består
             const importedMonths = new Set(hist.balanceHistory.map((b) => `${b.year}-${b.month}`))
             const mergedBalances = sortBalances([
@@ -674,10 +677,12 @@ export const useEconomyStore = create<EconomyState>()(
             const reachesFurtherBack = hist.openingDate < existing.openingDate
             const updated: SavingsAccount = {
               ...existing,
+              // Lås kontonummeret slik at neste import treffer denne kontoen direkte
+              accountNumber: existing.accountNumber || parsed.accountNumber || undefined,
               openingBalance: reachesFurtherBack ? hist.openingBalance : existing.openingBalance,
               openingDate: reachesFurtherBack ? hist.openingDate : existing.openingDate,
-              contributions: keepById(existing.contributions ?? [], hist.contributions),
-              withdrawals: keepById(existing.withdrawals ?? [], hist.withdrawals),
+              contributions: [...outsidePeriod(existing.contributions ?? []), ...hist.contributions].sort(byDate),
+              withdrawals: [...outsidePeriod(existing.withdrawals ?? []), ...hist.withdrawals].sort(byDate),
               balanceHistory: mergedBalances,
               rateHistory: mergedRates,
             }
@@ -685,12 +690,9 @@ export const useEconomyStore = create<EconomyState>()(
           }
 
           // Ny konto
-          const typeMap: Record<string, SavingsAccount['type']> = {
-            BSU: 'BSU', sparekonto: 'sparekonto', annet: 'annet',
-          }
           const newAccount: SavingsAccount = {
             id: crypto.randomUUID(),
-            type: typeMap[parsed.accountType] ?? 'sparekonto',
+            type: statementAccountType(parsed),
             label: parsed.accountLabel,
             accountNumber: parsed.accountNumber,
             openingBalance: hist.openingBalance,

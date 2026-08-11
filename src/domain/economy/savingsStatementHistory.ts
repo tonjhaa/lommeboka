@@ -14,9 +14,41 @@ import type { ParsedBankStatement, ParsedTransaction } from './bankTransactionPa
 import type {
   BalanceHistoryEntry,
   RateHistoryEntry,
+  SavingsAccount,
   SavingsContribution,
   WithdrawalEntry,
 } from '@/types/economy'
+
+const ACCOUNT_TYPE_MAP: Record<string, SavingsAccount['type']> = {
+  BSU: 'BSU', sparekonto: 'sparekonto', annet: 'annet',
+}
+
+export function statementAccountType(parsed: ParsedBankStatement): SavingsAccount['type'] {
+  return ACCOUNT_TYPE_MAP[parsed.accountType] ?? 'sparekonto'
+}
+
+/**
+ * Finner kontoen en utskrift hører til. Kontonummer er sikrest, men kontoer
+ * opprettet for hånd har det ikke — da faller vi tilbake på kontotype, og bare
+ * når det finnes én åpenbar kandidat. Ellers risikerer vi å skrive historikk
+ * inn på feil konto.
+ *
+ * Delt mellom importdialogen (som viser «oppdater» vs. «ny») og selve
+ * importen, slik at de aldri kan si to ulike ting.
+ */
+export function findStatementAccount(
+  accounts: SavingsAccount[],
+  parsed: ParsedBankStatement,
+): SavingsAccount | undefined {
+  const byNumber = parsed.accountNumber
+    ? accounts.find((a) => a.accountNumber === parsed.accountNumber)
+    : undefined
+  if (byNumber) return byNumber
+
+  const type = statementAccountType(parsed)
+  const untagged = accounts.filter((a) => a.type === type && !a.accountNumber)
+  return untagged.length === 1 ? untagged[0] : undefined
+}
 
 export interface StatementYear {
   year: number
