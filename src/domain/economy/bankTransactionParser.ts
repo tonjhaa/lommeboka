@@ -11,8 +11,12 @@ export type ParsedTxType = 'renter' | 'overføring' | 'betaling' | 'annet'
 export interface ParsedTransaction {
   date: string        // "YYYY-MM-DD"
   type: ParsedTxType
-  amount: number      // alltid positivt (inn på konto)
+  amount: number      // positivt = inn på konto, negativt = ut
   rawLine: string
+  /** Fri tekst frå banken ("Overføring fra Brukskonto") — brukes som notat */
+  description?: string
+  /** false når banken melder transaksjonen som «Reservert» (ikkje bokført enno) */
+  booked?: boolean
 }
 
 export interface ParsedBankStatement {
@@ -27,6 +31,12 @@ export interface ParsedBankStatement {
   transactions: ParsedTransaction[]
   estimatedMonthlyContribution: number
   estimatedAnnualInterestRate: number | null
+  /**
+   * Datoen `openingBalance` gjelder frå. Bankens transaksjonsarkiv går ofte
+   * kortare tilbake enn kontoen sjølv, så startsaldoen er den saldoen som
+   * må ha ligge der før første kjende transaksjon.
+   */
+  openingDate?: string
 }
 
 // ----------------------------------------------------------------
@@ -240,13 +250,70 @@ function colIdx(headers: string[], ...candidates: string[]): number {
   return -1
 }
 
+/**
+ * Deler CSV-tekst i rader og kolonner. Meldingsfeltet fr\u00E5 banken er sitert og
+ * kan innehalde b\u00E5de semikolon og linjeskift, s\u00E5 naiv `split` held ikkje.
+ */
+export function tokenizeCSV(text: string, sep = ';'): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let inQuotes = false
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++ }  // escapet hermeteikn
+        else inQuotes = false
+      } else field += ch
+      continue
+    }
+    if (ch === '"') inQuotes = true
+    else if (ch === sep) { row.push(field); field = '' }
+    else if (ch === '\n') { row.push(field); field = ''; rows.push(row); row = [] }
+    else if (ch !== '\r') field += ch
+  }
+  if (field !== '' || row.length > 0) { row.push(field); rows.push(row) }
+
+  return rows.filter((r) => r.some((c) => c.trim() !== ''))
+}
+
+/**
+ * Tolkar eit bel\u00F8p fr\u00E5 banken. Handterer "1000", "1277.27", "160 920,14"
+ * og "160.920,14" \u2014 skiljeteiknet lengst til h\u00F8gre er desimalseparatoren.
+ */
+export function parseAmount(raw: string): number {
+  const s = (raw ?? '').replace(/[\s\u00A0]/g, '')
+  if (!s) return 0
+
+  const lastComma = s.lastIndexOf(',')
+  const lastDot = s.lastIndexOf('.')
+  let normalized: string
+
+  if (lastComma >= 0 && lastDot >= 0) {
+    // Begge finst: den siste er desimalseparator, den andre er tusenskilje
+    normalized = lastComma > lastDot
+      ? s.replace(/\./g, '').replace(',', '.')
+      : s.replace(/,/g, '')
+  } else if (lastComma >= 0) {
+    normalized = s.replace(',', '.')
+  } else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) {
+    normalized = s.replace(/\./g, '')  // rein tusengruppering: "160.920"
+  } else {
+    normalized = s
+  }
+
+  return parseFloat(normalized) || 0
+}
+
 export function parseBankStatementFromCSV(csvText: string): ParsedBankStatement {
   // Fjern BOM om tilstede
   const text = csvText.replace(/^\uFEFF/, '')
-  const rawLines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-  if (rawLines.length < 2) throw new Error('CSV-filen er tom eller ugyldig')
+  const allRows = tokenizeCSV(text)
+  if (allRows.length < 2) throw new Error('CSV-filen er tom eller ugyldig')
 
-  const headers = rawLines[0].split(';')
+  const headers = allRows[0].map((h) => h.trim())
 
   const iDate     = colIdx(headers, 'utf', 'dato')           // Utført dato
   const iType     = colIdx(headers, 'type')
@@ -259,7 +326,10 @@ export function parseBankStatementFromCSV(csvText: string): ParsedBankStatement 
     throw new Error('Ukjent CSV-format: finner ikke Dato- eller Beløp-kolonner')
   }
 
-  const dataRows = rawLines.slice(1).map((l) => l.split(';'))
+  const iDesc     = colIdx(headers, 'beskrivelse')
+  const iStatus   = colIdx(headers, 'status')
+
+  const dataRows = allRows.slice(1)
 
   // ---- Kontonummer: finn kontoen som flest transaksjoner tilhører ----
   const kontoCount = new Map<string, number>()
@@ -272,7 +342,7 @@ export function parseBankStatementFromCSV(csvText: string): ParsedBankStatement 
   const accountNumber = [...kontoCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? ''
 
   // ---- Kontotype ----
-  const allText = rawLines.join(' ').toUpperCase()
+  const allText = allRows.map((r) => r.join(' ')).join(' ').toUpperCase()
   const isBSU = /\bBSU\b/.test(allText)
   const accountLabel = isBSU ? 'BSU' : 'Sparekonto'
   const accountType: 'BSU' | 'sparekonto' | 'annet' = isBSU ? 'BSU' : 'sparekonto'
@@ -296,11 +366,8 @@ export function parseBankStatementFromCSV(csvText: string): ParsedBankStatement 
 
     const date = toISO(dateStr)
     const typeRaw = row[iType]?.trim().toLowerCase() ?? ''
-    const innStr  = row[iInn]?.trim().replace(',', '.') ?? ''
-    const utStr   = row[iUt]?.trim().replace(',', '.').replace('-', '') ?? ''
-
-    const belopInn = parseFloat(innStr) || 0
-    const belopUt  = parseFloat(utStr) || 0
+    const belopInn = parseAmount(row[iInn] ?? '')
+    const belopUt  = Math.abs(parseAmount(row[iUt] ?? ''))
 
     // Bestem transaksjonstype
     let type: ParsedTxType = 'annet'
@@ -312,12 +379,16 @@ export function parseBankStatementFromCSV(csvText: string): ParsedBankStatement 
     const amount = belopInn > 0 ? belopInn : -belopUt
     runningBalance += amount
 
+    const statusRaw = iStatus >= 0 ? (row[iStatus]?.trim().toLowerCase() ?? '') : ''
+
     // Vi lagrer alle transaksjoner (inn og ut) med signed amount
     transactions.push({
       date,
       type,
       amount,
       rawLine: `${dateStr} ${row[iType]?.trim()} ${amount}`,
+      description: iDesc >= 0 ? row[iDesc]?.trim() || undefined : undefined,
+      booked: statusRaw ? !statusRaw.startsWith('reservert') : true,
     })
   }
 
@@ -327,8 +398,7 @@ export function parseBankStatementFromCSV(csvText: string): ParsedBankStatement 
   let closingBalance = runningBalance
   let openingBalance = 0
 
-  for (const line of rawLines) {
-    const cols = line.split(';')
+  for (const cols of allRows) {
     const label = cols[0]?.trim().toLowerCase() ?? ''
     if (/utg.*saldo/.test(label)) {
       const val = extractAmounts(cols.join(' '))
@@ -337,6 +407,26 @@ export function parseBankStatementFromCSV(csvText: string): ParsedBankStatement 
       const val = extractAmounts(cols.join(' '))
       if (val.length > 0) openingBalance = val[0]
     }
+  }
+
+  // ---- Startsaldo: utled frå fasit ----
+  // Banken oppgir «inngående saldo» pr. den datoen eksporten ble bestilt fra,
+  // men transaksjonsarkivet går ofte kortere tilbake (typisk 10 år). Da blir
+  // den oppgitte startsaldoen 0 selv om kontoen hadde penger på seg.
+  // Utgående saldo er fasit, så det som ikke kan forklares av transaksjonene
+  // MÅ ha ligget på kontoen før første kjente transaksjon.
+  const sortedByDate = [...transactions].sort((a, b) => a.date.localeCompare(b.date))
+  const firstTxDate = sortedByDate[0]?.date
+  const impliedOpening = Math.round((closingBalance - runningBalance) * 100) / 100
+  if (firstTxDate && Math.abs(impliedOpening - openingBalance) >= 1) {
+    openingBalance = impliedOpening
+  }
+  // Startsaldoen gjelder dagen før første transaksjon
+  let openingDate = firstTxDate
+  if (firstTxDate) {
+    const d = new Date(`${firstTxDate}T12:00:00`)
+    d.setDate(d.getDate() - 1)
+    openingDate = d.toISOString().slice(0, 10)
   }
 
   const totalIn  = transactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0)
@@ -386,5 +476,6 @@ export function parseBankStatementFromCSV(csvText: string): ParsedBankStatement 
     transactions,
     estimatedMonthlyContribution,
     estimatedAnnualInterestRate,
+    openingDate,
   }
 }

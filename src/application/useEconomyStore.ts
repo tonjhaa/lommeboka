@@ -45,6 +45,7 @@ import { POLICY_RATE_HISTORY, LONNSVEKST_DEFAULT, GRUNNBELOP_VEKST_DEFAULT } fro
 import { DEFAULT_BANK_PRESETS } from '@/config/bankPresets'
 import { calibrateProfile } from '@/domain/economy/forecastCalibration'
 import { applyCategories, seedCategoryRules } from '@/domain/economy/spendingCategorizer'
+import { buildStatementHistory } from '@/domain/economy/savingsStatementHistory'
 
 // ------------------------------------------------------------
 // STATE INTERFACE
@@ -638,31 +639,51 @@ export const useEconomyStore = create<EconomyState>()(
 
       importSavingsStatement: (parsed) =>
         set((s) => {
-          const printDate = new Date(parsed.printDate)
-          const balEntry: BalanceHistoryEntry = {
-            year: printDate.getFullYear(),
-            month: printDate.getMonth() + 1,
-            balance: parsed.closingBalance,
-            isManual: false,
-          }
+          const hist = buildStatementHistory(parsed)
+          const sortBalances = (list: BalanceHistoryEntry[]) =>
+            [...list].sort((a, b) => (a.year !== b.year ? a.year - b.year : a.month - b.month))
+
           // Finn eksisterende konto med same kontonummer
           const existing = parsed.accountNumber
             ? s.savingsAccounts.find((a) => a.accountNumber === parsed.accountNumber)
             : undefined
+
           if (existing) {
-            // Oppdater saldo og estimert månedssparing
-            const history = existing.balanceHistory.filter(
-              (b) => !(b.year === balEntry.year && b.month === balEntry.month)
-            )
+            // Fyll på historikk, men la brukerens eget oppsett stå urørt
+            // (månedssparing, trinnrenter, bankpreset, etikett, mål ...).
+            const keepById = <T extends { id: string }>(mine: T[], imported: T[]) => {
+              const importedIds = new Set(imported.map((x) => x.id))
+              return [...mine.filter((x) => !importedIds.has(x.id)), ...imported]
+                .sort((a, b) =>
+                  (a as unknown as { date: string }).date.localeCompare((b as unknown as { date: string }).date))
+            }
+            // Utskriften vinner for de månedene den dekker; egne punkt ellers består
+            const importedMonths = new Set(hist.balanceHistory.map((b) => `${b.year}-${b.month}`))
+            const mergedBalances = sortBalances([
+              ...existing.balanceHistory.filter((b) => !importedMonths.has(`${b.year}-${b.month}`)),
+              ...hist.balanceHistory,
+            ])
+            // Egne rentesatser overstyrer estimerte for samme dato
+            const ownRateDates = new Set(existing.rateHistory.map((r) => r.fromDate))
+            const mergedRates = [
+              ...existing.rateHistory,
+              ...hist.rateHistory.filter((r) => !ownRateDates.has(r.fromDate)),
+            ].sort((a, b) => a.fromDate.localeCompare(b.fromDate))
+
+            // Rekker utskriften lenger tilbake enn det vi hadde? Da flytter vi starten.
+            const reachesFurtherBack = hist.openingDate < existing.openingDate
             const updated: SavingsAccount = {
               ...existing,
-              balanceHistory: [...history, balEntry].sort(
-                (a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month
-              ),
-              monthlyContribution: parsed.estimatedMonthlyContribution || existing.monthlyContribution,
+              openingBalance: reachesFurtherBack ? hist.openingBalance : existing.openingBalance,
+              openingDate: reachesFurtherBack ? hist.openingDate : existing.openingDate,
+              contributions: keepById(existing.contributions ?? [], hist.contributions),
+              withdrawals: keepById(existing.withdrawals ?? [], hist.withdrawals),
+              balanceHistory: mergedBalances,
+              rateHistory: mergedRates,
             }
             return { savingsAccounts: s.savingsAccounts.map((a) => a.id === existing.id ? updated : a) }
           }
+
           // Ny konto
           const typeMap: Record<string, SavingsAccount['type']> = {
             BSU: 'BSU', sparekonto: 'sparekonto', annet: 'annet',
@@ -672,16 +693,18 @@ export const useEconomyStore = create<EconomyState>()(
             type: typeMap[parsed.accountType] ?? 'sparekonto',
             label: parsed.accountLabel,
             accountNumber: parsed.accountNumber,
-            openingBalance: parsed.closingBalance,
-            openingDate: parsed.printDate,
+            openingBalance: hist.openingBalance,
+            openingDate: hist.openingDate,
             monthlyContribution: parsed.estimatedMonthlyContribution,
             interestCreditFrequency: parsed.accountType === 'BSU' ? 'yearly' : 'monthly',
-            rateHistory: parsed.estimatedAnnualInterestRate != null
-              ? [{ fromDate: parsed.printDate, rate: parsed.estimatedAnnualInterestRate }]
-              : [],
-            balanceHistory: [balEntry],
-            withdrawals: [],
-            contributions: [],
+            rateHistory: hist.rateHistory.length > 0
+              ? hist.rateHistory
+              : parsed.estimatedAnnualInterestRate != null
+                ? [{ fromDate: parsed.printDate, rate: parsed.estimatedAnnualInterestRate }]
+                : [],
+            balanceHistory: hist.balanceHistory,
+            withdrawals: hist.withdrawals,
+            contributions: hist.contributions,
             ...(parsed.accountType === 'BSU' ? { maxYearlyContribution: 27500, maxTotalBalance: 300000 } : {}),
           }
           return { savingsAccounts: [...s.savingsAccounts, newAccount] }

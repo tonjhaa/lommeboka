@@ -23,9 +23,14 @@ import { BSU_MAX_YEARLY, BSU_MAX_TOTAL } from '@/config/economy.config'
  */
 export function computeEffectiveBalance(account: SavingsAccount, asOf: Date = new Date()): number {
   const asOfISO = asOf.toISOString().split('T')[0]
-  const sortedHistory = [...account.balanceHistory].sort((a, b) =>
-    a.year !== b.year ? a.year - b.year : a.month - b.month
-  )
+  // Bare saldopunkt som ligger på eller før `asOf` er gyldige å regne fra.
+  // Uten dette filteret ville et saldopunkt fra i dag blitt brukt som
+  // utgangspunkt også for historiske måneder, og hele historikken ville
+  // vist dagens saldo.
+  const asOfYM = asOf.getFullYear() * 12 + (asOf.getMonth() + 1)
+  const sortedHistory = [...account.balanceHistory]
+    .filter((b) => b.year * 12 + b.month <= asOfYM)
+    .sort((a, b) => (a.year !== b.year ? a.year - b.year : a.month - b.month))
   const lastEntry = sortedHistory.at(-1)
   let base: number
   let afterISO: string
