@@ -112,6 +112,27 @@ export function projectBalanceMonthly(
 /**
  * Sum av innskudd for en gitt måned (year + month).
  */
+/**
+ * Fantes kontoen ved utgangen av denne måneden?
+ *
+ * Månedsoversikten strekker seg så langt tilbake som den eldste kontoen rekker.
+ * Uten denne sjekken vises yngre kontoer med «0 kr» — eller, i årsraden, med
+ * dagens startsaldo — for år de ikke eksisterte i.
+ */
+export function accountExistsAt(
+  account: Pick<SavingsAccount, 'openingDate'>,
+  year: number,
+  month: number,
+): boolean {
+  return account.openingDate.slice(0, 7) <= `${year}-${String(month).padStart(2, '0')}`
+}
+
+/** Som accountExistsAt, men for en fri startdato (fondsportefølje o.l.) */
+export function existsAt(startDate: string | undefined, year: number, month: number): boolean {
+  if (!startDate) return true
+  return startDate.slice(0, 7) <= `${year}-${String(month).padStart(2, '0')}`
+}
+
 export function computeMonthContributions(account: SavingsAccount, year: number, month: number): number {
   return (account.contributions ?? [])
     .filter((c) => {

@@ -29,6 +29,8 @@ import {
   computeAccountHistory,
   getEffectiveRateFromTiers,
   getActiveTiersForDate,
+  accountExistsAt,
+  existsAt,
 } from '@/domain/economy/savingsCalculator'
 import { calcMaxPurchase, BSU_MAX_TOTAL } from '@/hooks/useVeikart'
 import { defaultConfig } from '@/config/default.config'
@@ -903,7 +905,8 @@ function MånedsoversiktTable({
           }
         }
         runningBals[j] = bal
-        return { id: acc.id, balance: bal, contribution: contrib, overrideKey, interest }
+        // Fremtidsrader gjelder alltid kontoer som finnes i dag
+        return { id: acc.id, balance: bal, contribution: contrib, overrideKey, interest, exists: true }
       })
 
       // Fond — basert på faktiske snapshots, ingen automatisk avkastning
@@ -1047,6 +1050,8 @@ function MånedsoversiktTable({
         fondBalance: fondBal,
         fondContrib: Math.round(effectiveFondMnd),
         fondInterest: Math.round(fondInterest),
+        fondExists: true,
+        fondBalanceKnown: true,
         fondPeriod: activeFondPeriod,
         partnerAccBalances,
         partnerBsuBalance: partnerBsuBal,
@@ -1098,6 +1103,7 @@ function MånedsoversiktTable({
     // antatt vekst bakover i tid mellom snapshots, kun ekte datapunkter.
     let fondCarry = 0
     let fondContribSinceSnapshot = 0
+    let fondSnapshotSeen = false
 
     while (y < currentYear || (y === currentYear && m < currentMonth)) {
       const accountBalances = accounts.map((acc, idx) => {
@@ -1108,13 +1114,18 @@ function MånedsoversiktTable({
           contribution: entry?.contribution ?? 0,
           overrideKey: `${acc.id}-${y}-${m}`,
           interest: entry?.interest ?? 0,
+          exists: accountExistsAt(acc, y, m),
         }
       })
 
       let fondBalance = 0
       let fondContrib = 0
       let fondInterest = 0
-      if (fondPortfolio) {
+      // Fondet fantes ikke før startDate — uten denne sjekken projiseres dagens
+      // faste månedssparing bakover og gir «innskudd» i år fondet ikke eksisterte,
+      // samtidig som saldoen står på 0.
+      const fondExists = existsAt(fondPortfolio?.startDate, y, m)
+      if (fondPortfolio && fondExists) {
         const ym = `${y}-${String(m).padStart(2, '0')}`
         const snapshot = fondPortfolio.snapshots?.find(s => s.date.slice(0, 7) === ym)
         fondContrib = getFondContribForMonth(fondPortfolio, y, m)
@@ -1123,9 +1134,14 @@ function MånedsoversiktTable({
           fondInterest = Math.round(snapshot.totalValue - fondCarry - fondContribSinceSnapshot)
           fondCarry = snapshot.totalValue
           fondContribSinceSnapshot = 0
+          fondSnapshotSeen = true
         }
         fondBalance = fondCarry
       }
+      // Innskuddene kjenner vi fra spareplanen, men verdien gjør vi ikke før
+      // første snapshot — vi antar bevisst ingen vekst bakover. «0 kr» ville
+      // påstått at fondet var verdiløst; det riktige er at vi ikke vet.
+      const fondBalanceKnown = fondExists && fondSnapshotSeen
 
       rows.push({
         year: y,
@@ -1134,6 +1150,8 @@ function MånedsoversiktTable({
         fondBalance,
         fondContrib,
         fondInterest,
+        fondExists,
+        fondBalanceKnown,
         fondPeriod: null,
         partnerAccBalances: partnerAccMeta.map(acc => ({
           id: acc.id, balance: 0, contribution: 0, overrideKey: `p-${acc.id}-${y}-${m}`, interest: 0,
@@ -1515,15 +1533,35 @@ function MånedsoversiktTable({
             const yearData = allRows.filter(r => r.year === year)
             const isFirstYear = year === years[0]
             const isCurrentYear = year === now.getFullYear()
+            // En kollapset årsrad er en oppsummeringslinje, ikke en seksjonsoverskrift.
+            // Med ti år historikk utgjør de nesten hele tabellen, så de får lettere
+            // vekt; en utvidet årsrad innleder faktisk en blokk med måneder og
+            // beholder den tyngre behandlingen.
+            const isCollapsed = collapsedYears.has(year)
+            const yearCellDensity = isCollapsed ? 'py-1 font-medium text-xs' : 'py-2 font-semibold'
             const prevYearRows = isFirstYear ? [] : allRows.filter(r => r.year === year - 1)
             const prevYearLast = prevYearRows[prevYearRows.length - 1]
+            // Partnerdata beregnes ikke bakover i tid (pastRows nullstiller dem, og
+            // månedsradene viser derfor «—»). Årsraden må si det samme, ellers leser
+            // et «0 kr» som at partneren faktisk hadde null på konto det året.
+            const prevYearIsPast = prevYearLast?.isPast ?? true
             return (
               <Fragment key={year}>
                 {/* Year row: første år = startsaldo (redigerbar); påfølgende år = forrige år summary */}
-                <tr className="bg-muted [&>td]:border-y-2 [&>td]:border-border">
+                <tr className={cn(
+                  'hover:bg-muted/60 transition-colors',
+                  isCollapsed
+                    ? 'bg-muted/25 [&>td]:border-b [&>td]:border-border/40'
+                    : 'bg-muted [&>td]:border-y-2 [&>td]:border-border',
+                )}>
                   <td
-                    className="sticky left-0 bg-muted px-3 py-2 font-bold text-sm border-r border-border whitespace-nowrap cursor-pointer select-none hover:text-primary transition-colors"
-                    title={collapsedYears.has(year) ? 'Vis månedene' : 'Skjul månedene'}
+                    className={cn(
+                      'sticky left-0 px-3 border-r border-border whitespace-nowrap cursor-pointer select-none hover:text-primary transition-colors',
+                      isCollapsed
+                        ? 'bg-muted/25 py-1 font-medium text-xs text-muted-foreground'
+                        : 'bg-muted py-2 font-bold text-sm',
+                    )}
+                    title={isCollapsed ? 'Vis månedene' : 'Skjul månedene'}
                     onClick={() => setCollapsedYears(prev => {
                       const next = new Set(prev)
                       if (next.has(year)) next.delete(year)
@@ -1532,8 +1570,8 @@ function MånedsoversiktTable({
                     })}
                   >
                     <span className="inline-flex items-center gap-1">
-                      {collapsedYears.has(year)
-                        ? <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                      {isCollapsed
+                        ? <ChevronRight className="h-3 w-3 shrink-0 opacity-60" />
                         : <ChevronDown className="h-3.5 w-3.5 shrink-0" />}
                       {year}
                     </span>
@@ -1556,6 +1594,10 @@ function MånedsoversiktTable({
                       )
                     }
                     const rawAcc = accounts.find(a => a.id === acc.id)
+                    // Skjul kontoen i år den ikke fantes i det hele tatt. Merk at vi
+                    // måler mot slutten av året, ikke starten: i kontoens FØRSTE år er
+                    // inngående saldo nettopp startsaldoen, og den skal vises.
+                    const existedAtYearStart = rawAcc ? accountExistsAt(rawAcc, year, 12) : true
                     const openingBal = isFirstYear
                       ? (rawAcc ? Math.round(computeEffectiveBalance(rawAcc, new Date(year - 1, 11, 31, 12))) : 0)
                       : prevYearLast?.accountBalances.find(a => a.id === acc.id)?.balance ?? 0
@@ -1563,15 +1605,24 @@ function MånedsoversiktTable({
                     const prevInnskudd = isFirstYear ? 0 : Math.round(prevYearRows.reduce((s, r) => s + (r.accountBalances.find(a => a.id === acc.id)?.contribution ?? 0), 0))
                     return (
                       <td key={acc.id} colSpan={2} className="border-r border-border p-0">
-                        <div className="grid grid-cols-[6rem_1fr] items-baseline">
-                          <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
-                            {prevInnskudd > 0 ? prevInnskudd.toLocaleString('no-NO') : '—'}
+                        <div className={cn('grid grid-cols-[6rem_1fr] items-baseline', isCollapsed ? 'text-xs' : '')}>
+                          <span className={cn('flex-1 px-3 text-right tabular-nums text-muted-foreground', isCollapsed ? 'py-1' : 'py-2')}>
+                            {existedAtYearStart && prevInnskudd > 0 ? prevInnskudd.toLocaleString('no-NO') : '—'}
                           </span>
-                          <span className="flex-1 px-3 py-2 text-right font-semibold whitespace-nowrap flex items-baseline justify-end">
-                            <span>{fmtNOK(openingBal)}</span>
-                            <span className="text-[10px] text-green-400/80 ml-1 min-w-[3.5rem] text-right shrink-0">
-                              {prevRente > 0 ? `(+${prevRente.toLocaleString('no-NO')})` : ''}
-                            </span>
+                          <span className={cn(
+                            'flex-1 px-3 text-right whitespace-nowrap flex items-baseline justify-end',
+                            isCollapsed ? 'py-1 font-medium' : 'py-2 font-semibold',
+                          )}>
+                            {existedAtYearStart ? (
+                              <>
+                                <span>{fmtNOK(openingBal)}</span>
+                                <span className="text-[10px] text-green-400/80 ml-1 min-w-[3.5rem] text-right shrink-0">
+                                  {prevRente > 0 ? `(+${prevRente.toLocaleString('no-NO')})` : ''}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-muted-foreground/40" title="Kontoen fantes ikke ennå">—</span>
+                            )}
                           </span>
                         </div>
                       </td>
@@ -1595,19 +1646,29 @@ function MånedsoversiktTable({
                       )
                     }
                     const fondOpening = isFirstYear ? 0 : prevYearLast?.fondBalance ?? 0
+                    const fondOpeningKnown = !isFirstYear && (prevYearLast?.fondBalanceKnown ?? false)
                     const prevFondRente = Math.round(prevYearRows.reduce((s, r) => s + r.fondInterest, 0))
                     const prevFondInnskudd = Math.round(prevYearRows.reduce((s, r) => s + r.fondContrib, 0))
                     return (
                       <td colSpan={2} className="border-r border-border p-0">
-                        <div className="grid grid-cols-[6rem_1fr] items-baseline">
-                          <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
+                        <div className={cn('grid grid-cols-[6rem_1fr] items-baseline', isCollapsed && 'text-xs')}>
+                          <span className={cn('flex-1 px-3 text-right tabular-nums text-muted-foreground', isCollapsed ? 'py-1' : 'py-2')}>
                             {prevFondInnskudd > 0 ? prevFondInnskudd.toLocaleString('no-NO') : '—'}
                           </span>
-                          <span className="flex-1 px-3 py-2 text-right text-teal-400 font-semibold whitespace-nowrap flex items-baseline justify-end">
-                            <span>{fmtNOK(fondOpening)}</span>
-                            <span className="text-[10px] text-green-400/80 ml-1 min-w-[3.5rem] text-right shrink-0">
-                              {prevFondRente > 0 ? `(+${prevFondRente.toLocaleString('no-NO')})` : ''}
-                            </span>
+                          <span className={cn(
+                            'flex-1 px-3 text-right text-teal-400 whitespace-nowrap flex items-baseline justify-end',
+                            isCollapsed ? 'py-1 font-medium' : 'py-2 font-semibold',
+                          )}>
+                            {fondOpeningKnown ? (
+                              <>
+                                <span>{fmtNOK(fondOpening)}</span>
+                                <span className="text-[10px] text-green-400/80 ml-1 min-w-[3.5rem] text-right shrink-0">
+                                  {prevFondRente > 0 ? `(+${prevFondRente.toLocaleString('no-NO')})` : ''}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-muted-foreground/40" title="Ukjent verdi — ingen fondssnapshot så langt tilbake">—</span>
+                            )}
                           </span>
                         </div>
                       </td>
@@ -1651,10 +1712,14 @@ function MånedsoversiktTable({
                             {prevBsuInnskudd > 0 ? prevBsuInnskudd.toLocaleString('no-NO') : '—'}
                           </span>
                           <span className="flex-1 px-3 py-2 text-right text-violet-300 font-semibold whitespace-nowrap flex items-baseline justify-end">
-                            <span>{fmtNOK(bsuOpening)}</span>
-                            <span className="text-[10px] text-green-400/80 ml-1 min-w-[3.5rem] text-right shrink-0">
-                              {prevBsuRente > 0 ? `(+${prevBsuRente.toLocaleString('no-NO')})` : ''}
-                            </span>
+                            {prevYearIsPast ? <span className="text-muted-foreground/40">—</span> : (
+                              <>
+                                <span>{fmtNOK(bsuOpening)}</span>
+                                <span className="text-[10px] text-green-400/80 ml-1 min-w-[3.5rem] text-right shrink-0">
+                                  {prevBsuRente > 0 ? `(+${prevBsuRente.toLocaleString('no-NO')})` : ''}
+                                </span>
+                              </>
+                            )}
                           </span>
                         </div>
                       </td>
@@ -1685,7 +1750,9 @@ function MånedsoversiktTable({
                           <span className="flex-1 px-3 py-2 text-right tabular-nums text-muted-foreground">
                             {prevFondInnskudd > 0 ? prevFondInnskudd.toLocaleString('no-NO') : '—'}
                           </span>
-                          <span className="flex-1 px-3 py-2 text-right text-violet-300 font-semibold whitespace-nowrap">{fmtNOK(fondOpening)}</span>
+                          <span className="flex-1 px-3 py-2 text-right text-violet-300 font-semibold whitespace-nowrap">
+                            {prevYearIsPast ? <span className="text-muted-foreground/40">—</span> : fmtNOK(fondOpening)}
+                          </span>
                         </div>
                       </td>
                     )
@@ -1717,24 +1784,34 @@ function MånedsoversiktTable({
                             {prevInnskudd > 0 ? prevInnskudd.toLocaleString('no-NO') : '—'}
                           </span>
                           <span className="flex-1 px-3 py-2 text-right text-violet-300 font-semibold whitespace-nowrap flex items-baseline justify-end">
-                            <span>{fmtNOK(openingBal)}</span>
-                            <span className="text-[10px] text-green-400/80 ml-1 min-w-[3.5rem] text-right shrink-0">
-                              {prevRente > 0 ? `(+${prevRente.toLocaleString('no-NO')})` : ''}
-                            </span>
+                            {prevYearIsPast ? <span className="text-muted-foreground/40">—</span> : (
+                              <>
+                                <span>{fmtNOK(openingBal)}</span>
+                                <span className="text-[10px] text-green-400/80 ml-1 min-w-[3.5rem] text-right shrink-0">
+                                  {prevRente > 0 ? `(+${prevRente.toLocaleString('no-NO')})` : ''}
+                                </span>
+                              </>
+                            )}
                           </span>
                         </div>
                       </td>
                     )
                   })}
                   {/* Summary columns: show previous year-end values (= this year's opening EK/debt/kjøpekraft) */}
-                  <td className="px-2 py-2 text-right font-mono text-red-400/50 font-semibold border-l-2 border-l-red-400/20 border-r border-border whitespace-nowrap">{prevYearLast?.myDebtBalance ? '-' + fmtNOK(prevYearLast.myDebtBalance) : '—'}</td>
-                  {hasPartner && <td className="px-2 py-2 text-right font-mono text-red-400/50 font-semibold border-r border-border whitespace-nowrap">{prevYearLast?.partnerDebtBalance ? '-' + fmtNOK(prevYearLast.partnerDebtBalance) : '—'}</td>}
-                  <td className="px-2 py-2 text-right font-mono text-red-400/70 font-semibold border-r-2 border-r-red-400/30 whitespace-nowrap">{prevYearLast?.debtBalance ? '-' + fmtNOK(prevYearLast.debtBalance) : '—'}</td>
-                  <td className="px-3 py-2 text-right font-mono text-green-400 font-semibold border-l-2 border-l-green-400/20 border-r border-border whitespace-nowrap">{prevYearLast?.maxKjøpesum ? fmtNOK(prevYearLast.maxKjøpesum) : '—'}</td>
-                  {myAnnualIncome > 0 && <td className="px-3 py-2 text-right font-mono text-green-400/70 font-semibold border-r border-border whitespace-nowrap">{prevYearLast?.maxKjøpesumMeg ? fmtNOK(prevYearLast.maxKjøpesumMeg) : '—'}</td>}
-                  {hasPartner && partnerOnlyAnnualIncome > 0 && <td className="px-3 py-2 text-right font-mono text-violet-400/70 font-semibold whitespace-nowrap">{prevYearLast?.maxKjøpesumPartner ? fmtNOK(prevYearLast.maxKjøpesumPartner) : '—'}</td>}
-                  <td className="sticky right-0 z-10 bg-muted px-3 py-2 text-right font-mono text-blue-400 font-semibold border-l-2 border-l-blue-400/30 whitespace-nowrap">
-                    {prevYearLast ? fmtNOK(prevYearLast.totalEK) : '—'}
+                  <td className={cn('px-2 text-right font-mono text-red-400/50 border-l-2 border-l-red-400/20 border-r border-border whitespace-nowrap', yearCellDensity)}>{prevYearLast?.myDebtBalance ? '-' + fmtNOK(prevYearLast.myDebtBalance) : '—'}</td>
+                  {hasPartner && <td className={cn('px-2 text-right font-mono text-red-400/50 border-r border-border whitespace-nowrap', yearCellDensity)}>{prevYearLast?.partnerDebtBalance ? '-' + fmtNOK(prevYearLast.partnerDebtBalance) : '—'}</td>}
+                  <td className={cn('px-2 text-right font-mono text-red-400/70 border-r-2 border-r-red-400/30 whitespace-nowrap', yearCellDensity)}>{prevYearLast?.debtBalance ? '-' + fmtNOK(prevYearLast.debtBalance) : '—'}</td>
+                  <td className={cn('px-3 text-right font-mono text-green-400 border-l-2 border-l-green-400/20 border-r border-border whitespace-nowrap', yearCellDensity)}>{prevYearLast?.maxKjøpesum ? fmtNOK(prevYearLast.maxKjøpesum) : '—'}</td>
+                  {myAnnualIncome > 0 && <td className={cn('px-3 text-right font-mono text-green-400/70 border-r border-border whitespace-nowrap', yearCellDensity)}>{prevYearLast?.maxKjøpesumMeg ? fmtNOK(prevYearLast.maxKjøpesumMeg) : '—'}</td>}
+                  {hasPartner && partnerOnlyAnnualIncome > 0 && <td className={cn('px-3 text-right font-mono text-violet-400/70 whitespace-nowrap', yearCellDensity)}>{prevYearLast?.maxKjøpesumPartner ? fmtNOK(prevYearLast.maxKjøpesumPartner) : '—'}</td>}
+                  <td className={cn(
+                    'sticky right-0 z-10 px-3 text-right font-mono text-blue-400 border-l-2 border-l-blue-400/30 whitespace-nowrap',
+                    isCollapsed ? 'bg-muted/25 py-1 font-medium text-xs' : 'bg-muted py-2 font-semibold',
+                  )}>
+                    {/* EK/gjeld/kjøpekraft beregnes ikke for passerte måneder (pastRows
+                        nullstiller dem), så et «0 kr» her ville lest som «null i egenkapital»
+                        i stedet for «ikke beregnet» — samme grunn som nabokolonnene viser «—». */}
+                    {prevYearLast?.totalEK ? fmtNOK(prevYearLast.totalEK) : '—'}
                     <span className="block text-[9px] font-sans font-normal text-muted-foreground">inngående</span>
                   </td>
                 </tr>
@@ -1767,7 +1844,9 @@ function MånedsoversiktTable({
                         <td key={acc.id} colSpan={2} className="border-r border-border p-0">
                           <div className="grid grid-cols-[6rem_1fr] items-center">
                             <span className="flex-1 px-3 py-1 flex items-center justify-end">
-                              {row.isPast ? (
+                              {!ab.exists ? (
+                                <span className="text-muted-foreground/40">—</span>
+                              ) : row.isPast ? (
                                 <span className="tabular-nums text-right text-muted-foreground">
                                   {Math.round(ab.contribution).toLocaleString('no-NO')}
                                 </span>
@@ -1781,10 +1860,16 @@ function MånedsoversiktTable({
                               )}
                             </span>
                             <span className="flex-1 px-3 py-1 flex items-baseline justify-end font-mono whitespace-nowrap">
-                              <span>{fmtNOK(ab.balance)}</span>
-                              <span className="text-[10px] text-green-400/60 ml-1 inline-block min-w-[3.5rem] text-right shrink-0">
-                                {ab.interest > 0 ? `(+${Math.round(ab.interest).toLocaleString('no-NO')})` : ''}
-                              </span>
+                              {ab.exists ? (
+                                <>
+                                  <span>{fmtNOK(ab.balance)}</span>
+                                  <span className="text-[10px] text-green-400/60 ml-1 inline-block min-w-[3.5rem] text-right shrink-0">
+                                    {ab.interest > 0 ? `(+${Math.round(ab.interest).toLocaleString('no-NO')})` : ''}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-muted-foreground/40" title="Kontoen fantes ikke ennå">—</span>
+                              )}
                             </span>
                           </div>
                         </td>
@@ -1794,7 +1879,9 @@ function MånedsoversiktTable({
                       <td colSpan={2} className="border-r border-border p-0">
                         <div className="grid grid-cols-[6rem_1fr] items-center">
                           <span className="flex-1 px-3 py-1 flex items-center justify-end">
-                            {row.isPast ? (
+                            {!row.fondExists ? (
+                              <span className="text-muted-foreground/40">—</span>
+                            ) : row.isPast ? (
                               <span className="tabular-nums text-right text-muted-foreground">
                                 {Math.round(row.fondContrib).toLocaleString('no-NO')}
                               </span>
@@ -1821,10 +1908,19 @@ function MånedsoversiktTable({
                             )}
                           </span>
                           <span className="flex-1 px-3 py-1 flex items-baseline justify-end font-mono text-teal-400 whitespace-nowrap">
-                            <span>{fmtNOK(row.fondBalance)}</span>
-                            <span className="text-[10px] text-green-400/60 ml-1 inline-block min-w-[3.5rem] text-right shrink-0">
-                              {row.fondInterest > 0 ? `(+${row.fondInterest.toLocaleString('no-NO')})` : ''}
-                            </span>
+                            {row.fondBalanceKnown ? (
+                              <>
+                                <span>{fmtNOK(row.fondBalance)}</span>
+                                <span className="text-[10px] text-green-400/60 ml-1 inline-block min-w-[3.5rem] text-right shrink-0">
+                                  {row.fondInterest > 0 ? `(+${row.fondInterest.toLocaleString('no-NO')})` : ''}
+                                </span>
+                              </>
+                            ) : (
+                              <span
+                                className="text-muted-foreground/40"
+                                title={row.fondExists ? 'Ukjent verdi — ingen fondssnapshot så langt tilbake' : 'Fondet fantes ikke ennå'}
+                              >—</span>
+                            )}
                           </span>
                         </div>
                       </td>
