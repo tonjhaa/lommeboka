@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ExternalLink, RefreshCw, Home } from 'lucide-react'
+import { ExternalLink, RefreshCw, Home, Sparkles } from 'lucide-react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { useBoligsokStore } from '@/store/useBoligsokStore'
-import type { BoligAnnonse, BoligsokStatus } from '@/types/boligsok'
+import type { AiAnbefaling, BoligAnnonse, BoligsokStatus } from '@/types/boligsok'
 
 function fmtNOK(n: number | null) {
   if (n == null) return '–'
@@ -25,6 +25,14 @@ const KILDE_LABELS: Record<BoligAnnonse['kilde'], string> = {
   hjem: 'hjem.no',
 }
 
+const ANBEFALING_RANK: Record<AiAnbefaling, number> = { anbefales: 0, vurder: 1, neppe: 2 }
+
+const ANBEFALING_META: Record<AiAnbefaling, { label: string; variant: 'success' | 'warning' | 'muted' }> = {
+  anbefales: { label: 'Anbefales', variant: 'success' },
+  vurder: { label: 'Verdt å vurdere', variant: 'warning' },
+  neppe: { label: 'Neppe aktuell', variant: 'muted' },
+}
+
 function KravBadge({ oppfylt, label }: { oppfylt: boolean; label: string }) {
   return (
     <Badge variant={oppfylt ? 'success' : 'muted'} className={cn(!oppfylt && 'opacity-60')}>
@@ -40,16 +48,17 @@ function AnnonseCard({ annonse }: { annonse: BoligAnnonse }) {
 
   const pris = annonse.totalpris ?? annonse.prisantydning
   const areal = annonse.primaerrom_m2 ?? annonse.bruksareal_m2
+  const anbefaling = ANBEFALING_META[annonse.ai_anbefaling]
 
   return (
-    <Card className={cn(annonse.oppfyller_krav && 'border-success/50')}>
+    <Card className={cn(annonse.ai_anbefaling === 'anbefales' && 'border-success/50')}>
       <CardHeader className="p-4 pb-0">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-base font-semibold truncate">{annonse.tittel ?? 'Uten tittel'}</h3>
               <Badge variant="outline">{KILDE_LABELS[annonse.kilde]}</Badge>
-              {annonse.oppfyller_krav && <Badge variant="success">Oppfyller alle krav</Badge>}
+              <Badge variant={anbefaling.variant}>{anbefaling.label}</Badge>
             </div>
             <p className="text-sm text-muted-foreground truncate">
               {[annonse.adresse, annonse.bydel].filter(Boolean).join(', ') || 'Ukjent adresse'}
@@ -67,6 +76,13 @@ function AnnonseCard({ annonse }: { annonse: BoligAnnonse }) {
       </CardHeader>
 
       <CardContent className="p-4 pt-3 space-y-3">
+        {annonse.ai_vurdering && (
+          <p className="flex gap-2 text-sm bg-muted/40 rounded-md px-3 py-2">
+            <Sparkles className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
+            <span>{annonse.ai_vurdering}</span>
+          </p>
+        )}
+
         <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
           <span className="font-medium">{fmtNOK(pris)}</span>
           {annonse.soverom != null && <span className="text-muted-foreground">{annonse.soverom} soverom</span>}
@@ -118,6 +134,8 @@ function AnnonseCard({ annonse }: { annonse: BoligAnnonse }) {
   )
 }
 
+type Visfilter = 'alle' | 'anbefales' | 'vurder'
+
 export function BoligsokPage() {
   const annonser = useBoligsokStore((s) => s.annonser)
   const loading = useBoligsokStore((s) => s.loading)
@@ -126,7 +144,7 @@ export function BoligsokPage() {
   const subscribe = useBoligsokStore((s) => s.subscribe)
   const unsubscribe = useBoligsokStore((s) => s.unsubscribe)
 
-  const [visFilter, setVisFilter] = useState<'alle' | 'krav'>('alle')
+  const [visFilter, setVisFilter] = useState<Visfilter>('alle')
 
   useEffect(() => {
     fetchAnnonser()
@@ -134,12 +152,23 @@ export function BoligsokPage() {
     return () => unsubscribe()
   }, [fetchAnnonser, subscribe, unsubscribe])
 
-  const filtrerte = useMemo(
-    () => (visFilter === 'krav' ? annonser.filter((a) => a.oppfyller_krav) : annonser),
-    [annonser, visFilter]
+  const sortert = useMemo(
+    () =>
+      [...annonser].sort((a, b) => {
+        const rankDiff = ANBEFALING_RANK[a.ai_anbefaling] - ANBEFALING_RANK[b.ai_anbefaling]
+        if (rankDiff !== 0) return rankDiff
+        return b.created_at.localeCompare(a.created_at)
+      }),
+    [annonser]
   )
 
-  const antallOppfyller = annonser.filter((a) => a.oppfyller_krav).length
+  const filtrerte = useMemo(() => {
+    if (visFilter === 'alle') return sortert
+    return sortert.filter((a) => a.ai_anbefaling === visFilter)
+  }, [sortert, visFilter])
+
+  const antallAnbefales = annonser.filter((a) => a.ai_anbefaling === 'anbefales').length
+  const antallVurder = annonser.filter((a) => a.ai_anbefaling === 'vurder').length
 
   return (
     <div className="flex-1 overflow-y-auto h-full">
@@ -150,8 +179,8 @@ export function BoligsokPage() {
               <Home className="h-5 w-5" /> Boligsøk
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Nye boligannonser fra dine lagrede søk på Finn.no, synkronisert automatisk hver morgen.
-              {annonser.length > 0 && ` ${antallOppfyller} av ${annonser.length} oppfyller alle krav.`}
+              Nye boligannonser fra dine lagrede søk, synkronisert automatisk hver morgen og vurdert av AI
+              — ikke bare harde filtre, men en faktisk lesning av annonsen.
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={() => fetchAnnonser()} disabled={loading}>
@@ -160,19 +189,14 @@ export function BoligsokPage() {
         </div>
 
         <div className="flex gap-2">
-          <Button
-            variant={visFilter === 'alle' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setVisFilter('alle')}
-          >
+          <Button variant={visFilter === 'alle' ? 'default' : 'outline'} size="sm" onClick={() => setVisFilter('alle')}>
             Alle ({annonser.length})
           </Button>
-          <Button
-            variant={visFilter === 'krav' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setVisFilter('krav')}
-          >
-            Oppfyller alle krav ({antallOppfyller})
+          <Button variant={visFilter === 'anbefales' ? 'default' : 'outline'} size="sm" onClick={() => setVisFilter('anbefales')}>
+            Anbefales ({antallAnbefales})
+          </Button>
+          <Button variant={visFilter === 'vurder' ? 'default' : 'outline'} size="sm" onClick={() => setVisFilter('vurder')}>
+            Verdt å vurdere ({antallVurder})
           </Button>
         </div>
 
@@ -181,7 +205,7 @@ export function BoligsokPage() {
         {!loading && filtrerte.length === 0 && (
           <div className="text-center py-12 text-sm text-muted-foreground">
             {annonser.length === 0
-              ? 'Ingen annonser ennå. De dukker opp her når det lagrede søket ditt på Finn.no finner nye treff og den daglige synkroniseringen har kjørt.'
+              ? 'Ingen annonser ennå. De dukker opp her når det lagrede søket ditt finner nye treff og den daglige synkroniseringen har kjørt.'
               : 'Ingen annonser matcher filteret.'}
           </div>
         )}

@@ -1,5 +1,6 @@
 export type BoligsokKilde = 'finn' | 'hjem'
 export type BoligsokStatus = 'ny' | 'sett' | 'interessant' | 'avslatt'
+export type AiAnbefaling = 'anbefales' | 'vurder' | 'neppe'
 
 export interface BoligAnnonse {
   id: string
@@ -23,6 +24,8 @@ export interface BoligAnnonse {
   boligtype: string | null
   byggeaar: number | null
   oppfyller_krav: boolean
+  ai_anbefaling: AiAnbefaling
+  ai_vurdering: string | null
   status: BoligsokStatus
   notat: string | null
   raw_snippet: string | null
