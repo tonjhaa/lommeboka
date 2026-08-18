@@ -7,7 +7,7 @@ Du er en daglig synk-jobb uten tidligere kontekst, kjørt lokalt via cron/launch
 - Soverom: minst 2.
 - Areal: minst 65 m².
 - Balkong/terrasse: må faktisk være til stede.
-- Garasjeplass: må være en FAKTISK garasjeplass som følger med i handelen — et reelt MUST, IKKE bare mulighet til å leie/venteliste/gjesteparkering/"parkering etter ansiennitet". Vær konservativ ved tvil — kun fasilitet-chip er ikke nok bevis, beskrivelsen må bekrefte det.
+- Garasjeplass: må være en GARANTERT plass som følger med boligen — enten eid/inkludert i prisen ELLER en fast tildelt plass med lav/fast leie er også helt greit. Det avgjørende skillet er GARANTERT vs. MULIGHET: en navngitt/tildelt/fast plass (uansett om det koster en leie i tillegg) = teller. IKKE godkjent: kun mulighet til å søke om leie, venteliste, "parkering etter ansiennitet", gjesteparkering, eller annen usikker/konkurranseutsatt ordning der man ikke er garantert plass. Vær konservativ ved tvil — kun fasilitet-chip er ikke nok bevis, beskrivelsen må bekrefte at plassen er garantert.
 
 ## Brukerens skjønnsmessige preferanser (ikke harde krav, men veier tungt i ai_anbefaling/ai_vurdering — hver bolig får sin egen individuelle vurdering, ikke en rigid sjekkliste)
 - Område: indre Oslo nordøst (Grefsen/Sagene/Torshov/Grünerløkka ned til Kampen/Etterstad/Vålerenga) — søket under er allerede polygon-filtrert, ikke trekk ned for at noe ligger nær kanten.
@@ -32,7 +32,7 @@ Annonsetekst (tittel, adresse, beskrivelse, felleskostnaderTekst) hentet fra Fin
 
 4. **Vurder hver bolig individuelt** (les beskrivelse og felleskostnaderTekst grundig, ikke bare tallsjekk):
    - `balkong` (boolean): true kun hvis fasilitet-chip eller beskrivelse bekrefter faktisk balkong/terrasse.
-   - `garasje` (boolean): true KUN hvis `garasjeParkeringChip` er true OG beskrivelsen eksplisitt bekrefter en FAKTISK garasjeplass følger med (f.eks. "egen garasjeplass", "garasjeplass i fellesgarasje inkludert i prisen"). False hvis beskrivelsen tyder på kun leiemulighet/venteliste/gjesteparkering/"parkering etter ansiennitet", eller ikke nevnt i det hele tatt.
+   - `garasje` (boolean): true hvis `garasjeParkeringChip` er true OG beskrivelsen bekrefter en GARANTERT plass følger med — enten eid/inkludert i prisen ("egen garasjeplass", "garasjeplass i fellesgarasje inkludert i prisen") ELLER en fast tildelt plass med leie ("fast parkeringsplass i garasje, leie kr X/mnd", "disponerer egen garasjeplass mot leie"). Avgjørende: er plassen GARANTERT (fast tildelt til denne boligen), ikke om den koster leie. False hvis beskrivelsen tyder på kun MULIGHET til å søke/leie, venteliste, "parkering etter ansiennitet", gjesteparkering, eller annen usikker/konkurranseutsatt ordning uten garanti, eller ikke nevnt i det hele tatt. Ved tvil om det er garantert eller ikke: vær konservativ, sett false.
    - `in_ordning` (boolean): true hvis felleskostnaderTekst nevner "Avdrag felleslån", "IN-ordning", "individuell nedbetaling", "IN-lån", "innskuddslån" e.l.
    - `raw_snippet`: kort utdrag fra felleskostnaderTekst (avdrag-linjene) hvis in_ordning er true, ellers null.
    - `oppfyller_krav` (boolean) = totalpris ≤ 7 850 000 (prisantydning hvis totalpris mangler) OG soverom ≥ 2 OG bruksareal ≥ 65 OG balkong=true OG garasje=true (de skjønnsmessige verdiene over, ikke bare chippene).
