@@ -154,6 +154,9 @@ function AnnonseCard({ annonse }: { annonse: BoligAnnonse }) {
 
 type Visfilter = 'alle' | 'anbefales' | 'vurder'
 
+const SOVEROM_OPTIONS = [0, 2, 3, 4] as const
+const AREAL_OPTIONS = [0, 65, 70, 80, 90] as const
+
 function StatTile({ label, value, active, accent, onClick }: { label: string; value: number; active: boolean; accent?: string; onClick: () => void }) {
   return (
     <button
@@ -180,6 +183,8 @@ export function BoligsokPage() {
   const unsubscribe = useBoligsokStore((s) => s.unsubscribe)
 
   const [visFilter, setVisFilter] = useState<Visfilter>('alle')
+  const [minSoverom, setMinSoverom] = useState(0)
+  const [minAreal, setMinAreal] = useState(0)
 
   useEffect(() => {
     fetchAnnonser()
@@ -198,9 +203,14 @@ export function BoligsokPage() {
   )
 
   const filtrerte = useMemo(() => {
-    if (visFilter === 'alle') return sortert
-    return sortert.filter((a) => a.ai_anbefaling === visFilter)
-  }, [sortert, visFilter])
+    return sortert.filter((a) => {
+      if (visFilter !== 'alle' && a.ai_anbefaling !== visFilter) return false
+      if (minSoverom > 0 && (a.soverom ?? 0) < minSoverom) return false
+      const areal = a.primaerrom_m2 ?? a.bruksareal_m2 ?? 0
+      if (minAreal > 0 && areal < minAreal) return false
+      return true
+    })
+  }, [sortert, visFilter, minSoverom, minAreal])
 
   const antallAnbefales = annonser.filter((a) => a.ai_anbefaling === 'anbefales').length
   const antallVurder = annonser.filter((a) => a.ai_anbefaling === 'vurder').length
@@ -218,6 +228,35 @@ export function BoligsokPage() {
         <StatTile label="Alle" value={annonser.length} active={visFilter === 'alle'} onClick={() => setVisFilter('alle')} />
         <StatTile label="Anbefales" value={antallAnbefales} active={visFilter === 'anbefales'} accent="#22c55e" onClick={() => setVisFilter('anbefales')} />
         <StatTile label="Verdt å vurdere" value={antallVurder} active={visFilter === 'vurder'} accent="#f59e0b" onClick={() => setVisFilter('vurder')} />
+      </div>
+
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Min. soverom</span>
+          <Select value={String(minSoverom)} onValueChange={(v) => setMinSoverom(Number(v))}>
+            <SelectTrigger className="h-7 w-20 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SOVEROM_OPTIONS.map((n) => (
+                <SelectItem key={n} value={String(n)}>{n === 0 ? 'Alle' : `${n}+`}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Min. areal</span>
+          <Select value={String(minAreal)} onValueChange={(v) => setMinAreal(Number(v))}>
+            <SelectTrigger className="h-7 w-24 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {AREAL_OPTIONS.map((n) => (
+                <SelectItem key={n} value={String(n)}>{n === 0 ? 'Alle' : `${n} m²`}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {error && <p className="text-sm text-destructive">Kunne ikke laste boligannonser: {error}</p>}
