@@ -74,6 +74,22 @@ function finnDevApi(): Plugin {
           }
         })()
       })
+      server.middlewares.use('/api/finn-search', (req, res) => {
+        void (async () => {
+          const url = new URL(req.url ?? '', 'http://localhost')
+          const page = parseInt(url.searchParams.get('page') ?? '1', 10)
+          const { fetchFinnSearchPage } = await import('./src/domain/finn/finnSearchParser')
+          res.setHeader('Content-Type', 'application/json')
+          try {
+            const data = await fetchFinnSearchPage(Number.isFinite(page) && page > 0 ? page : 1)
+            res.statusCode = 200
+            res.end(JSON.stringify(data))
+          } catch {
+            res.statusCode = 502
+            res.end(JSON.stringify({ error: 'Klarte ikke å hente søkeresultater fra FINN.' }))
+          }
+        })()
+      })
     },
   }
 }
