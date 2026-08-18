@@ -35,6 +35,22 @@ export interface FinnAdData {
   eieform: 'selveier' | 'andel' | 'aksje' | null
   /** Bruksareal (BRA) i m² */
   bruksareal: number | null
+  /** Antall soverom */
+  soverom: number | null
+  /** Rå fasilitet-chips fra "Fasiliteter"-seksjonen, f.eks. ["Balkong/Terrasse", "Garasje/P-plass", "Heis"] */
+  fasiliteter: string[]
+  /** Fasilitet-chip nevner balkong/terrasse */
+  balkong: boolean
+  /**
+   * Fasilitet-chip "Garasje/P-plass" er til stede. FINN skiller IKKE mellom faktisk
+   * garasje og ren (leie/venteliste-)parkeringsplass i denne chippen — bruk
+   * `beskrivelse` for å avgjøre hvilket av de to det faktisk er.
+   */
+  garasjeParkeringChip: boolean
+  /** Fritekst fra "Om boligen" — eneste pålitelige kilde til om en ev. garasje/p-plass faktisk følger med handelen */
+  beskrivelse: string | null
+  /** Fritekst fra "Felleskostnader inkluderer" — her fremgår ev. "Avdrag felleslån" (IN-ordning/individuell nedbetaling) */
+  felleskostnaderTekst: string | null
 }
 
 function escapeRegExp(s: string): string {
@@ -73,6 +89,27 @@ function parseEieform(text: string | null): FinnAdData['eieform'] {
   return null
 }
 
+const MAX_SECTION_TEXT_LENGTH = 4000
+
+/** Henter fritekst-innholdet under en <h2>-overskrift, avgrenset til seksjonen (</div></section>) */
+function sectionByHeading(html: string, heading: string): string | null {
+  const re = new RegExp(
+    `<h2[^>]*>\\s*${escapeRegExp(heading)}\\s*</h2>\\s*<div class="description-area[^>]*>([\\s\\S]*?)</div></section>`,
+    'i'
+  )
+  const m = html.match(re)
+  if (!m) return null
+  const text = stripTags(m[1]).trim()
+  return text ? text.slice(0, MAX_SECTION_TEXT_LENGTH) : null
+}
+
+/** Henter fasilitet-chips fra "Fasiliteter"-seksjonen */
+function parseFasiliteter(html: string): string[] {
+  const section = html.match(/data-testid="object-facilities">[\s\S]*?<div class="grid[^>]*>([\s\S]*?)<\/div><\/section>/i)
+  if (!section) return []
+  return [...section[1].matchAll(/<div class="py-4 break-words">([^<]*)<\/div>/g)].map((m) => m[1].trim())
+}
+
 function parseBoligtype(text: string | null): FinnAdData['boligtype'] {
   if (!text) return null
   const t = text.toLowerCase()
@@ -96,6 +133,7 @@ export function parseFinnAd(html: string, finnkode: string): FinnAdData {
     stripTags(html.match(/data-testid="object-address"[^>]*>([^<]+)/i)?.[1] ?? '') || null
 
   const eieformText = ddValue(html, 'Eieform') ?? ddValue(html, 'Eierform')
+  const fasiliteter = parseFasiliteter(html)
 
   return {
     finnkode,
@@ -111,7 +149,13 @@ export function parseFinnAd(html: string, finnkode: string): FinnAdData {
     boligtypeRaw: ddValue(html, 'Boligtype'),
     boligtype: parseBoligtype(ddValue(html, 'Boligtype')),
     eieform: parseEieform(eieformText),
-    bruksareal: parseNok(ddValue(html, 'Bruksareal')),
+    bruksareal: parseNok(ddValue(html, 'Bruksareal')) ?? parseNok(ddValue(html, 'Internt bruksareal')),
+    soverom: parseNok(ddValue(html, 'Soverom')),
+    fasiliteter,
+    balkong: fasiliteter.some((f) => /balkong|terrasse/i.test(f)),
+    garasjeParkeringChip: fasiliteter.some((f) => /garasje|p-plass/i.test(f)),
+    beskrivelse: sectionByHeading(html, 'Om boligen'),
+    felleskostnaderTekst: sectionByHeading(html, 'Felleskostnader inkluderer'),
   }
 }
 

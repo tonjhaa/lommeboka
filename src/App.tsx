@@ -33,6 +33,9 @@ const IVFPageTop = lazyWithRetry(() =>
 const CarLoanCalculatorPage = lazyWithRetry(() =>
   import('@/pages/CarLoanCalculatorPage').then((m) => ({ default: m.CarLoanCalculatorPage }))
 )
+const BoligsokPage = lazyWithRetry(() =>
+  import('@/pages/BoligsokPage').then((m) => ({ default: m.BoligsokPage }))
+)
 
 function PageFallback() {
   return (
@@ -73,6 +76,11 @@ function AppContent() {
         {currentView === 'billan' && (
           <Suspense fallback={<PageFallback />}>
             <CarLoanCalculatorPage />
+          </Suspense>
+        )}
+        {currentView === 'boligsok' && (
+          <Suspense fallback={<PageFallback />}>
+            <BoligsokPage />
           </Suspense>
         )}
       </div>
