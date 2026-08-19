@@ -2,6 +2,9 @@
 # Daglig lokal synk av boligsok_annonser. Kjøres av launchd (se boligsok-sync.plist).
 set -euo pipefail
 
+# launchd kjører uten brukerens vanlige PATH (source'r ikke .zshrc) — pek eksplisitt på claude-binæren.
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="$HOME/Library/Logs/boligsok-sync"
 mkdir -p "$LOG_DIR"

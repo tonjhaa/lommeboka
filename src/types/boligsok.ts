@@ -26,6 +26,7 @@ export interface BoligAnnonse {
   oppfyller_krav: boolean
   ai_anbefaling: AiAnbefaling
   ai_vurdering: string | null
+  aktiv: boolean
   status: BoligsokStatus
   notat: string | null
   raw_snippet: string | null

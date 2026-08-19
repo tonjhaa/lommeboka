@@ -73,13 +73,14 @@ function AnnonseCard({ annonse }: { annonse: BoligAnnonse }) {
   const ring = ANBEFALING_RING[annonse.ai_anbefaling]
 
   return (
-    <Card className="flex flex-col">
+    <Card className={cn('flex flex-col', !annonse.aktiv && 'opacity-50')}>
       <CardContent className="p-4 space-y-2.5 flex flex-col flex-1">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 min-w-0">
               <AnbefalingRing anbefaling={annonse.ai_anbefaling} />
               <h3 className="text-sm font-semibold truncate">{annonse.tittel ?? 'Uten tittel'}</h3>
+              {!annonse.aktiv && <span className="text-[10px] font-semibold uppercase tracking-wider text-destructive shrink-0">Solgt</span>}
             </div>
             <p className="text-xs text-muted-foreground truncate mt-0.5">
               {[annonse.adresse, annonse.bydel].filter(Boolean).join(', ') || 'Ukjent adresse'}
@@ -185,6 +186,7 @@ export function BoligsokPage() {
   const [visFilter, setVisFilter] = useState<Visfilter>('alle')
   const [minSoverom, setMinSoverom] = useState(0)
   const [minAreal, setMinAreal] = useState(0)
+  const [visSolgte, setVisSolgte] = useState(false)
 
   useEffect(() => {
     fetchAnnonser()
@@ -204,16 +206,20 @@ export function BoligsokPage() {
 
   const filtrerte = useMemo(() => {
     return sortert.filter((a) => {
+      if (!visSolgte && !a.aktiv) return false
       if (visFilter !== 'alle' && a.ai_anbefaling !== visFilter) return false
       if (minSoverom > 0 && (a.soverom ?? 0) < minSoverom) return false
       const areal = a.primaerrom_m2 ?? a.bruksareal_m2 ?? 0
       if (minAreal > 0 && areal < minAreal) return false
       return true
     })
-  }, [sortert, visFilter, minSoverom, minAreal])
+  }, [sortert, visFilter, minSoverom, minAreal, visSolgte])
 
-  const antallAnbefales = annonser.filter((a) => a.ai_anbefaling === 'anbefales').length
-  const antallVurder = annonser.filter((a) => a.ai_anbefaling === 'vurder').length
+  const antallSolgte = annonser.filter((a) => !a.aktiv).length
+  const aktive = annonser.filter((a) => a.aktiv)
+
+  const antallAnbefales = aktive.filter((a) => a.ai_anbefaling === 'anbefales').length
+  const antallVurder = aktive.filter((a) => a.ai_anbefaling === 'vurder').length
 
   return (
     <div className="p-4 space-y-4 overflow-y-auto h-full">
@@ -225,7 +231,7 @@ export function BoligsokPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <StatTile label="Alle" value={annonser.length} active={visFilter === 'alle'} onClick={() => setVisFilter('alle')} />
+        <StatTile label="Alle" value={aktive.length} active={visFilter === 'alle'} onClick={() => setVisFilter('alle')} />
         <StatTile label="Anbefales" value={antallAnbefales} active={visFilter === 'anbefales'} accent="#22c55e" onClick={() => setVisFilter('anbefales')} />
         <StatTile label="Verdt å vurdere" value={antallVurder} active={visFilter === 'vurder'} accent="#f59e0b" onClick={() => setVisFilter('vurder')} />
       </div>
@@ -257,6 +263,14 @@ export function BoligsokPage() {
             </SelectContent>
           </Select>
         </div>
+        {antallSolgte > 0 && (
+          <button
+            onClick={() => setVisSolgte((v) => !v)}
+            className="text-[11px] text-muted-foreground hover:text-foreground ml-auto"
+          >
+            {visSolgte ? 'Skjul' : 'Vis'} solgte ({antallSolgte})
+          </button>
+        )}
       </div>
 
       {error && <p className="text-sm text-destructive">Kunne ikke laste boligannonser: {error}</p>}
