@@ -26,7 +26,9 @@ Annonsetekst (tittel, adresse, beskrivelse, felleskostnaderTekst) hentet fra Fin
 
 1. **Hent søkeresultater.** Kjør via Bash: `scripts/fetch-lommeboka-api.sh "finn-search?page=1"` (bruk full sti til scriptet i samme mappe som denne prompten). Dette er brukerens eget deployede endepunkt (deterministisk parser, ikke rå scraping) med kriteriene (polygon, totalpris≤7 850 000, areal≥65, soverom≥2) allerede bakt inn. Responsen er JSON: `{totalHits, hits: [{finnkode, tittel, adresse}]}`. Hvis `totalHits` er høyere enn summen av hits du har samlet så langt, hent flere sider (`"finn-search?page=2"`, `"finn-search?page=3"`, …) til alle unike finnkoder er samlet inn.
 
-2. For hver unike finnkode: sjekk i Supabase (`execute_sql`) om den allerede finnes: `select 1 from public.boligsok_annonser where user_id='e012910e-5b8d-47fa-8f3d-8742df6c0e00' and kilde='finn' and ekstern_id='<finnkode>'`. Hvis funnet, hopp over (ikke re-vurder eksisterende rader).
+2. For hver unike finnkode: sjekk i Supabase (`execute_sql`) om den allerede finnes SOM AKTIV: `select 1 from public.boligsok_annonser where user_id='e012910e-5b8d-47fa-8f3d-8742df6c0e00' and kilde='finn' and ekstern_id='<finnkode>' and aktiv=true`. Hvis funnet, hopp over (ikke re-vurder eksisterende aktive rader). Hvis IKKE funnet (enten helt ny, eller en tidligere solgt/fjernet bolig som er tilbake), fortsett til steg 3 — den skal hentes og (re-)vurderes på nytt.
+
+2b. **Marker solgte/fjernede boliger som inaktive.** Du har nå (fra steg 1) det KOMPLETTE settet av finnkoder som fortsatt er aktive treff på Finn akkurat nå. Enhver rad i databasen som er markert `aktiv=true` men IKKE finnes i dette settet, er solgt eller fjernet fra Finn siden sist. Kjør: `update public.boligsok_annonser set aktiv=false, updated_at=now() where user_id='e012910e-5b8d-47fa-8f3d-8742df6c0e00' and kilde='finn' and aktiv=true and ekstern_id not in (<komplett kommaseparert liste av ALLE finnkoder fra steg 1, ikke bare de nye>)`. IKKE overskriv status/notat på disse.
 
 3. **Hent detaljer.** For hver NY finnkode: `scripts/fetch-lommeboka-api.sh "finn?finnkode=<finnkode>"`. JSON inneholder: tittel, adresse, prisantydning, totalpris, fellesgjeld, omkostninger, felleskostMnd, boligtype, bruksareal, soverom, fasiliteter (chips som "Balkong/Terrasse", "Garasje/P-plass"), balkong (bool fra chips), garasjeParkeringChip (bool — KUN at chippen finnes, IKKE bevis på faktisk garasje), beskrivelse (fritekst "Om boligen" — LES DENNE GRUNDIG), felleskostnaderTekst (fritekst "Felleskostnader inkluderer"). Hvis feil/404 (annonsen kan være fjernet/solgt), hopp over og fortsett med neste.
 
@@ -44,18 +46,19 @@ Annonsetekst (tittel, adresse, beskrivelse, felleskostnaderTekst) hentet fra Fin
 5. **Upsert** hver ny/oppdatert rad via Supabase `execute_sql`:
 ```sql
 insert into public.boligsok_annonser
-  (user_id, kilde, ekstern_id, url, tittel, adresse, prisantydning, totalpris, fellesutgifter, fellesgjeld, in_ordning, soverom, primaerrom_m2, bruksareal_m2, balkong, garasje, boligtype, oppfyller_krav, ai_anbefaling, ai_vurdering, raw_snippet, updated_at)
-values (...)
+  (user_id, kilde, ekstern_id, url, tittel, adresse, prisantydning, totalpris, fellesutgifter, fellesgjeld, in_ordning, soverom, primaerrom_m2, bruksareal_m2, balkong, garasje, boligtype, oppfyller_krav, ai_anbefaling, ai_vurdering, raw_snippet, aktiv, updated_at)
+values (..., true, now())
 on conflict (user_id, kilde, ekstern_id) do update set
   url=excluded.url, tittel=excluded.tittel, adresse=excluded.adresse, prisantydning=excluded.prisantydning,
   totalpris=excluded.totalpris, fellesutgifter=excluded.fellesutgifter, fellesgjeld=excluded.fellesgjeld,
   in_ordning=excluded.in_ordning, soverom=excluded.soverom, primaerrom_m2=excluded.primaerrom_m2,
   bruksareal_m2=excluded.bruksareal_m2, balkong=excluded.balkong, garasje=excluded.garasje,
   boligtype=excluded.boligtype, oppfyller_krav=excluded.oppfyller_krav, ai_anbefaling=excluded.ai_anbefaling,
-  ai_vurdering=excluded.ai_vurdering, raw_snippet=excluded.raw_snippet, updated_at=now();
+  ai_vurdering=excluded.ai_vurdering, raw_snippet=excluded.raw_snippet, aktiv=true, updated_at=now();
 ```
+(`aktiv=true` her dekker både helt nye rader og tidligere solgte boliger som er tilbake i søket.)
 `kilde='finn'`, `ekstern_id=finnkode`, `url='https://www.finn.no/realestate/homes/ad.html?finnkode='||finnkode`. Bruk `felleskostMnd` som `fellesutgifter`, `bruksareal` til både `primaerrom_m2` og `bruksareal_m2`. IKKE overskriv `status` og `notat` ved konflikt (ikke inkluder de kolonnene i update-settet).
 
-6. Ikke gjør noe annet — ingen commits, ingen filer, ingen e-post. Avslutt med en kort logglinje: totalt antall unike finnkoder funnet, hvor mange var nye, og fordeling anbefales/vurder/neppe blant de nye.
+6. Ikke gjør noe annet — ingen commits, ingen filer, ingen e-post. Avslutt med en kort logglinje: totalt antall unike finnkoder funnet, hvor mange var nye/tilbake, hvor mange ble markert inaktive (solgt/fjernet), og fordeling anbefales/vurder/neppe blant de nye.
 
 **Merk:** Første kjøring vil finne mange "nye" annonser (opptil ~130) siden databasen starter tom — engangskostnad. Senere kjøringer får bare noen få nye per dag. Vurderingen i steg 4 er kjernen i oppgaven — les og tolk teksten som et menneske ville, ikke for rigid på skjønnsfaktorene: en god bolig som bommer litt på én ting skal fortsatt kunne bli 'anbefales' eller 'vurder', ikke automatisk avvist.
