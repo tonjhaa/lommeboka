@@ -24,6 +24,7 @@ const FIXTURE_ANDEL = `
 <section data-testid="object-facilities"><h2 class="h3" id="facilities-heading">Fasiliteter</h2><div class="grid md:grid-cols-3 grid-cols-2"><div class="py-4 break-words">Balkong/Terrasse</div><div class="py-4 break-words">Garasje/P-plass</div><div class="py-4 break-words">Heis</div></div></section>
 <section aria-label="Om boligen"><div class="pt-16" data-testid="om boligen"><h2 class="h3">Om boligen</h2><div class="description-area whitespace-pre-wrap">Fin leilighet med egen garasjeplass i fellesgarasje inkludert i prisen.</div></div></section>
 <section aria-labelledby="common-cost" data-testid="html-felleskostnader inkluderer"><h2 class="h3" id="common-cost">Felleskostnader inkluderer</h2><div class="description-area whitespace-pre-wrap" data-testid="common-cost">Felleskostnader: 2 314,-<br />Avdrag felleslån: 3 200,-<br />Renter felleslån: 327,-</div></section>
+<table><tbody><tr><th class="pr-8">FINN-kode</th><td class="pl-8">468534269</td></tr><tr><th class="pr-8">Sist endret</th><td class="pl-8">14. aug. 2026 13:00</td></tr></tbody></table>
 </body></html>`
 
 const FIXTURE_SELVEIER_MINIMAL = `
@@ -58,6 +59,7 @@ describe('parseFinnAd', () => {
     expect(d.garasjeParkeringChip).toBe(true)
     expect(d.beskrivelse).toBe('Fin leilighet med egen garasjeplass i fellesgarasje inkludert i prisen.')
     expect(d.felleskostnaderTekst).toContain('Avdrag felleslån: 3 200,-')
+    expect(d.sistEndret).toBe('2026-08-14T13:00:00')
   })
 
   it('manglende felt blir null/0 — selveier uten fellesgjeld', () => {
@@ -76,6 +78,7 @@ describe('parseFinnAd', () => {
     expect(d.garasjeParkeringChip).toBe(false)
     expect(d.beskrivelse).toBeNull()
     expect(d.felleskostnaderTekst).toBeNull()
+    expect(d.sistEndret).toBeNull()
   })
 
   it('tom side gir null-pris (kalleren avviser)', () => {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ExternalLink, RefreshCw, CheckCircle2, XCircle, Sparkles } from 'lucide-react'
+import { ExternalLink, RefreshCw, CheckCircle2, XCircle, Sparkles, TrendingDown } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -10,6 +10,14 @@ import type { AiAnbefaling, BoligAnnonse, BoligsokStatus } from '@/types/boligso
 function fmtNOK(n: number | null) {
   if (n == null) return '–'
   return Math.round(n).toLocaleString('no-NO') + ' kr'
+}
+
+function fmtDagerSiden(dato: string | null) {
+  if (!dato) return null
+  const dager = Math.floor((Date.now() - new Date(dato).getTime()) / 86_400_000)
+  if (dager <= 0) return 'i dag'
+  if (dager === 1) return '1 dag siden'
+  return `${dager} dager siden`
 }
 
 const STATUS_LABELS: Record<BoligsokStatus, string> = {
@@ -85,6 +93,7 @@ function AnnonseCard({ annonse }: { annonse: BoligAnnonse }) {
             <p className="text-xs text-muted-foreground truncate mt-0.5">
               {[annonse.adresse, annonse.bydel].filter(Boolean).join(', ') || 'Ukjent adresse'}
               {' · '}{KILDE_LABELS[annonse.kilde]}
+              {fmtDagerSiden(annonse.annonsert_dato) && ` · ${fmtDagerSiden(annonse.annonsert_dato)}`}
             </p>
           </div>
           <a
@@ -103,6 +112,11 @@ function AnnonseCard({ annonse }: { annonse: BoligAnnonse }) {
             {annonse.soverom != null ? `${annonse.soverom} sov` : '–'}
             {areal != null && ` · ${areal} m²`}
           </p>
+          {annonse.prisnedgang && (
+            <span className="flex items-center gap-1 text-xs text-green-500 font-medium">
+              <TrendingDown className="h-3 w-3" /> Prisnedgang
+            </span>
+          )}
         </div>
 
         {annonse.ai_vurdering && (

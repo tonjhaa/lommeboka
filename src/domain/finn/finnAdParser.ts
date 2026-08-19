@@ -51,6 +51,12 @@ export interface FinnAdData {
   beskrivelse: string | null
   /** Fritekst fra "Felleskostnader inkluderer" — her fremgår ev. "Avdrag felleslån" (IN-ordning/individuell nedbetaling) */
   felleskostnaderTekst: string | null
+  /**
+   * "Sist endret"-tidspunktet fra annonseinfo-tabellen, som ISO 8601. Reflekterer siste
+   * redigering (kan være nyere enn opprinnelig publiseringsdato), men er det eneste
+   * liggetid-signalet FINN eksponerer i den statiske siden — brukes som beste tilnærming.
+   */
+  sistEndret: string | null
 }
 
 function escapeRegExp(s: string): string {
@@ -64,7 +70,7 @@ function stripTags(html: string): string {
 /** Trekker første heltall ut av en tekst som «8 800 000 kr» / «5&nbsp;841 kr» */
 function parseNok(text: string | null): number | null {
   if (!text) return null
-  const digits = text.replace(/&nbsp;|&#160;| /g, ' ').match(/[\d][\d\s.]*/)?.[0]
+  const digits = text.replace(/&nbsp;|&#160;|\u00A0/g, ' ').match(/[\d][\d\s.]*/)?.[0]
   if (!digits) return null
   const n = parseInt(digits.replace(/[\s.]/g, ''), 10)
   return Number.isFinite(n) ? n : null
@@ -108,6 +114,24 @@ function parseFasiliteter(html: string): string[] {
   const section = html.match(/data-testid="object-facilities">[\s\S]*?<div class="grid[^>]*>([\s\S]*?)<\/div><\/section>/i)
   if (!section) return []
   return [...section[1].matchAll(/<div class="py-4 break-words">([^<]*)<\/div>/g)].map((m) => m[1].trim())
+}
+
+const NORSK_MANED: Record<string, string> = {
+  jan: '01', feb: '02', mar: '03', apr: '04', mai: '05', jun: '06',
+  jul: '07', aug: '08', sep: '09', okt: '10', nov: '11', des: '12',
+}
+
+/** Parser "Sist endret"-verdien, f.eks. "14. aug. 2026 13:00" → ISO 8601 */
+function parseSistEndret(html: string): string | null {
+  const m = html.match(/<th[^>]*>\s*Sist endret\s*<\/th>\s*<td[^>]*>([^<]+)<\/td>/i)
+  if (!m) return null
+  const raw = stripTags(m[1])
+  const dm = raw.match(/(\d{1,2})\.\s*([a-zæøå]{3})\.?\s*(\d{4})\s*(\d{1,2}):(\d{2})/i)
+  if (!dm) return null
+  const [, day, manedTekst, year, hour, minute] = dm
+  const maned = NORSK_MANED[manedTekst.toLowerCase()]
+  if (!maned) return null
+  return `${year}-${maned}-${day.padStart(2, '0')}T${hour.padStart(2, '0')}:${minute}:00`
 }
 
 function parseBoligtype(text: string | null): FinnAdData['boligtype'] {
@@ -156,6 +180,7 @@ export function parseFinnAd(html: string, finnkode: string): FinnAdData {
     garasjeParkeringChip: fasiliteter.some((f) => /garasje|p-plass/i.test(f)),
     beskrivelse: sectionByHeading(html, 'Om boligen'),
     felleskostnaderTekst: sectionByHeading(html, 'Felleskostnader inkluderer'),
+    sistEndret: parseSistEndret(html),
   }
 }
 

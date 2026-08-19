@@ -27,6 +27,8 @@ export interface BoligAnnonse {
   ai_anbefaling: AiAnbefaling
   ai_vurdering: string | null
   aktiv: boolean
+  annonsert_dato: string | null
+  prisnedgang: boolean
   status: BoligsokStatus
   notat: string | null
   raw_snippet: string | null
