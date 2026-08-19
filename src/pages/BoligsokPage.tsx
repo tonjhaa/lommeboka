@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import * as Slider from '@radix-ui/react-slider'
 import { ExternalLink, RefreshCw, CheckCircle2, XCircle, Sparkles, TrendingDown } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -180,9 +181,46 @@ function AnnonseCard({ annonse }: { annonse: BoligAnnonse }) {
 }
 
 type Visfilter = 'alle' | 'anbefales' | 'vurder'
+type KjokkenFilter = 'alle' | 'adskilt' | 'apent'
 
-const SOVEROM_OPTIONS = [0, 2, 3, 4] as const
-const AREAL_OPTIONS = [0, 65, 70, 80, 90] as const
+const KJOKKEN_FILTER_LABELS: Record<KjokkenFilter, string> = {
+  alle: 'Alle',
+  adskilt: 'Eget kjøkken',
+  apent: 'Åpent kjøkken',
+}
+
+/** Kompakt slider til filterlinjen — matcher SliderRow-idiomet fra GiftPage, men inline i stedet for stablet */
+function InlineSlider({
+  label, value, min, max, step, onChange, format,
+}: {
+  label: string
+  value: number
+  min: number
+  max: number
+  step: number
+  onChange: (v: number) => void
+  format: (v: number) => string
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] text-muted-foreground uppercase tracking-wider shrink-0">{label}</span>
+      <Slider.Root
+        value={[value]}
+        min={min}
+        max={max}
+        step={step}
+        onValueChange={([v]) => onChange(v)}
+        className="relative flex items-center select-none touch-none w-20 h-5"
+      >
+        <Slider.Track className="bg-border relative grow rounded-full h-1">
+          <Slider.Range className="absolute bg-primary rounded-full h-full" />
+        </Slider.Track>
+        <Slider.Thumb className="block w-3.5 h-3.5 bg-background border-2 border-primary rounded-full shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" />
+      </Slider.Root>
+      <span className="text-xs font-mono tabular-nums text-foreground shrink-0 w-9 text-right">{format(value)}</span>
+    </div>
+  )
+}
 
 function StatTile({ label, value, active, accent, onClick }: { label: string; value: number; active: boolean; accent?: string; onClick: () => void }) {
   return (
@@ -212,6 +250,7 @@ export function BoligsokPage() {
   const [visFilter, setVisFilter] = useState<Visfilter>('alle')
   const [minSoverom, setMinSoverom] = useState(0)
   const [minAreal, setMinAreal] = useState(0)
+  const [kjokkenFilter, setKjokkenFilter] = useState<KjokkenFilter>('alle')
   const [visSolgte, setVisSolgte] = useState(false)
 
   useEffect(() => {
@@ -237,9 +276,11 @@ export function BoligsokPage() {
       if (minSoverom > 0 && (a.soverom ?? 0) < minSoverom) return false
       const areal = a.primaerrom_m2 ?? a.bruksareal_m2 ?? 0
       if (minAreal > 0 && areal < minAreal) return false
+      if (kjokkenFilter === 'adskilt' && a.kjokken_adskilt !== true) return false
+      if (kjokkenFilter === 'apent' && a.kjokken_adskilt !== false) return false
       return true
     })
-  }, [sortert, visFilter, minSoverom, minAreal, visSolgte])
+  }, [sortert, visFilter, minSoverom, minAreal, kjokkenFilter, visSolgte])
 
   const antallSolgte = annonser.filter((a) => !a.aktiv).length
   const aktive = annonser.filter((a) => a.aktiv)
@@ -262,29 +303,34 @@ export function BoligsokPage() {
         <StatTile label="Verdt å vurdere" value={antallVurder} active={visFilter === 'vurder'} accent="#f59e0b" onClick={() => setVisFilter('vurder')} />
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <InlineSlider
+          label="Min. soverom"
+          value={minSoverom}
+          min={0}
+          max={5}
+          step={1}
+          onChange={setMinSoverom}
+          format={(v) => (v === 0 ? 'Alle' : `${v}+`)}
+        />
+        <InlineSlider
+          label="Min. areal"
+          value={minAreal}
+          min={0}
+          max={120}
+          step={5}
+          onChange={setMinAreal}
+          format={(v) => (v === 0 ? 'Alle' : `${v} m²`)}
+        />
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Min. soverom</span>
-          <Select value={String(minSoverom)} onValueChange={(v) => setMinSoverom(Number(v))}>
-            <SelectTrigger className="h-7 w-20 text-xs">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Kjøkken</span>
+          <Select value={kjokkenFilter} onValueChange={(v) => setKjokkenFilter(v as KjokkenFilter)}>
+            <SelectTrigger className="h-7 w-32 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {SOVEROM_OPTIONS.map((n) => (
-                <SelectItem key={n} value={String(n)}>{n === 0 ? 'Alle' : `${n}+`}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Min. areal</span>
-          <Select value={String(minAreal)} onValueChange={(v) => setMinAreal(Number(v))}>
-            <SelectTrigger className="h-7 w-24 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {AREAL_OPTIONS.map((n) => (
-                <SelectItem key={n} value={String(n)}>{n === 0 ? 'Alle' : `${n} m²`}</SelectItem>
+              {(Object.keys(KJOKKEN_FILTER_LABELS) as KjokkenFilter[]).map((k) => (
+                <SelectItem key={k} value={k}>{KJOKKEN_FILTER_LABELS[k]}</SelectItem>
               ))}
             </SelectContent>
           </Select>
