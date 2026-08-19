@@ -183,11 +183,55 @@ function AnnonseCard({ annonse }: { annonse: BoligAnnonse }) {
 
 type Visfilter = 'alle' | 'anbefales' | 'vurder'
 type KjokkenFilter = 'alle' | 'adskilt' | 'apent'
+type KildeFilter = 'alle' | BoligAnnonse['kilde']
+type SortBy = 'anbefaling' | 'nyest' | 'pris_lav' | 'pris_hoy' | 'areal_stor' | 'soverom_mange' | 'fellesutgift_lav'
 
 const KJOKKEN_FILTER_LABELS: Record<KjokkenFilter, string> = {
   alle: 'Alle',
   adskilt: 'Eget kjøkken',
   apent: 'Åpent kjøkken',
+}
+
+const KILDE_FILTER_LABELS: Record<KildeFilter, string> = {
+  alle: 'Alle',
+  finn: 'Finn.no',
+  hjem: 'hjem.no',
+}
+
+const SORT_LABELS: Record<SortBy, string> = {
+  anbefaling: 'Anbefaling',
+  nyest: 'Nyeste',
+  pris_lav: 'Lavest pris',
+  pris_hoy: 'Høyest pris',
+  areal_stor: 'Størst areal',
+  soverom_mange: 'Flest soverom',
+  fellesutgift_lav: 'Lavest fellesutgift',
+}
+
+function sammenlign(a: BoligAnnonse, b: BoligAnnonse, sortBy: SortBy): number {
+  switch (sortBy) {
+    case 'nyest': {
+      const aDato = a.annonsert_dato ?? a.created_at
+      const bDato = b.annonsert_dato ?? b.created_at
+      return bDato.localeCompare(aDato)
+    }
+    case 'pris_lav':
+      return (a.totalpris ?? a.prisantydning ?? Infinity) - (b.totalpris ?? b.prisantydning ?? Infinity)
+    case 'pris_hoy':
+      return (b.totalpris ?? b.prisantydning ?? -Infinity) - (a.totalpris ?? a.prisantydning ?? -Infinity)
+    case 'areal_stor':
+      return (b.primaerrom_m2 ?? b.bruksareal_m2 ?? -Infinity) - (a.primaerrom_m2 ?? a.bruksareal_m2 ?? -Infinity)
+    case 'soverom_mange':
+      return (b.soverom ?? -Infinity) - (a.soverom ?? -Infinity)
+    case 'fellesutgift_lav':
+      return (a.fellesutgifter ?? Infinity) - (b.fellesutgifter ?? Infinity)
+    case 'anbefaling':
+    default: {
+      const rankDiff = ANBEFALING_RANK[a.ai_anbefaling] - ANBEFALING_RANK[b.ai_anbefaling]
+      if (rankDiff !== 0) return rankDiff
+      return b.created_at.localeCompare(a.created_at)
+    }
+  }
 }
 
 /** Kompakt slider til filterlinjen — matcher SliderRow-idiomet fra GiftPage, men inline i stedet for stablet */
@@ -251,9 +295,14 @@ export function BoligsokPage() {
   const [visFilter, setVisFilter] = useState<Visfilter>('alle')
   const [minSoverom, setMinSoverom] = useState(0)
   const [minAreal, setMinAreal] = useState(0)
+  const [maksTotalpris, setMaksTotalpris] = useState(0)
+  const [maksFellesutgift, setMaksFellesutgift] = useState(0)
   const [kjokkenFilter, setKjokkenFilter] = useState<KjokkenFilter>('alle')
+  const [kildeFilter, setKildeFilter] = useState<KildeFilter>('alle')
   const [kunGarasje, setKunGarasje] = useState(false)
+  const [kunPrisnedgang, setKunPrisnedgang] = useState(false)
   const [visSolgte, setVisSolgte] = useState(false)
+  const [sortBy, setSortBy] = useState<SortBy>('anbefaling')
 
   useEffect(() => {
     fetchAnnonser()
@@ -262,13 +311,8 @@ export function BoligsokPage() {
   }, [fetchAnnonser, subscribe, unsubscribe])
 
   const sortert = useMemo(
-    () =>
-      [...annonser].sort((a, b) => {
-        const rankDiff = ANBEFALING_RANK[a.ai_anbefaling] - ANBEFALING_RANK[b.ai_anbefaling]
-        if (rankDiff !== 0) return rankDiff
-        return b.created_at.localeCompare(a.created_at)
-      }),
-    [annonser]
+    () => [...annonser].sort((a, b) => sammenlign(a, b, sortBy)),
+    [annonser, sortBy]
   )
 
   const filtrerte = useMemo(() => {
@@ -278,12 +322,20 @@ export function BoligsokPage() {
       if (minSoverom > 0 && (a.soverom ?? 0) < minSoverom) return false
       const areal = a.primaerrom_m2 ?? a.bruksareal_m2 ?? 0
       if (minAreal > 0 && areal < minAreal) return false
+      const pris = a.totalpris ?? a.prisantydning ?? 0
+      if (maksTotalpris > 0 && pris > maksTotalpris) return false
+      if (maksFellesutgift > 0 && (a.fellesutgifter ?? 0) > maksFellesutgift) return false
       if (kjokkenFilter === 'adskilt' && a.kjokken_adskilt !== true) return false
       if (kjokkenFilter === 'apent' && a.kjokken_adskilt !== false) return false
+      if (kildeFilter !== 'alle' && a.kilde !== kildeFilter) return false
       if (kunGarasje && !a.garasje) return false
+      if (kunPrisnedgang && !a.prisnedgang) return false
       return true
     })
-  }, [sortert, visFilter, minSoverom, minAreal, kjokkenFilter, kunGarasje, visSolgte])
+  }, [
+    sortert, visFilter, minSoverom, minAreal, maksTotalpris, maksFellesutgift,
+    kjokkenFilter, kildeFilter, kunGarasje, kunPrisnedgang, visSolgte,
+  ])
 
   const antallSolgte = annonser.filter((a) => !a.aktiv).length
   const aktive = annonser.filter((a) => a.aktiv)
@@ -293,11 +345,24 @@ export function BoligsokPage() {
 
   return (
     <div className="p-4 space-y-4 overflow-y-auto h-full">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h2 className="font-semibold">Boligsøk</h2>
-        <Button variant="outline" size="sm" onClick={() => fetchAnnonser()} disabled={loading}>
-          <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
-        </Button>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Sorter</span>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortBy)}>
+            <SelectTrigger className="h-7 w-40 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(SORT_LABELS) as SortBy[]).map((s) => (
+                <SelectItem key={s} value={s}>{SORT_LABELS[s]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={() => fetchAnnonser()} disabled={loading}>
+            <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2">
@@ -325,6 +390,24 @@ export function BoligsokPage() {
           onChange={setMinAreal}
           format={(v) => (v === 0 ? 'Alle' : `${v} m²`)}
         />
+        <InlineSlider
+          label="Maks totalpris"
+          value={maksTotalpris}
+          min={0}
+          max={8_000_000}
+          step={250_000}
+          onChange={setMaksTotalpris}
+          format={(v) => (v === 0 ? 'Alle' : `${(v / 1_000_000).toFixed(2)} M`)}
+        />
+        <InlineSlider
+          label="Maks fellesutg."
+          value={maksFellesutgift}
+          min={0}
+          max={20_000}
+          step={1_000}
+          onChange={setMaksFellesutgift}
+          format={(v) => (v === 0 ? 'Alle' : `${Math.round(v / 1000)}k`)}
+        />
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Kjøkken</span>
           <Select value={kjokkenFilter} onValueChange={(v) => setKjokkenFilter(v as KjokkenFilter)}>
@@ -339,8 +422,25 @@ export function BoligsokPage() {
           </Select>
         </div>
         <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Kilde</span>
+          <Select value={kildeFilter} onValueChange={(v) => setKildeFilter(v as KildeFilter)}>
+            <SelectTrigger className="h-7 w-28 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(KILDE_FILTER_LABELS) as KildeFilter[]).map((k) => (
+                <SelectItem key={k} value={k}>{KILDE_FILTER_LABELS[k]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Kun med garasje</span>
           <Switch checked={kunGarasje} onCheckedChange={setKunGarasje} />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Kun prisnedgang</span>
+          <Switch checked={kunPrisnedgang} onCheckedChange={setKunPrisnedgang} />
         </div>
         {antallSolgte > 0 && (
           <button
