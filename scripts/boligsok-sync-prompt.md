@@ -64,6 +64,7 @@ Les beskrivelse og felleskostnaderTekst grundig, ikke bare tallsjekk:
 - `raw_snippet`: kort utdrag fra felleskostnaderTekst (avdrag-linjene) hvis in_ordning er true, ellers null.
 - `prisnedgang` (boolean): true KUN hvis tittel eller beskrivelse eksplisitt nevner en prisreduksjon (f.eks. "NY LAVERE PRIS", "prisen er satt ned", "redusert prisantydning", "prisjustert ned"). Ikke gjett. Sett false ellers.
 - `annonsert_dato`: for Finn bruk `sistEndret` direkte. For hjem bruk `annonsertDato` direkte. Begge er ISO-tidspunkt eller null.
+- `kjokken_adskilt` (boolean ELLER null): `true` hvis beskrivelsen tydelig sier kjøkkenet er adskilt/avskjermet fra stuen, eller nevner en egen kjøkkenkrok/-avdeling. `false` hvis beskrivelsen tydelig beskriver et helt åpent kjøkken-i-stue-løsning (kun én benk/øy, ingen avdeling). `null` hvis kjøkkenløsningen ikke er nevnt/uklar — IKKE gjett, dette er en synlig UI-indikator så feil verdi er verre enn ukjent.
 - `oppfyller_krav` (boolean) = totalpris ≤ 7 850 000 (prisantydning hvis totalpris mangler) OG soverom ≥ 2 OG bruksareal ≥ 65 OG balkong=true OG garasje=true (de skjønnsmessige verdiene over, ikke bare chippene).
 - `ai_anbefaling` (`'anbefales'` | `'vurder'` | `'neppe'`) og `ai_vurdering` (1-2 setninger, direkte til brukeren, på norsk, konkret begrunnet ut fra INNHOLDET i akkurat denne annonsen — ikke en generisk setning):
   - `'neppe'`: oppfyller_krav er false, ELLER et helt åpent kjøkken-i-stue med kun én benk er tydelig beskrevet, ELLER badet beskrives som klart dårlig/behov for full renovering, ELLER annet tydelig dealbreaker (stort oppussingsbehov generelt, tvilsom økonomi i sameiet/borettslaget).
@@ -75,7 +76,7 @@ Les beskrivelse og felleskostnaderTekst grundig, ikke bare tallsjekk:
 **Finn:**
 ```sql
 insert into public.boligsok_annonser
-  (user_id, kilde, ekstern_id, url, tittel, adresse, prisantydning, totalpris, fellesutgifter, fellesgjeld, in_ordning, soverom, primaerrom_m2, bruksareal_m2, balkong, garasje, boligtype, oppfyller_krav, ai_anbefaling, ai_vurdering, raw_snippet, prisnedgang, annonsert_dato, aktiv, updated_at)
+  (user_id, kilde, ekstern_id, url, tittel, adresse, prisantydning, totalpris, fellesutgifter, fellesgjeld, in_ordning, soverom, primaerrom_m2, bruksareal_m2, balkong, garasje, boligtype, oppfyller_krav, ai_anbefaling, ai_vurdering, raw_snippet, prisnedgang, annonsert_dato, kjokken_adskilt, aktiv, updated_at)
 values ('e012910e-5b8d-47fa-8f3d-8742df6c0e00', 'finn', <finnkode>, 'https://www.finn.no/realestate/homes/ad.html?finnkode='||<finnkode>, ..., true, now())
 on conflict (user_id, kilde, ekstern_id) do update set
   url=excluded.url, tittel=excluded.tittel, adresse=excluded.adresse, prisantydning=excluded.prisantydning,
@@ -84,14 +85,14 @@ on conflict (user_id, kilde, ekstern_id) do update set
   bruksareal_m2=excluded.bruksareal_m2, balkong=excluded.balkong, garasje=excluded.garasje,
   boligtype=excluded.boligtype, oppfyller_krav=excluded.oppfyller_krav, ai_anbefaling=excluded.ai_anbefaling,
   ai_vurdering=excluded.ai_vurdering, raw_snippet=excluded.raw_snippet, prisnedgang=excluded.prisnedgang,
-  annonsert_dato=excluded.annonsert_dato, aktiv=true, updated_at=now();
+  annonsert_dato=excluded.annonsert_dato, kjokken_adskilt=excluded.kjokken_adskilt, aktiv=true, updated_at=now();
 ```
 `ekstern_id=finnkode`. Bruk `felleskostMnd` som `fellesutgifter`, `bruksareal` til både `primaerrom_m2` og `bruksareal_m2`.
 
 **hjem.no** (samme mønster, `url` er allerede den fulle URL-en fra søkeresultatet i steg 1B — ikke konstruer den på nytt):
 ```sql
 insert into public.boligsok_annonser
-  (user_id, kilde, ekstern_id, url, tittel, adresse, prisantydning, totalpris, fellesutgifter, fellesgjeld, in_ordning, soverom, primaerrom_m2, bruksareal_m2, balkong, garasje, boligtype, oppfyller_krav, ai_anbefaling, ai_vurdering, raw_snippet, prisnedgang, annonsert_dato, aktiv, updated_at)
+  (user_id, kilde, ekstern_id, url, tittel, adresse, prisantydning, totalpris, fellesutgifter, fellesgjeld, in_ordning, soverom, primaerrom_m2, bruksareal_m2, balkong, garasje, boligtype, oppfyller_krav, ai_anbefaling, ai_vurdering, raw_snippet, prisnedgang, annonsert_dato, kjokken_adskilt, aktiv, updated_at)
 values ('e012910e-5b8d-47fa-8f3d-8742df6c0e00', 'hjem', <eksternId>, <url fra søket>, ..., true, now())
 on conflict (user_id, kilde, ekstern_id) do update set
   url=excluded.url, tittel=excluded.tittel, adresse=excluded.adresse, prisantydning=excluded.prisantydning,
@@ -100,7 +101,7 @@ on conflict (user_id, kilde, ekstern_id) do update set
   bruksareal_m2=excluded.bruksareal_m2, balkong=excluded.balkong, garasje=excluded.garasje,
   boligtype=excluded.boligtype, oppfyller_krav=excluded.oppfyller_krav, ai_anbefaling=excluded.ai_anbefaling,
   ai_vurdering=excluded.ai_vurdering, raw_snippet=excluded.raw_snippet, prisnedgang=excluded.prisnedgang,
-  annonsert_dato=excluded.annonsert_dato, aktiv=true, updated_at=now();
+  annonsert_dato=excluded.annonsert_dato, kjokken_adskilt=excluded.kjokken_adskilt, aktiv=true, updated_at=now();
 ```
 `bruksareal` fra hjem-detaljen brukes til både `primaerrom_m2` og `bruksareal_m2` (samme forenkling som Finn).
 
