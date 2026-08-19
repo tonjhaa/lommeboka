@@ -458,6 +458,12 @@ export function BoligsokPage() {
         )}
       </div>
 
+      {!loading && annonser.length > 0 && (
+        <p className="text-xs text-muted-foreground font-mono tabular-nums">
+          Viser {filtrerte.length} av {visSolgte ? annonser.length : aktive.length} annonser
+        </p>
+      )}
+
       {error && <p className="text-sm text-destructive">Kunne ikke laste boligannonser: {error}</p>}
 
       {!loading && filtrerte.length === 0 && (
