@@ -32,7 +32,13 @@ Annonsetekst (tittel, adresse, beskrivelse, felleskostnaderTekst) hentet fra Fin
 
 For hver unike finnkode i `FINN_IDS`: sjekk i Supabase om den finnes SOM AKTIV: `select 1 from public.boligsok_annonser where user_id='e012910e-5b8d-47fa-8f3d-8742df6c0e00' and kilde='finn' and ekstern_id='<finnkode>' and aktiv=true`. Hvis funnet, hopp over. Hvis ikke, den skal (re-)hentes og vurderes — legg til i `FINN_NYE`.
 
-For hver unike eksternId i `HJEM_IDS`: sjekk tilsvarende med `kilde='hjem'`. Hvis funnet som aktiv, hopp over. Hvis ikke: **sjekk deretter duplikat på tvers av kilder** — Finn er hovedkilden. Normaliser adressen (små bokstaver, trim, ett mellomrom, ignorer postnummer/by-suffiks, behandle "39D" og "39 D" som likt husnummer) og sammenlign mot `adresse`-feltet til ALLE rader i databasen med `kilde='finn' and aktiv=true` for denne brukeren (hent listen med én enkel `select adresse from ... where kilde='finn' and aktiv=true` og sammenlign selv). Match på gate+husnummer er nok (by/postnummer trenger ikke være identisk formatert). Hvis en matchende Finn-adresse finnes: hopp over hjem-treffet helt (IKKE opprett en duplikatrad — Finn-raden er allerede der). Hvis ingen match: legg til i `HJEM_NYE`.
+For hver unike eksternId i `HJEM_IDS`: sjekk tilsvarende med `kilde='hjem'`. Hvis funnet som aktiv, hopp over. Hvis ikke: **sjekk deretter duplikat på tvers av kilder** — Finn er hovedkilden. IKKE sammenlign adresser manuelt (dette er upålitelig over mange rader) — bruk i stedet den deterministiske SQL-funksjonen `public.normaliser_adresse(adresse)` (finnes allerede i databasen):
+```sql
+select 1 from public.boligsok_annonser
+where user_id='e012910e-5b8d-47fa-8f3d-8742df6c0e00' and kilde='finn' and aktiv=true
+  and public.normaliser_adresse(adresse) = public.normaliser_adresse('<hjem-treffets adresse>')
+```
+Hvis denne gir en treff-rad: hopp over hjem-treffet helt (IKKE opprett en duplikatrad — Finn-raden er allerede der). Hvis ingen treff: legg til i `HJEM_NYE`. (Du kan batch-sjekke flere hjem-adresser i én spørring med `where ... and public.normaliser_adresse(adresse) in (public.normaliser_adresse('adr1'), public.normaliser_adresse('adr2'), ...)` og se hvilke som kommer tilbake, for å spare kall.)
 
 ## Steg 2b — marker solgte/fjernede boliger som inaktive (per kilde)
 
