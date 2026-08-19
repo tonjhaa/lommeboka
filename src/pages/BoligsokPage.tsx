@@ -4,6 +4,7 @@ import { ExternalLink, RefreshCw, CheckCircle2, XCircle, Sparkles, TrendingDown 
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { useBoligsokStore } from '@/store/useBoligsokStore'
 import type { AiAnbefaling, BoligAnnonse, BoligsokStatus } from '@/types/boligsok'
@@ -251,6 +252,7 @@ export function BoligsokPage() {
   const [minSoverom, setMinSoverom] = useState(0)
   const [minAreal, setMinAreal] = useState(0)
   const [kjokkenFilter, setKjokkenFilter] = useState<KjokkenFilter>('alle')
+  const [kunGarasje, setKunGarasje] = useState(false)
   const [visSolgte, setVisSolgte] = useState(false)
 
   useEffect(() => {
@@ -278,9 +280,10 @@ export function BoligsokPage() {
       if (minAreal > 0 && areal < minAreal) return false
       if (kjokkenFilter === 'adskilt' && a.kjokken_adskilt !== true) return false
       if (kjokkenFilter === 'apent' && a.kjokken_adskilt !== false) return false
+      if (kunGarasje && !a.garasje) return false
       return true
     })
-  }, [sortert, visFilter, minSoverom, minAreal, kjokkenFilter, visSolgte])
+  }, [sortert, visFilter, minSoverom, minAreal, kjokkenFilter, kunGarasje, visSolgte])
 
   const antallSolgte = annonser.filter((a) => !a.aktiv).length
   const aktive = annonser.filter((a) => a.aktiv)
@@ -334,6 +337,10 @@ export function BoligsokPage() {
               ))}
             </SelectContent>
           </Select>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Kun med garasje</span>
+          <Switch checked={kunGarasje} onCheckedChange={setKunGarasje} />
         </div>
         {antallSolgte > 0 && (
           <button
