@@ -90,6 +90,44 @@ function finnDevApi(): Plugin {
           }
         })()
       })
+      server.middlewares.use('/api/hjem-search', (req, res) => {
+        void (async () => {
+          const url = new URL(req.url ?? '', 'http://localhost')
+          const page = parseInt(url.searchParams.get('page') ?? '1', 10)
+          const { fetchHjemSearchPage } = await import('./src/domain/hjem/hjemSearchClient')
+          res.setHeader('Content-Type', 'application/json')
+          try {
+            const data = await fetchHjemSearchPage(Number.isFinite(page) && page > 0 ? page : 1)
+            res.statusCode = 200
+            res.end(JSON.stringify(data))
+          } catch {
+            res.statusCode = 502
+            res.end(JSON.stringify({ error: 'Klarte ikke å hente søkeresultater fra hjem.no.' }))
+          }
+        })()
+      })
+      server.middlewares.use('/api/hjem-detail', (req, res) => {
+        void (async () => {
+          const url = new URL(req.url ?? '', 'http://localhost')
+          const ids = (url.searchParams.get('ids') ?? '').split(',').map((id) => id.trim()).filter(Boolean)
+          const { fetchHjemAdDetails, HjemLookupError } = await import('./src/domain/hjem/hjemAdParser')
+          res.setHeader('Content-Type', 'application/json')
+          if (ids.length === 0) {
+            res.statusCode = 400
+            res.end(JSON.stringify({ error: 'Mangler ids-parameter.' }))
+            return
+          }
+          try {
+            const results = await fetchHjemAdDetails(ids)
+            res.statusCode = 200
+            res.end(JSON.stringify({ results }))
+          } catch (err) {
+            const isLookupErr = err instanceof HjemLookupError
+            res.statusCode = isLookupErr ? (err as { statusCode: number }).statusCode : 502
+            res.end(JSON.stringify({ error: isLookupErr ? (err as Error).message : 'Klarte ikke å hente annonsene fra hjem.no.' }))
+          }
+        })()
+      })
     },
   }
 }
