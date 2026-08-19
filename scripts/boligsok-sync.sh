@@ -14,6 +14,7 @@ PROMPT="$(cat "$DIR/boligsok-sync-prompt.md")"
 
 claude -p "$PROMPT" \
   --model claude-haiku-4-5-20251001 \
+  --permission-mode dontAsk \
   --allowedTools "Bash($DIR/fetch-lommeboka-api.sh:*)" "mcp__Supabase__execute_sql" "mcp__claude_ai_Supabase__execute_sql" \
   > "$LOG_FILE" 2>&1
 
