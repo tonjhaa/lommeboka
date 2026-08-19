@@ -7,7 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { useBoligsokStore } from '@/store/useBoligsokStore'
-import type { AiAnbefaling, BoligAnnonse, BoligsokStatus } from '@/types/boligsok'
+import type {
+  AiAnbefaling, BoligAnnonse, BoligsokStatus,
+  BoligsokKjokkenFilter, BoligsokKildeFilter, BoligsokSortBy,
+} from '@/types/boligsok'
 
 function fmtNOK(n: number | null) {
   if (n == null) return '–'
@@ -87,6 +90,7 @@ function KjokkenBadge({ adskilt }: { adskilt: boolean | null }) {
 function AnnonseCard({ annonse }: { annonse: BoligAnnonse }) {
   const setStatus = useBoligsokStore((s) => s.setStatus)
   const setNotat = useBoligsokStore((s) => s.setNotat)
+  const markerSett = useBoligsokStore((s) => s.markerSett)
   const [notatDraft, setNotatDraft] = useState(annonse.notat ?? '')
 
   const pris = annonse.totalpris ?? annonse.prisantydning
@@ -113,6 +117,7 @@ function AnnonseCard({ annonse }: { annonse: BoligAnnonse }) {
             href={annonse.url}
             target="_blank"
             rel="noreferrer"
+            onClick={() => markerSett(annonse.id)}
             className="shrink-0 inline-flex items-center gap-1 text-xs text-primary hover:underline mt-0.5"
           >
             Se annonse <ExternalLink className="h-3 w-3" />
@@ -181,24 +186,19 @@ function AnnonseCard({ annonse }: { annonse: BoligAnnonse }) {
   )
 }
 
-type Visfilter = 'alle' | 'anbefales' | 'vurder'
-type KjokkenFilter = 'alle' | 'adskilt' | 'apent'
-type KildeFilter = 'alle' | BoligAnnonse['kilde']
-type SortBy = 'anbefaling' | 'nyest' | 'pris_lav' | 'pris_hoy' | 'areal_stor' | 'soverom_mange' | 'fellesutgift_lav'
-
-const KJOKKEN_FILTER_LABELS: Record<KjokkenFilter, string> = {
+const KJOKKEN_FILTER_LABELS: Record<BoligsokKjokkenFilter, string> = {
   alle: 'Alle',
   adskilt: 'Eget kjøkken',
   apent: 'Åpent kjøkken',
 }
 
-const KILDE_FILTER_LABELS: Record<KildeFilter, string> = {
+const KILDE_FILTER_LABELS: Record<BoligsokKildeFilter, string> = {
   alle: 'Alle',
   finn: 'Finn.no',
   hjem: 'hjem.no',
 }
 
-const SORT_LABELS: Record<SortBy, string> = {
+const SORT_LABELS: Record<BoligsokSortBy, string> = {
   anbefaling: 'Anbefaling',
   nyest: 'Nyeste',
   pris_lav: 'Lavest pris',
@@ -208,7 +208,7 @@ const SORT_LABELS: Record<SortBy, string> = {
   fellesutgift_lav: 'Lavest fellesutgift',
 }
 
-function sammenlign(a: BoligAnnonse, b: BoligAnnonse, sortBy: SortBy): number {
+function sammenlign(a: BoligAnnonse, b: BoligAnnonse, sortBy: BoligsokSortBy): number {
   switch (sortBy) {
     case 'nyest': {
       const aDato = a.annonsert_dato ?? a.created_at
@@ -292,18 +292,31 @@ export function BoligsokPage() {
   const subscribe = useBoligsokStore((s) => s.subscribe)
   const unsubscribe = useBoligsokStore((s) => s.unsubscribe)
 
-  const [visFilter, setVisFilter] = useState<Visfilter>('alle')
-  const [minSoverom, setMinSoverom] = useState(0)
-  const [minAreal, setMinAreal] = useState(0)
-  const [maksTotalpris, setMaksTotalpris] = useState(0)
-  const [maksFellesutgift, setMaksFellesutgift] = useState(0)
-  const [kjokkenFilter, setKjokkenFilter] = useState<KjokkenFilter>('alle')
-  const [kildeFilter, setKildeFilter] = useState<KildeFilter>('alle')
-  const [kunGarasje, setKunGarasje] = useState(false)
-  const [kunBalkong, setKunBalkong] = useState(false)
-  const [kunPrisnedgang, setKunPrisnedgang] = useState(false)
-  const [visSolgte, setVisSolgte] = useState(false)
-  const [sortBy, setSortBy] = useState<SortBy>('anbefaling')
+  // UI-filter/sortering ligger i storen (persistert) slik at valgene overlever fane-bytte/reload
+  const visFilter = useBoligsokStore((s) => s.visFilter)
+  const minSoverom = useBoligsokStore((s) => s.minSoverom)
+  const minAreal = useBoligsokStore((s) => s.minAreal)
+  const maksTotalpris = useBoligsokStore((s) => s.maksTotalpris)
+  const maksFellesutgift = useBoligsokStore((s) => s.maksFellesutgift)
+  const kjokkenFilter = useBoligsokStore((s) => s.kjokkenFilter)
+  const kildeFilter = useBoligsokStore((s) => s.kildeFilter)
+  const kunGarasje = useBoligsokStore((s) => s.kunGarasje)
+  const kunBalkong = useBoligsokStore((s) => s.kunBalkong)
+  const kunPrisnedgang = useBoligsokStore((s) => s.kunPrisnedgang)
+  const visSolgte = useBoligsokStore((s) => s.visSolgte)
+  const sortBy = useBoligsokStore((s) => s.sortBy)
+  const setVisFilter = useBoligsokStore((s) => s.setVisFilter)
+  const setMinSoverom = useBoligsokStore((s) => s.setMinSoverom)
+  const setMinAreal = useBoligsokStore((s) => s.setMinAreal)
+  const setMaksTotalpris = useBoligsokStore((s) => s.setMaksTotalpris)
+  const setMaksFellesutgift = useBoligsokStore((s) => s.setMaksFellesutgift)
+  const setKjokkenFilter = useBoligsokStore((s) => s.setKjokkenFilter)
+  const setKildeFilter = useBoligsokStore((s) => s.setKildeFilter)
+  const setKunGarasje = useBoligsokStore((s) => s.setKunGarasje)
+  const setKunBalkong = useBoligsokStore((s) => s.setKunBalkong)
+  const setKunPrisnedgang = useBoligsokStore((s) => s.setKunPrisnedgang)
+  const setVisSolgte = useBoligsokStore((s) => s.setVisSolgte)
+  const setSortBy = useBoligsokStore((s) => s.setSortBy)
 
   useEffect(() => {
     fetchAnnonser()
@@ -351,12 +364,12 @@ export function BoligsokPage() {
         <h2 className="font-semibold">Boligsøk</h2>
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Sorter</span>
-          <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortBy)}>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as BoligsokSortBy)}>
             <SelectTrigger className="h-7 w-40 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {(Object.keys(SORT_LABELS) as SortBy[]).map((s) => (
+              {(Object.keys(SORT_LABELS) as BoligsokSortBy[]).map((s) => (
                 <SelectItem key={s} value={s}>{SORT_LABELS[s]}</SelectItem>
               ))}
             </SelectContent>
@@ -412,12 +425,12 @@ export function BoligsokPage() {
         />
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Kjøkken</span>
-          <Select value={kjokkenFilter} onValueChange={(v) => setKjokkenFilter(v as KjokkenFilter)}>
+          <Select value={kjokkenFilter} onValueChange={(v) => setKjokkenFilter(v as BoligsokKjokkenFilter)}>
             <SelectTrigger className="h-7 w-32 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {(Object.keys(KJOKKEN_FILTER_LABELS) as KjokkenFilter[]).map((k) => (
+              {(Object.keys(KJOKKEN_FILTER_LABELS) as BoligsokKjokkenFilter[]).map((k) => (
                 <SelectItem key={k} value={k}>{KJOKKEN_FILTER_LABELS[k]}</SelectItem>
               ))}
             </SelectContent>
@@ -425,12 +438,12 @@ export function BoligsokPage() {
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Kilde</span>
-          <Select value={kildeFilter} onValueChange={(v) => setKildeFilter(v as KildeFilter)}>
+          <Select value={kildeFilter} onValueChange={(v) => setKildeFilter(v as BoligsokKildeFilter)}>
             <SelectTrigger className="h-7 w-28 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {(Object.keys(KILDE_FILTER_LABELS) as KildeFilter[]).map((k) => (
+              {(Object.keys(KILDE_FILTER_LABELS) as BoligsokKildeFilter[]).map((k) => (
                 <SelectItem key={k} value={k}>{KILDE_FILTER_LABELS[k]}</SelectItem>
               ))}
             </SelectContent>
@@ -450,7 +463,7 @@ export function BoligsokPage() {
         </div>
         {antallSolgte > 0 && (
           <button
-            onClick={() => setVisSolgte((v) => !v)}
+            onClick={() => setVisSolgte(!visSolgte)}
             className="text-[11px] text-muted-foreground hover:text-foreground ml-auto"
           >
             {visSolgte ? 'Skjul' : 'Vis'} solgte ({antallSolgte})

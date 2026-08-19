@@ -37,3 +37,9 @@ export interface BoligAnnonse {
   created_at: string
   updated_at: string
 }
+
+export type BoligsokVisfilter = 'alle' | 'anbefales' | 'vurder'
+export type BoligsokKjokkenFilter = 'alle' | 'adskilt' | 'apent'
+export type BoligsokKildeFilter = 'alle' | BoligsokKilde
+export type BoligsokSortBy =
+  | 'anbefaling' | 'nyest' | 'pris_lav' | 'pris_hoy' | 'areal_stor' | 'soverom_mange' | 'fellesutgift_lav'
