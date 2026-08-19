@@ -300,6 +300,7 @@ export function BoligsokPage() {
   const [kjokkenFilter, setKjokkenFilter] = useState<KjokkenFilter>('alle')
   const [kildeFilter, setKildeFilter] = useState<KildeFilter>('alle')
   const [kunGarasje, setKunGarasje] = useState(false)
+  const [kunBalkong, setKunBalkong] = useState(false)
   const [kunPrisnedgang, setKunPrisnedgang] = useState(false)
   const [visSolgte, setVisSolgte] = useState(false)
   const [sortBy, setSortBy] = useState<SortBy>('anbefaling')
@@ -329,12 +330,13 @@ export function BoligsokPage() {
       if (kjokkenFilter === 'apent' && a.kjokken_adskilt !== false) return false
       if (kildeFilter !== 'alle' && a.kilde !== kildeFilter) return false
       if (kunGarasje && !a.garasje) return false
+      if (kunBalkong && !a.balkong) return false
       if (kunPrisnedgang && !a.prisnedgang) return false
       return true
     })
   }, [
     sortert, visFilter, minSoverom, minAreal, maksTotalpris, maksFellesutgift,
-    kjokkenFilter, kildeFilter, kunGarasje, kunPrisnedgang, visSolgte,
+    kjokkenFilter, kildeFilter, kunGarasje, kunBalkong, kunPrisnedgang, visSolgte,
   ])
 
   const antallSolgte = annonser.filter((a) => !a.aktiv).length
@@ -437,6 +439,10 @@ export function BoligsokPage() {
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Kun med garasje</span>
           <Switch checked={kunGarasje} onCheckedChange={setKunGarasje} />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Kun med balkong</span>
+          <Switch checked={kunBalkong} onCheckedChange={setKunBalkong} />
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Kun prisnedgang</span>
