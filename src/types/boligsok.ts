@@ -29,6 +29,8 @@ export interface BoligAnnonse {
   aktiv: boolean
   annonsert_dato: string | null
   prisnedgang: boolean
+  /** true = kjøkken adskilt/avskjermet fra stue, false = åpent kjøkken-i-stue, null = ikke nevnt/ukjent */
+  kjokken_adskilt: boolean | null
   status: BoligsokStatus
   notat: string | null
   raw_snippet: string | null

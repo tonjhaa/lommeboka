@@ -71,6 +71,17 @@ function KravRad({ oppfylt, label }: { oppfylt: boolean; label: string }) {
   )
 }
 
+/** Soft preferanse, ikke hardt krav — amber i stedet for rødt når fraværende, og skjules helt når ukjent */
+function KjokkenBadge({ adskilt }: { adskilt: boolean | null }) {
+  if (adskilt === null) return null
+  return (
+    <span className={cn('flex items-center gap-1 text-xs', adskilt ? 'text-foreground' : 'text-muted-foreground')}>
+      {adskilt ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" /> : <XCircle className="h-3.5 w-3.5 text-warning" />}
+      {adskilt ? 'Eget kjøkken' : 'Åpent kjøkken'}
+    </span>
+  )
+}
+
 function AnnonseCard({ annonse }: { annonse: BoligAnnonse }) {
   const setStatus = useBoligsokStore((s) => s.setStatus)
   const setNotat = useBoligsokStore((s) => s.setNotat)
@@ -136,6 +147,7 @@ function AnnonseCard({ annonse }: { annonse: BoligAnnonse }) {
         <div className="flex items-center gap-3">
           <KravRad oppfylt={annonse.balkong} label="Balkong" />
           <KravRad oppfylt={annonse.garasje} label="Garasje" />
+          <KjokkenBadge adskilt={annonse.kjokken_adskilt} />
         </div>
 
         {annonse.raw_snippet && (
