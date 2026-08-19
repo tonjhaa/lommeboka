@@ -30,23 +30,25 @@ Annonsetekst (tittel, adresse, beskrivelse, felleskostnaderTekst) hentet fra Fin
 
 2b. **Marker solgte/fjernede boliger som inaktive.** Du har nå (fra steg 1) det KOMPLETTE settet av finnkoder som fortsatt er aktive treff på Finn akkurat nå. Enhver rad i databasen som er markert `aktiv=true` men IKKE finnes i dette settet, er solgt eller fjernet fra Finn siden sist. Kjør: `update public.boligsok_annonser set aktiv=false, updated_at=now() where user_id='e012910e-5b8d-47fa-8f3d-8742df6c0e00' and kilde='finn' and aktiv=true and ekstern_id not in (<komplett kommaseparert liste av ALLE finnkoder fra steg 1, ikke bare de nye>)`. IKKE overskriv status/notat på disse.
 
-3. **Hent detaljer.** For hver NY finnkode, samme fulle sti som i steg 1: `/Users/tonjeharstad/Projects/Lommeboka/scripts/fetch-lommeboka-api.sh "finn?finnkode=<finnkode>"`. JSON inneholder: tittel, adresse, prisantydning, totalpris, fellesgjeld, omkostninger, felleskostMnd, boligtype, bruksareal, soverom, fasiliteter (chips som "Balkong/Terrasse", "Garasje/P-plass"), balkong (bool fra chips), garasjeParkeringChip (bool — KUN at chippen finnes, IKKE bevis på faktisk garasje), beskrivelse (fritekst "Om boligen" — LES DENNE GRUNDIG), felleskostnaderTekst (fritekst "Felleskostnader inkluderer"). Hvis feil/404 (annonsen kan være fjernet/solgt), hopp over og fortsett med neste.
+3. **Hent detaljer.** For hver NY finnkode, samme fulle sti som i steg 1: `/Users/tonjeharstad/Projects/Lommeboka/scripts/fetch-lommeboka-api.sh "finn?finnkode=<finnkode>"`. JSON inneholder: tittel, adresse, prisantydning, totalpris, fellesgjeld, omkostninger, felleskostMnd, boligtype, bruksareal, soverom, fasiliteter (chips som "Balkong/Terrasse", "Garasje/P-plass"), balkong (bool fra chips), garasjeParkeringChip (bool — KUN at chippen finnes, IKKE bevis på faktisk garasje), beskrivelse (fritekst "Om boligen" — LES DENNE GRUNDIG), felleskostnaderTekst (fritekst "Felleskostnader inkluderer"), sistEndret (ISO-tidspunkt for siste endring på annonsen, brukes som liggetid-signal — kan være null). Hvis feil/404 (annonsen kan være fjernet/solgt), hopp over og fortsett med neste.
 
 4. **Vurder hver bolig individuelt** (les beskrivelse og felleskostnaderTekst grundig, ikke bare tallsjekk):
    - `balkong` (boolean): true kun hvis fasilitet-chip eller beskrivelse bekrefter faktisk balkong/terrasse.
    - `garasje` (boolean): true hvis `garasjeParkeringChip` er true OG beskrivelsen bekrefter en GARANTERT plass følger med — enten eid/inkludert i prisen ("egen garasjeplass", "garasjeplass i fellesgarasje inkludert i prisen") ELLER en fast tildelt plass med leie ("fast parkeringsplass i garasje, leie kr X/mnd", "disponerer egen garasjeplass mot leie"). Avgjørende: er plassen GARANTERT (fast tildelt til denne boligen), ikke om den koster leie. False hvis beskrivelsen tyder på kun MULIGHET til å søke/leie, venteliste, "parkering etter ansiennitet", gjesteparkering, eller annen usikker/konkurranseutsatt ordning uten garanti, eller ikke nevnt i det hele tatt. Ved tvil om det er garantert eller ikke: vær konservativ, sett false.
    - `in_ordning` (boolean): true hvis felleskostnaderTekst nevner "Avdrag felleslån", "IN-ordning", "individuell nedbetaling", "IN-lån", "innskuddslån" e.l.
    - `raw_snippet`: kort utdrag fra felleskostnaderTekst (avdrag-linjene) hvis in_ordning er true, ellers null.
+   - `prisnedgang` (boolean): true KUN hvis tittel eller beskrivelse eksplisitt nevner en prisreduksjon (f.eks. "NY LAVERE PRIS", "prisen er satt ned", "redusert prisantydning", "prisjustert ned"). Ikke gjett — FINN eksponerer ingen strukturert prishistorikk, dette er kun et mykt signal når det faktisk står skrevet. Sett false ellers.
+   - `annonsert_dato`: bruk `sistEndret`-verdien fra JSON-responsen direkte (ISO-tidspunkt, eller null hvis den manglet).
    - `oppfyller_krav` (boolean) = totalpris ≤ 7 850 000 (prisantydning hvis totalpris mangler) OG soverom ≥ 2 OG bruksareal ≥ 65 OG balkong=true OG garasje=true (de skjønnsmessige verdiene over, ikke bare chippene).
    - `ai_anbefaling` (`'anbefales'` | `'vurder'` | `'neppe'`) og `ai_vurdering` (1-2 setninger, direkte til brukeren, på norsk, konkret begrunnet ut fra INNHOLDET i akkurat denne annonsen — ikke en generisk setning):
      - `'neppe'`: oppfyller_krav er false, ELLER et helt åpent kjøkken-i-stue med kun én benk er tydelig beskrevet, ELLER badet beskrives som klart dårlig/behov for full renovering, ELLER annet tydelig dealbreaker (stort oppussingsbehov generelt, tvilsom økonomi i sameiet/borettslaget).
-     - `'anbefales'`: alle harde krav oppfylt OG ingen minus-faktorer OG minst én positiv skjønnsfaktor (nyoppusset/TG0-TG1 bad, avskjermet kjøkken/krok nevnt, 3 soverom, over 70 m², elbillader, velbegrunnede fellesutgifter).
+     - `'anbefales'`: alle harde krav oppfylt OG ingen minus-faktorer OG minst én positiv skjønnsfaktor (nyoppusset/TG0-TG1 bad, avskjermet kjøkken/krok nevnt, 3 soverom, over 70 m², elbillader, velbegrunnede fellesutgifter, prisnedgang — nevn prisnedgang eksplisitt i ai_vurdering som mulig kupp-signal når det er tilfelle).
      - `'vurder'`: alle harde krav oppfylt, men nøytral/uklar på skjønnsfaktorene uten å utmerke seg, eller ett forhold bør sjekkes nærmere.
 
 5. **Upsert** hver ny/oppdatert rad via Supabase `execute_sql`:
 ```sql
 insert into public.boligsok_annonser
-  (user_id, kilde, ekstern_id, url, tittel, adresse, prisantydning, totalpris, fellesutgifter, fellesgjeld, in_ordning, soverom, primaerrom_m2, bruksareal_m2, balkong, garasje, boligtype, oppfyller_krav, ai_anbefaling, ai_vurdering, raw_snippet, aktiv, updated_at)
+  (user_id, kilde, ekstern_id, url, tittel, adresse, prisantydning, totalpris, fellesutgifter, fellesgjeld, in_ordning, soverom, primaerrom_m2, bruksareal_m2, balkong, garasje, boligtype, oppfyller_krav, ai_anbefaling, ai_vurdering, raw_snippet, prisnedgang, annonsert_dato, aktiv, updated_at)
 values (..., true, now())
 on conflict (user_id, kilde, ekstern_id) do update set
   url=excluded.url, tittel=excluded.tittel, adresse=excluded.adresse, prisantydning=excluded.prisantydning,
@@ -54,7 +56,8 @@ on conflict (user_id, kilde, ekstern_id) do update set
   in_ordning=excluded.in_ordning, soverom=excluded.soverom, primaerrom_m2=excluded.primaerrom_m2,
   bruksareal_m2=excluded.bruksareal_m2, balkong=excluded.balkong, garasje=excluded.garasje,
   boligtype=excluded.boligtype, oppfyller_krav=excluded.oppfyller_krav, ai_anbefaling=excluded.ai_anbefaling,
-  ai_vurdering=excluded.ai_vurdering, raw_snippet=excluded.raw_snippet, aktiv=true, updated_at=now();
+  ai_vurdering=excluded.ai_vurdering, raw_snippet=excluded.raw_snippet, prisnedgang=excluded.prisnedgang,
+  annonsert_dato=excluded.annonsert_dato, aktiv=true, updated_at=now();
 ```
 (`aktiv=true` her dekker både helt nye rader og tidligere solgte boliger som er tilbake i søket.)
 `kilde='finn'`, `ekstern_id=finnkode`, `url='https://www.finn.no/realestate/homes/ad.html?finnkode='||finnkode`. Bruk `felleskostMnd` som `fellesutgifter`, `bruksareal` til både `primaerrom_m2` og `bruksareal_m2`. IKKE overskriv `status` og `notat` ved konflikt (ikke inkluder de kolonnene i update-settet).
