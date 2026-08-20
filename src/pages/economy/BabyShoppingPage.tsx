@@ -21,6 +21,8 @@ export interface BabyShoppingItem {
   status: ItemStatus
   priority: ItemPriority
   budgeted: number
+  /** Normalpris/ordinær pris før evt. rabatt — brukes til å regne ut hvor mye som er spart på salg */
+  fullPrice?: number
   actual: number
   note: string
   storeUrl?: string
@@ -107,9 +109,16 @@ const INITIAL_ITEMS: Omit<BabyShoppingItem, 'id'>[] = [
 function fmtNOK(n: number) { return n > 0 ? n.toLocaleString('no-NO') + ' kr' : '—' }
 function newId() { return crypto.randomUUID() }
 
+/** Hvor mye spart på salg — kun meningsfullt når fullpris og faktisk betalt begge er satt, og fullpris er høyest */
+function saved(item: BabyShoppingItem): number {
+  const full = item.fullPrice ?? 0
+  const actual = item.actual ?? 0
+  return full > 0 && actual > 0 && full > actual ? full - actual : 0
+}
+
 const EMPTY_ITEM = (): Omit<BabyShoppingItem, 'id'> => ({
   category: 'Annet', name: '', status: 'kjøpe', priority: 'bra_å_ha',
-  budgeted: 0, actual: 0, note: '', storeUrl: '', bestPriceNote: '',
+  budgeted: 0, fullPrice: 0, actual: 0, note: '', storeUrl: '', bestPriceNote: '',
 })
 
 // ─── Store hook ───────────────────────────────────────────────────────────────
@@ -288,6 +297,7 @@ export function BabyShoppingPage() {
 
   const totalBudgeted = items.reduce((s, i) => s + i.budgeted, 0)
   const totalActual = items.reduce((s, i) => s + i.actual, 0)
+  const totalSaved = items.reduce((s, i) => s + saved(i), 0)
   const done = items.filter(i => i.status === 'anskaffet' || i.status === 'arv_gave').length
   const remaining = items.filter(i => i.status === 'kjøpe' || i.status === 'bestilt').reduce((s, i) => s + i.budgeted, 0)
 
@@ -307,7 +317,7 @@ export function BabyShoppingPage() {
       )}
 
       {/* Oversikt */}
-      <div className="px-5 pt-4 pb-3 grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
+      <div className="px-5 pt-4 pb-3 grid grid-cols-2 sm:grid-cols-5 gap-3 shrink-0">
         <div className="rounded-lg border border-border bg-card px-4 py-3">
           <p className="text-[11px] text-muted-foreground mb-0.5">Fullført</p>
           <p className="text-base font-semibold">{done} / {items.length}</p>
@@ -322,6 +332,10 @@ export function BabyShoppingPage() {
         <div className="rounded-lg border border-border bg-card px-4 py-3">
           <p className="text-[11px] text-muted-foreground mb-0.5">Faktisk betalt</p>
           <p className="text-base font-semibold font-mono">{fmtNOK(totalActual)}</p>
+        </div>
+        <div className="rounded-lg border border-border bg-card px-4 py-3">
+          <p className="text-[11px] text-muted-foreground mb-0.5">Spart på salg</p>
+          <p className={cn('text-base font-semibold font-mono', totalSaved > 0 && 'text-green-400')}>{fmtNOK(totalSaved)}</p>
         </div>
         <div className="rounded-lg border border-border bg-card px-4 py-3">
           <p className="text-[11px] text-muted-foreground mb-0.5">Gjenstår å kjøpe</p>
@@ -453,7 +467,12 @@ export function BabyShoppingPage() {
                       : <span className="opacity-30">—</span>}
                   </td>
                   <td className="py-2 px-3 text-right font-mono" onClick={() => openEdit(item)}>{fmtNOK(item.budgeted)}</td>
-                  <td className={cn('py-2 px-3 text-right font-mono', item.actual > 0 && 'text-green-400')} onClick={() => openEdit(item)}>{fmtNOK(item.actual)}</td>
+                  <td className={cn('py-2 px-3 text-right font-mono', item.actual > 0 && 'text-green-400')} onClick={() => openEdit(item)}>
+                    {fmtNOK(item.actual)}
+                    {saved(item) > 0 && (
+                      <p className="text-[10px] text-green-400/80 font-normal">spart {fmtNOK(saved(item))}</p>
+                    )}
+                  </td>
                   <td className="py-2 pl-1">
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button onClick={() => openEdit(item)} className="text-muted-foreground hover:text-foreground p-1"><Pencil className="h-3.5 w-3.5" /></button>
@@ -684,17 +703,26 @@ function ItemDialog({ item, isNew, categories, onSave, onClose, onDelete }: {
             )}
           </div>
 
-          {/* Budsjett + Faktisk */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Budsjett + Fullpris + Faktisk */}
+          <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs">Budsjettert pris (kr)</Label>
               <Input type="number" value={form.budgeted || ''} onChange={e => set({ budgeted: parseInt(e.target.value) || 0 })} placeholder="0" className="text-xs h-8 font-mono" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Fullpris (kr)</Label>
+              <Input type="number" value={form.fullPrice || ''} onChange={e => set({ fullPrice: parseInt(e.target.value) || 0 })} placeholder="0" className="text-xs h-8 font-mono" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Faktisk betalt (kr)</Label>
               <Input type="number" value={form.actual || ''} onChange={e => set({ actual: parseInt(e.target.value) || 0 })} placeholder="0" className="text-xs h-8 font-mono" />
             </div>
           </div>
+          {saved(form) > 0 && (
+            <p className="text-[11px] text-green-400">
+              Du sparer {fmtNOK(saved(form))} ({Math.round((saved(form) / (form.fullPrice ?? 1)) * 100)}%) sammenlignet med fullpris.
+            </p>
+          )}
 
           {/* Merknad */}
           <div className="space-y-1.5">
