@@ -1358,7 +1358,9 @@ export const useEconomyStore = create<EconomyState>()(
       version: 29,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
-        console.log('[LB-MIGRATE-DEBUG] start', { fromVersion, debtsIsArray: Array.isArray(state.debts), debtsLen: Array.isArray(state.debts) ? state.debts.length : null })
+        try {
+          localStorage.setItem('__lb_migrate_debug_start', JSON.stringify({ t: Date.now(), fromVersion, debtsIsArray: Array.isArray(state.debts), debtsLen: Array.isArray(state.debts) ? (state.debts as unknown[]).length : null }))
+        } catch { /* ignore */ }
         // v20 → v21: migrer tieredRates (snapshot) til tieredRateHistory (tidsserie)
         if (fromVersion < 21 && Array.isArray(state.savingsAccounts)) {
           state.savingsAccounts = (state.savingsAccounts as SavingsAccount[]).map((acc) => {
@@ -1618,12 +1620,16 @@ export const useEconomyStore = create<EconomyState>()(
             ]
           }
         }
-        console.log('[LB-MIGRATE-DEBUG] end', { debtIds: Array.isArray(state.debts) ? (state.debts as DebtAccount[]).map((d) => d.id) : null, insuranceIds: Array.isArray(state.insurances) ? (state.insurances as InsuranceEntry[]).map((i) => i.id) : null })
+        try {
+          localStorage.setItem('__lb_migrate_debug_end', JSON.stringify({ t: Date.now(), debtIds: Array.isArray(state.debts) ? (state.debts as DebtAccount[]).map((d) => d.id) : null, insuranceIds: Array.isArray(state.insurances) ? (state.insurances as InsuranceEntry[]).map((i) => i.id) : null }))
+        } catch { /* ignore */ }
         return state
       },
       merge: (persistedState, currentState) => {
         const merged = { ...currentState, ...(persistedState as object) } as EconomyState
-        console.log('[LB-MIGRATE-DEBUG] merge result', { debtIds: merged.debts?.map((d) => d.id), insuranceIds: merged.insurances?.map((i) => i.id) })
+        try {
+          localStorage.setItem('__lb_migrate_debug_merge', JSON.stringify({ t: Date.now(), debtIds: merged.debts?.map((d) => d.id), insuranceIds: merged.insurances?.map((i) => i.id) }))
+        } catch { /* ignore */ }
         return merged
       },
       partialize: (state) => ({
