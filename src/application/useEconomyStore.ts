@@ -51,30 +51,6 @@ import {
   statementAccountType,
 } from '@/domain/economy/savingsStatementHistory'
 
-// TEMP DEBUG: log every write to the min-okonomi-v1 storage key, with a stack trace,
-// so we can see what's overwriting the freshly-migrated debts/insurances arrays.
-if (typeof window !== 'undefined' && !(window as unknown as Record<string, unknown>).__lbSetItemPatched) {
-  ;(window as unknown as Record<string, unknown>).__lbSetItemPatched = true
-  const origSetItem = Storage.prototype.setItem
-  Storage.prototype.setItem = function (this: Storage, key: string, value: string) {
-    if (key === 'min-okonomi-v1') {
-      try {
-        const n = Number(localStorage.getItem('__lb_write_count') ?? '0') + 1
-        localStorage.setItem('__lb_write_count', String(n))
-        const parsed = JSON.parse(value)
-        const stack = new Error().stack?.split('\n').slice(1, 6).join(' | ') ?? ''
-        origSetItem.call(this, '__lb_write_' + n, JSON.stringify({
-          t: Date.now(),
-          version: parsed.version,
-          debtIds: (parsed.state?.debts ?? []).map((d: { id: string }) => d.id),
-          stack,
-        }))
-      } catch { /* ignore */ }
-    }
-    return origSetItem.call(this, key, value)
-  }
-}
-
 // ------------------------------------------------------------
 // STATE INTERFACE
 // ------------------------------------------------------------
@@ -1382,9 +1358,6 @@ export const useEconomyStore = create<EconomyState>()(
       version: 29,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
-        try {
-          localStorage.setItem('__lb_migrate_debug_start', JSON.stringify({ t: Date.now(), fromVersion, debtsIsArray: Array.isArray(state.debts), debtsLen: Array.isArray(state.debts) ? (state.debts as unknown[]).length : null }))
-        } catch { /* ignore */ }
         // v20 → v21: migrer tieredRates (snapshot) til tieredRateHistory (tidsserie)
         if (fromVersion < 21 && Array.isArray(state.savingsAccounts)) {
           state.savingsAccounts = (state.savingsAccounts as SavingsAccount[]).map((acc) => {
@@ -1644,29 +1617,7 @@ export const useEconomyStore = create<EconomyState>()(
             ]
           }
         }
-        try {
-          localStorage.setItem('__lb_migrate_debug_end', JSON.stringify({ t: Date.now(), debtIds: Array.isArray(state.debts) ? (state.debts as DebtAccount[]).map((d) => d.id) : null, insuranceIds: Array.isArray(state.insurances) ? (state.insurances as InsuranceEntry[]).map((i) => i.id) : null }))
-        } catch { /* ignore */ }
         return state
-      },
-      merge: (persistedState, currentState) => {
-        const merged = { ...currentState, ...(persistedState as object) } as EconomyState
-        try {
-          const mergeCallCount = Number(localStorage.getItem('__lb_migrate_debug_mergecount') ?? '0') + 1
-          localStorage.setItem('__lb_migrate_debug_mergecount', String(mergeCallCount))
-          localStorage.setItem('__lb_migrate_debug_merge_' + mergeCallCount, JSON.stringify({ t: Date.now(), debtIds: merged.debts?.map((d) => d.id), insuranceIds: merged.insurances?.map((i) => i.id) }))
-          const snap = (label: string) => {
-            try {
-              const raw = localStorage.getItem('min-okonomi-v1')
-              const parsed = raw ? JSON.parse(raw) : null
-              localStorage.setItem('__lb_snap_' + label, JSON.stringify({ t: Date.now(), version: parsed?.version, debtIds: (parsed?.state?.debts ?? []).map((d: DebtAccount) => d.id) }))
-            } catch { /* ignore */ }
-          }
-          setTimeout(() => snap('500ms'), 500)
-          setTimeout(() => snap('2000ms'), 2000)
-          setTimeout(() => snap('5000ms'), 5000)
-        } catch { /* ignore */ }
-        return merged
       },
       partialize: (state) => ({
         storeVersion: state.storeVersion,
