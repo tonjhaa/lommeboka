@@ -1355,7 +1355,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 28,
+      version: 29,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v20 → v21: migrer tieredRates (snapshot) til tieredRateHistory (tidsserie)
@@ -1576,8 +1576,11 @@ export const useEconomyStore = create<EconomyState>()(
           if (!Array.isArray(state.spendingTransactions)) state.spendingTransactions = []
           if (!Array.isArray(state.categoryRules)) state.categoryRules = []
         }
-        // v27 → v28: legg til billån (Yamaha MTN690-U, Nordea Finance) og motorsykkelforsikring (Gjensidige)
-        if (fromVersion < 28) {
+        // v27 → v29: legg til billån (Yamaha MTN690-U, Nordea Finance) og motorsykkelforsikring (Gjensidige).
+        // Gaten er bevisst < 29 (ikke < 28): v28 rullet ut uten at disse postene faktisk ble
+        // lagt til for eksisterende brukere (årsak ukjent), så gaten ble hevet for å gi
+        // migreringen — som er idempotent via .some()-sjekkene — en ny sjanse til å kjøre.
+        if (fromVersion < 29) {
           if (Array.isArray(state.debts) && !(state.debts as DebtAccount[]).some((d) => d.id === 'debt-billaan-yamaha-mt09')) {
             state.debts = [
               ...(state.debts as DebtAccount[]),
