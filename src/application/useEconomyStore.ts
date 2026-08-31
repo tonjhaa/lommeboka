@@ -1355,7 +1355,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 27,
+      version: 28,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v20 → v21: migrer tieredRates (snapshot) til tieredRateHistory (tidsserie)
@@ -1575,6 +1575,44 @@ export const useEconomyStore = create<EconomyState>()(
         if (fromVersion < 27) {
           if (!Array.isArray(state.spendingTransactions)) state.spendingTransactions = []
           if (!Array.isArray(state.categoryRules)) state.categoryRules = []
+        }
+        // v27 → v28: legg til billån (Yamaha MTN690-U, Nordea Finance) og motorsykkelforsikring (Gjensidige)
+        if (fromVersion < 28) {
+          if (Array.isArray(state.debts) && !(state.debts as DebtAccount[]).some((d) => d.id === 'debt-billaan-yamaha-mt09')) {
+            state.debts = [
+              ...(state.debts as DebtAccount[]),
+              {
+                id: 'debt-billaan-yamaha-mt09',
+                creditor: 'Nordea Finance',
+                type: 'billaan',
+                originalAmount: 83_189,
+                currentBalance: 83_189,
+                rateHistory: [{ fromDate: '2026-08-17', nominalRate: 6.35 }],
+                monthlyPayment: 1_289.28,
+                termFee: 0,
+                startDate: '2026-08-17',
+                expectedPayoffDate: '2033-08-17',
+                loanSubtype: 'Yamaha MTN690-U, reg. YD9592, lånenr. 30360958',
+                paymentDay: 17,
+                dailyInterestCalc: false,
+                status: 'aktiv',
+              } satisfies DebtAccount,
+            ]
+          }
+          if (Array.isArray(state.insurances) && !(state.insurances as InsuranceEntry[]).some((i) => i.id === 'insurance-mc-yamaha-mt09')) {
+            state.insurances = [
+              ...(state.insurances as InsuranceEntry[]),
+              {
+                id: 'insurance-mc-yamaha-mt09',
+                provider: 'GJENSIDIGE',
+                type: 'Motorsykkelforsikring (kasko)',
+                yearlyAmounts: { '2026': 783 * 12 },
+                isActive: true,
+                renewalMonth: 8,
+                bonus: 75,
+              } satisfies InsuranceEntry,
+            ]
+          }
         }
         return state
       },
