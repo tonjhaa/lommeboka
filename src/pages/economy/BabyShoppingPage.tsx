@@ -65,7 +65,7 @@ const PRIORITY_BADGE: Record<ItemPriority, string> = {
   kan_vente: 'bg-muted/40 text-muted-foreground border-border',
 }
 
-const DEFAULT_CATEGORIES = ['Søvn', 'Stell', 'Ernæring', 'Transport', 'Klær', 'Bad', 'Lek & utvikling', 'Annet']
+const DEFAULT_CATEGORIES = ['Søvn', 'Stell', 'Ernæring', 'Transport', 'Bad', 'Lek & utvikling', 'Annet']
 
 const INITIAL_ITEMS: Omit<BabyShoppingItem, 'id'>[] = [
   { category: 'Søvn', name: 'Vugge eller seng', status: 'kjøpe', priority: 'må_ha', budgeted: 2000, actual: 0, note: '' },
@@ -91,11 +91,6 @@ const INITIAL_ITEMS: Omit<BabyShoppingItem, 'id'>[] = [
   { category: 'Transport', name: 'Barnevogn', status: 'kjøpe', priority: 'må_ha', budgeted: 5000, actual: 0, note: '' },
   { category: 'Transport', name: 'Bæresele/bærestol', status: 'kjøpe', priority: 'bra_å_ha', budgeted: 1500, actual: 0, note: '' },
   { category: 'Transport', name: 'Regnslag til vogn', status: 'kjøpe', priority: 'bra_å_ha', budgeted: 400, actual: 0, note: '' },
-  { category: 'Klær', name: 'Bodyer 50/56 cm (5–8 stk)', status: 'kjøpe', priority: 'må_ha', budgeted: 600, actual: 0, note: '' },
-  { category: 'Klær', name: 'Sparkebukser/onesies (5–8 stk)', status: 'kjøpe', priority: 'må_ha', budgeted: 600, actual: 0, note: '' },
-  { category: 'Klær', name: 'Luer (2 stk)', status: 'kjøpe', priority: 'må_ha', budgeted: 200, actual: 0, note: '' },
-  { category: 'Klær', name: 'Votter (2–3 par)', status: 'kjøpe', priority: 'bra_å_ha', budgeted: 150, actual: 0, note: '' },
-  { category: 'Klær', name: 'Ytterdrakt/overall', status: 'kjøpe', priority: 'bra_å_ha', budgeted: 800, actual: 0, note: '' },
   { category: 'Bad', name: 'Babybadekar', status: 'kjøpe', priority: 'bra_å_ha', budgeted: 600, actual: 0, note: '' },
   { category: 'Bad', name: 'Badetermometer', status: 'kjøpe', priority: 'bra_å_ha', budgeted: 150, actual: 0, note: '' },
   { category: 'Bad', name: 'Mild babysåpe/shampoo', status: 'kjøpe', priority: 'må_ha', budgeted: 150, actual: 0, note: '' },
@@ -289,7 +284,7 @@ export function BabyShoppingPage() {
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
-        <p className="text-sm text-muted-foreground">Ingen innkjøpsliste ennå.</p>
+        <p className="text-sm text-muted-foreground">Ingen utstyrsliste ennå.</p>
         <Button onClick={init}>Last inn standardliste</Button>
       </div>
     )

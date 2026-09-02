@@ -100,13 +100,16 @@ export interface EconomyState {
   ivfTransactions: IVFTransaction[]
   ivfSettings: IVFSettings
 
-  // Baby-innkjøpsliste
+  // Baby-innkjøpsliste (utstyr)
   babyShoppingItems: import('../pages/economy/BabyShoppingPage').BabyShoppingItem[]
   priceAlerts: import('../pages/economy/BabyShoppingPage').PriceAlert[]
   lastGlobalPriceCheckAt: number
   addPriceAlerts: (alerts: import('../pages/economy/BabyShoppingPage').PriceAlert[]) => void
   dismissPriceAlert: (itemId: string) => void
   setLastGlobalPriceCheckAt: (ts: number) => void
+
+  // Baby-klesliste (størrelsesmatrise)
+  clothingItems: import('../pages/economy/ClothingPage').ClothingItem[]
 
   // Fond (KRON-portefølje)
   fondPortfolio: FondPortfolio
@@ -208,6 +211,7 @@ export interface EconomyState {
   setIvfSettings: (settings: Partial<IVFSettings>) => void
 
   setBabyShoppingItems: (items: import('../pages/economy/BabyShoppingPage').BabyShoppingItem[]) => void
+  setClothingItems: (items: import('../pages/economy/ClothingPage').ClothingItem[]) => void
 
   setFondPortfolio: (p: FondPortfolio) => void
   addFondSnapshot: (snapshot: FondPortfolioSnapshot) => void
@@ -334,6 +338,7 @@ export const useEconomyStore = create<EconomyState>()(
       babyShoppingItems: [],
       priceAlerts: [],
       lastGlobalPriceCheckAt: 0,
+      clothingItems: [],
       fondPortfolio: DEFAULT_FOND_PORTFOLIO,
       partnerVeikart: {
         enabled: false,
@@ -1052,6 +1057,7 @@ export const useEconomyStore = create<EconomyState>()(
       setIvfSettings: (settings) =>
         set((s) => ({ ivfSettings: { ...s.ivfSettings, ...settings } })),
       setBabyShoppingItems: (items) => set({ babyShoppingItems: items }),
+      setClothingItems: (items) => set({ clothingItems: items }),
       addPriceAlerts: (alerts) =>
         set((s) => {
           const existingIds = new Set(s.priceAlerts.map((a) => a.itemId))
@@ -1355,7 +1361,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 29,
+      version: 30,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v20 → v21: migrer tieredRates (snapshot) til tieredRateHistory (tidsserie)
@@ -1617,6 +1623,28 @@ export const useEconomyStore = create<EconomyState>()(
             ]
           }
         }
+        // v29 → v30: splitt "Klær" ut av innkjøpslisten (Utstyr) til egen klesliste
+        // med størrelsesmatrise. Idempotent via clothingItems-sjekken.
+        if (fromVersion < 30 && !Array.isArray(state.clothingItems)) {
+          const shopping = (Array.isArray(state.babyShoppingItems)
+            ? state.babyShoppingItems
+            : []) as import('../pages/economy/BabyShoppingPage').BabyShoppingItem[]
+          const klaer = shopping.filter((i) => i.category === 'Klær')
+          state.clothingItems = klaer.map((i) => ({
+            id: i.id,
+            name: i.name,
+            status: i.status,
+            priority: i.priority,
+            budgeted: i.budgeted,
+            actual: i.actual,
+            note: i.note,
+            storeUrl: i.storeUrl,
+            sizes: {},
+          })) satisfies import('../pages/economy/ClothingPage').ClothingItem[]
+          if (klaer.length > 0) {
+            state.babyShoppingItems = shopping.filter((i) => i.category !== 'Klær')
+          }
+        }
         return state
       },
       partialize: (state) => ({
@@ -1651,6 +1679,7 @@ export const useEconomyStore = create<EconomyState>()(
         babyShoppingItems: state.babyShoppingItems,
         priceAlerts: state.priceAlerts,
         lastGlobalPriceCheckAt: state.lastGlobalPriceCheckAt,
+        clothingItems: state.clothingItems,
         pensionSettings: state.pensionSettings,
         keyFigureOverrides: state.keyFigureOverrides,
         spendingTransactions: state.spendingTransactions,

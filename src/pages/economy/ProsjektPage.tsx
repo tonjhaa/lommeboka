@@ -2,16 +2,18 @@ import { cn } from '@/lib/utils'
 import { IVFPage } from './IVFPage'
 import { PermisjonPage } from './PermisjonPage'
 import { BabyShoppingPage } from './BabyShoppingPage'
-import { FlaskConical, Baby, ShoppingCart } from 'lucide-react'
+import { ClothingPage } from './ClothingPage'
+import { FlaskConical, Baby, ShoppingCart, Shirt } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 import { useEconomyStore } from '@/application/useEconomyStore'
 
-type ProsjektTab = 'behandling' | 'permisjon' | 'innkjøpsliste'
+type ProsjektTab = 'behandling' | 'permisjon' | 'utstyr' | 'klær'
 
 const TABS: { id: ProsjektTab; label: string; Icon: React.FC<{ className?: string }> }[] = [
   { id: 'behandling', label: 'Behandling', Icon: FlaskConical },
   { id: 'permisjon', label: 'Permisjon', Icon: Baby },
-  { id: 'innkjøpsliste', label: 'Innkjøpsliste', Icon: ShoppingCart },
+  { id: 'utstyr', label: 'Utstyr', Icon: ShoppingCart },
+  { id: 'klær', label: 'Klær', Icon: Shirt },
 ]
 
 export function ProsjektPage() {
@@ -36,7 +38,7 @@ export function ProsjektPage() {
           >
             <Icon className="h-3.5 w-3.5" />
             {label}
-            {id === 'innkjøpsliste' && alertCount > 0 && (
+            {id === 'utstyr' && alertCount > 0 && (
               <span className="absolute -top-0.5 -right-1 h-4 min-w-4 rounded-full bg-green-500 text-[9px] font-bold text-black flex items-center justify-center px-1">
                 {alertCount}
               </span>
@@ -48,7 +50,8 @@ export function ProsjektPage() {
       <div className="flex-1 overflow-hidden">
         <div className={cn('h-full', tab !== 'behandling' && 'hidden')}><IVFPage /></div>
         <div className={cn('h-full', tab !== 'permisjon' && 'hidden')}><PermisjonPage /></div>
-        <div className={cn('h-full', tab !== 'innkjøpsliste' && 'hidden')}><BabyShoppingPage /></div>
+        <div className={cn('h-full', tab !== 'utstyr' && 'hidden')}><BabyShoppingPage /></div>
+        <div className={cn('h-full', tab !== 'klær' && 'hidden')}><ClothingPage /></div>
       </div>
     </div>
   )

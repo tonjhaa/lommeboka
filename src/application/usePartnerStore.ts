@@ -432,6 +432,8 @@ export const usePartnerStore = create<EconomyState>()(
       setIvfSettings: () => {},
       babyShoppingItems: [],
       setBabyShoppingItems: () => {},
+      clothingItems: [],
+      setClothingItems: () => {},
       priceAlerts: [],
       lastGlobalPriceCheckAt: 0,
       addPriceAlerts: () => {},

@@ -29,7 +29,7 @@ interface AppState {
   currentView: AppView
   currentEconomyPage: EconomySubPage
   savingsTab: 'kontoer' | 'fond' | 'måneder' | 'råd'
-  prosjektTab: 'behandling' | 'permisjon' | 'innkjøpsliste'
+  prosjektTab: 'behandling' | 'permisjon' | 'utstyr' | 'klær'
 
   /** Avviste Pengepuls-chips: chip-id → ISO-dato chipen er skjult til */
   dismissedChips: Record<string, string>
@@ -43,7 +43,7 @@ interface AppState {
   setCurrentView: (view: AppView) => void
   setCurrentEconomyPage: (page: EconomySubPage) => void
   setSavingsTab: (tab: 'kontoer' | 'fond' | 'måneder' | 'råd') => void
-  setProsjektTab: (tab: 'behandling' | 'permisjon' | 'innkjøpsliste') => void
+  setProsjektTab: (tab: 'behandling' | 'permisjon' | 'utstyr' | 'klær') => void
 
   addScenario: (scenario: ScenarioInput) => void
   updateScenario: (id: string, updates: Partial<ScenarioInput>) => void
@@ -170,9 +170,13 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'boligkalkulator-storage',
-      version: 3,
+      version: 4,
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>
+        if (version < 4 && state.prosjektTab === 'innkjøpsliste') {
+          // Innkjøpsliste-fanen ble delt i to: Utstyr og Klær
+          state.prosjektTab = 'utstyr'
+        }
         if (version < 2 && state.config) {
           // Deep-merge stored config with defaultConfig so new fields get populated
           state.config = {
