@@ -1633,10 +1633,6 @@ export const useEconomyStore = create<EconomyState>()(
           state.clothingItems = klaer.map((i) => ({
             id: i.id,
             name: i.name,
-            status: i.status,
-            priority: i.priority,
-            budgeted: i.budgeted,
-            actual: i.actual,
             note: i.note,
             storeUrl: i.storeUrl,
             sizes: {},
