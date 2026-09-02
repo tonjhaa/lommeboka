@@ -24,15 +24,28 @@ export interface ClothingItem {
   sizes: Partial<Record<ClothingSize, number>>
 }
 
-const INITIAL_ITEMS: Omit<ClothingItem, 'id'>[] = [
-  { name: 'Ull body', note: '', sizes: {} },
-  { name: 'Bodyer (bomull)', note: '', sizes: {} },
-  { name: 'Sparkebukser/onesies', note: '', sizes: {} },
-  { name: 'Luer', note: '', sizes: {} },
-  { name: 'Votter', note: '', sizes: {} },
-  { name: 'Sokker/ullsokker', note: '', sizes: {} },
-  { name: 'Ytterdrakt/overall', note: '', sizes: {} },
+/** Standard plaggtyper — brukt både til "Last inn standardliste" og til å fylle på
+ *  manglende typer i eksisterende kleslister (se useEconomyStore-migreringen). */
+export const STANDARD_CLOTHING_TYPES = [
+  'Ull body, langermet',
+  'Body, kortermet',
+  'Body, langermet',
+  'Sparkebukse/onesie',
+  'Pyjamas',
+  'Strømpebukse',
+  'Sokker',
+  'Ullsokker',
+  'Votter',
+  'Lue, bomull',
+  'Lue, ull',
+  'Ytterdrakt/vognpose',
+  'Regndress',
+  'Fleecedress/-jakke',
+  'Ullundertøy-sett',
+  'Sko, myke',
 ]
+
+const INITIAL_ITEMS: Omit<ClothingItem, 'id'>[] = STANDARD_CLOTHING_TYPES.map((name) => ({ name, note: '', sizes: {} }))
 
 function newId() { return crypto.randomUUID() }
 function totalQty(item: ClothingItem) { return CLOTHING_SIZES.reduce((s, sz) => s + (item.sizes[sz] ?? 0), 0) }

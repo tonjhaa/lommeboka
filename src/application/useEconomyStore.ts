@@ -1361,7 +1361,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 30,
+      version: 31,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v20 → v21: migrer tieredRates (snapshot) til tieredRateHistory (tidsserie)
@@ -1640,6 +1640,28 @@ export const useEconomyStore = create<EconomyState>()(
           if (klaer.length > 0) {
             state.babyShoppingItems = shopping.filter((i) => i.category !== 'Klær')
           }
+        }
+        // v30 → v31: fjern antall/størrelse fra plaggnavn (dekkes nå av størrelses-
+        // matrisen, f.eks. "Bodyer 50/56 cm (5–8 stk)" → "Bodyer"), og fyll på med
+        // standard plaggtyper som ikke allerede finnes i lista.
+        if (fromVersion < 31 && Array.isArray(state.clothingItems)) {
+          const stripQty = (name: string) => name
+            .replace(/\s*\(.*?\)\s*$/, '')
+            .replace(/\s*\d+(\/\d+)?\s*cm\s*$/i, '')
+            .trim()
+          const standardTypes = [
+            'Ull body, langermet', 'Body, kortermet', 'Body, langermet',
+            'Sparkebukse/onesie', 'Pyjamas', 'Strømpebukse', 'Sokker', 'Ullsokker',
+            'Votter', 'Lue, bomull', 'Lue, ull', 'Ytterdrakt/vognpose', 'Regndress',
+            'Fleecedress/-jakke', 'Ullundertøy-sett', 'Sko, myke',
+          ]
+          const cleaned = (state.clothingItems as import('../pages/economy/ClothingPage').ClothingItem[])
+            .map((i) => ({ ...i, name: stripQty(i.name) }))
+          const existingNames = new Set(cleaned.map((i) => i.name.toLowerCase()))
+          const missing = standardTypes
+            .filter((name) => !existingNames.has(name.toLowerCase()))
+            .map((name) => ({ id: crypto.randomUUID(), name, note: '', sizes: {} }))
+          state.clothingItems = [...cleaned, ...missing]
         }
         return state
       },
