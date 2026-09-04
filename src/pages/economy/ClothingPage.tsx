@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react'
-import { Plus, Minus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Search, X, Pencil } from 'lucide-react'
+import { Plus, Minus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Search, X, Pencil, Lock, LockOpen } from 'lucide-react'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
@@ -79,6 +80,8 @@ export function ClothingPage() {
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [editing, setEditing] = useState<ClothingItem | null>(null)
   const [isNew, setIsNew] = useState(false)
+  /** Låst som default — hindrer at antall/rader endres ved et uhell når man bare skal se */
+  const [editMode, setEditMode] = useState(false)
 
   const filtered = useMemo(() => {
     let list = [...items]
@@ -158,9 +161,23 @@ export function ClothingPage() {
           {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>}
         </div>
         <span className="text-xs text-muted-foreground ml-auto">{filtered.length} plagg</span>
-        <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={openNew}>
-          <Plus className="h-3.5 w-3.5" /> Legg til plagg
-        </Button>
+        <div className={cn(
+          'flex items-center gap-2 h-8 rounded-md border px-2.5 text-xs font-medium transition-colors',
+          editMode ? 'border-amber-500/40 text-amber-400 bg-amber-500/10' : 'border-border text-muted-foreground'
+        )}>
+          {editMode ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+          <span className="cursor-pointer select-none" onClick={() => setEditMode(v => !v)}>Redigering</span>
+          <Switch
+            checked={editMode}
+            onCheckedChange={setEditMode}
+            className="h-4 w-7 [&>span]:h-3 [&>span]:w-3 [&>span]:data-[state=checked]:translate-x-3"
+          />
+        </div>
+        {editMode && (
+          <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={openNew}>
+            <Plus className="h-3.5 w-3.5" /> Legg til plagg
+          </Button>
+        )}
       </div>
 
       {/* Tabell */}
@@ -179,21 +196,23 @@ export function ClothingPage() {
           <tbody>
             {filtered.map(item => (
               <tr key={item.id} className="border-b border-border/40 group hover:bg-muted/10 transition-colors">
-                <td className="py-2 px-3 cursor-pointer" onClick={() => openEdit(item)}>
+                <td className={cn('py-2 px-3', editMode && 'cursor-pointer')} onClick={() => editMode && openEdit(item)}>
                   <span className="font-medium">{item.name || <span className="text-muted-foreground italic">Uten navn</span>}</span>
                   {item.note && <p className="text-[10px] text-muted-foreground mt-0.5">{item.note}</p>}
                 </td>
                 {CLOTHING_SIZES.map(sz => (
                   <td key={sz} className="py-1 px-1">
-                    <SizeCell value={item.sizes[sz] ?? 0} onChange={v => setSize(item.id, sz, v)} />
+                    <SizeCell value={item.sizes[sz] ?? 0} onChange={v => setSize(item.id, sz, v)} editable={editMode} />
                   </td>
                 ))}
                 <td className="py-2 px-3 text-right font-mono text-muted-foreground">{totalQty(item) || '—'}</td>
                 <td className="py-2 pl-1">
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => openEdit(item)} className="text-muted-foreground hover:text-foreground p-1"><Pencil className="h-3.5 w-3.5" /></button>
-                    <button onClick={() => remove(item.id)} className="text-muted-foreground hover:text-red-400 p-1"><Trash2 className="h-3.5 w-3.5" /></button>
-                  </div>
+                  {editMode && (
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => openEdit(item)} className="text-muted-foreground hover:text-foreground p-1"><Pencil className="h-3.5 w-3.5" /></button>
+                      <button onClick={() => remove(item.id)} className="text-muted-foreground hover:text-red-400 p-1"><Trash2 className="h-3.5 w-3.5" /></button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
@@ -209,7 +228,16 @@ export function ClothingPage() {
 
 // ─── Størrelsescelle (enkel velger) ────────────────────────────────────────────
 
-function SizeCell({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function SizeCell({ value, onChange, editable }: { value: number; onChange: (v: number) => void; editable: boolean }) {
+  if (!editable) {
+    return (
+      <div className="flex items-center justify-center">
+        <span className={cn('w-4 text-center text-[11px] font-mono tabular-nums', value > 0 ? 'text-foreground font-medium' : 'text-muted-foreground/40')}>
+          {value}
+        </span>
+      </div>
+    )
+  }
   return (
     <div className="flex items-center justify-center gap-0.5">
       <button
