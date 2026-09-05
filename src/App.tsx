@@ -8,6 +8,10 @@ import { useAppStore } from '@/store/useAppStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { usePartnershipStore } from '@/store/usePartnershipStore'
 import { useSharedProjectStore } from '@/store/useSharedProjectStore'
+import { useSharedUtstyrStore } from '@/store/useSharedUtstyrStore'
+import { useSharedKlaerStore } from '@/store/useSharedKlaerStore'
+import { useSharedGaverStore } from '@/store/useSharedGaverStore'
+import { startGiftSync } from '@/lib/giftSync'
 import { LoginPage } from '@/pages/LoginPage'
 import { loadFromSupabase, startAutoSync, setImporting } from '@/lib/syncEconomyData'
 import { useEconomyStore } from '@/application/useEconomyStore'
@@ -128,6 +132,7 @@ function App() {
       })
 
     const stopSync = startAutoSync()
+    const stopGiftSync = startGiftSync()
 
     // Initialiser partnerskap og håndter eventuelle invite-lenker
     const initPartnership = async () => {
@@ -146,11 +151,14 @@ function App() {
       const partnership = usePartnershipStore.getState().partnership
       if (partnership?.status === 'accepted') {
         useSharedProjectStore.getState().initialize(partnership.id)
+        useSharedUtstyrStore.getState().initialize(partnership.id)
+        useSharedKlaerStore.getState().initialize(partnership.id)
+        useSharedGaverStore.getState().initialize(partnership.id)
       }
     }
     initPartnership()
 
-    return stopSync
+    return () => { stopSync(); stopGiftSync() }
   }, [user])
 
   if (!initialized || syncing) {

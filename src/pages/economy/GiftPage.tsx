@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import {
   Gift, Plus, Trash2, Pencil, AlertTriangle,
-  Users, SlidersHorizontal, TrendingUp, Wallet, ChevronDown, ChevronUp,
+  Users, SlidersHorizontal, TrendingUp, Wallet, ChevronDown, ChevronUp, Share2,
 } from 'lucide-react'
 import * as RadixSlider from '@radix-ui/react-slider'
 import { cn } from '@/lib/utils'
@@ -11,7 +11,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { useGiftStore } from '@/application/useGiftStore'
+import { useGiftStore, giftSharedSlice, giftSliceIsEmpty } from '@/application/useGiftStore'
+import { useSharedGaverStore } from '@/store/useSharedGaverStore'
 import {
   OCCASION_LABELS, RELATIONSHIP_LABELS,
   STATUS_LABELS, DISTRIBUTION_LABELS,
@@ -1843,6 +1844,22 @@ function RatesTab() {
 
 export function GiftPage() {
   const [activeTab, setActiveTab] = useState<GiftTab>('oversikt')
+  const [migrating, setMigrating] = useState(false)
+  const recipients = useGiftStore((s) => s.recipients)
+  const events = useGiftStore((s) => s.events)
+  const isShared = useSharedGaverStore((s) => s.partnershipId !== null)
+  const migrated = useSharedGaverStore((s) => s.migrated)
+  const sharedIsEmpty = useSharedGaverStore((s) => (s.data === null || giftSliceIsEmpty(s.data)) && !s.loading)
+  const needsMigration = isShared && (recipients.length > 0 || events.length > 0) && sharedIsEmpty && !migrated
+
+  async function handleMigrate() {
+    setMigrating(true)
+    try {
+      await useSharedGaverStore.getState().migrateFrom(giftSharedSlice(), giftSliceIsEmpty)
+    } finally {
+      setMigrating(false)
+    }
+  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -1864,6 +1881,28 @@ export function GiftPage() {
           </button>
         ))}
       </nav>
+
+      {/* Del med partner */}
+      {needsMigration && (
+        <div className="mx-4 mt-4 rounded-lg border border-violet-500/40 bg-violet-500/10 px-4 py-3 flex items-center justify-between gap-3 shrink-0">
+          <div>
+            <p className="text-sm font-medium text-violet-300 flex items-center gap-1.5">
+              <Share2 className="h-4 w-4" />
+              Del gaveplanleggeren med partner
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {recipients.length} mottakere og {events.length} hendelser er klare til å flyttes til den felles planleggeren.
+            </p>
+          </div>
+          <button
+            onClick={handleMigrate}
+            disabled={migrating}
+            className="text-xs px-3 py-1.5 rounded bg-violet-600 hover:bg-violet-500 text-white font-medium transition-colors disabled:opacity-50 whitespace-nowrap"
+          >
+            {migrating ? 'Flytter…' : 'Flytt til felles'}
+          </button>
+        </div>
+      )}
 
       {/* Innhold */}
       <div className="flex-1 overflow-y-auto">

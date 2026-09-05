@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { Plus, Trash2, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Search, X, Pencil, Loader2, TrendingDown } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Search, X, Pencil, Loader2, TrendingDown, Share2 } from 'lucide-react'
 import { useEconomyStore } from '@/application/useEconomyStore'
+import { useSharedUtstyrStore } from '@/store/useSharedUtstyrStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -119,8 +120,16 @@ const EMPTY_ITEM = (): Omit<BabyShoppingItem, 'id'> => ({
 // ─── Store hook ───────────────────────────────────────────────────────────────
 
 function useBabyShopping() {
-  const items = useEconomyStore((s) => s.babyShoppingItems ?? []) as BabyShoppingItem[]
-  const setItems = useEconomyStore((s) => s.setBabyShoppingItems)
+  const shared = useSharedUtstyrStore()
+  const personalItems = useEconomyStore((s) => s.babyShoppingItems ?? []) as BabyShoppingItem[]
+  const setPersonalItems = useEconomyStore((s) => s.setBabyShoppingItems)
+  const isShared = shared.partnershipId !== null
+  // Bruk delt data kun etter at migrering er gjort ELLER delt liste allerede har innhold
+  const sharedHasData = (shared.data?.length ?? 0) > 0 || shared.migrated
+  const useShared = isShared && sharedHasData
+  const items = useShared ? (shared.data ?? []) : personalItems
+  const setItems = (next: BabyShoppingItem[]) => { if (useShared) void shared.setData(next); else setPersonalItems(next) }
+
   const priceAlerts = useEconomyStore((s) => s.priceAlerts ?? []) as PriceAlert[]
   const addPriceAlerts = useEconomyStore((s) => s.addPriceAlerts)
   const dismissPriceAlert = useEconomyStore((s) => s.dismissPriceAlert)
@@ -129,6 +138,8 @@ function useBabyShopping() {
   return {
     items, priceAlerts, lastGlobalPriceCheckAt,
     addPriceAlerts, dismissPriceAlert, setLastGlobalPriceCheckAt,
+    isShared, personalItems, migrated: shared.migrated,
+    migrateFrom: () => shared.migrateFrom(personalItems, (d) => d.length === 0),
     init: () => setItems(INITIAL_ITEMS.map(i => ({ ...i, id: newId() }))),
     save: (item: BabyShoppingItem) => {
       const exists = items.some(i => i.id === item.id)
@@ -222,7 +233,16 @@ function usePriceChecker(
 
 export function BabyShoppingPage() {
   const { items, priceAlerts, lastGlobalPriceCheckAt, addPriceAlerts, dismissPriceAlert,
-          setLastGlobalPriceCheckAt, init, save, remove, toggleDone, setStatus, updateTrackedPrice } = useBabyShopping()
+          setLastGlobalPriceCheckAt, init, save, remove, toggleDone, setStatus, updateTrackedPrice,
+          isShared, personalItems, migrated, migrateFrom } = useBabyShopping()
+  const sharedIsEmpty = useSharedUtstyrStore((s) => (s.data?.length ?? 0) === 0 && !s.loading)
+  const needsMigration = isShared && personalItems.length > 0 && sharedIsEmpty && !migrated
+  const [migrating, setMigrating] = useState(false)
+
+  async function handleMigrate() {
+    setMigrating(true)
+    try { await migrateFrom() } finally { setMigrating(false) }
+  }
 
   const { checking, progress } = usePriceChecker(
     items, lastGlobalPriceCheckAt,
@@ -309,6 +329,28 @@ export function BabyShoppingPage() {
           onClose={closeDialog}
           onDelete={isNew ? undefined : () => { remove(editing.id); closeDialog() }}
         />
+      )}
+
+      {/* Del med partner */}
+      {needsMigration && (
+        <div className="mx-5 mt-4 rounded-lg border border-violet-500/40 bg-violet-500/10 px-4 py-3 flex items-center justify-between gap-3 shrink-0">
+          <div>
+            <p className="text-sm font-medium text-violet-300 flex items-center gap-1.5">
+              <Share2 className="h-4 w-4" />
+              Del utstyrslisten med partner
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {personalItems.length} produkter er klare til å flyttes til den felles listen.
+            </p>
+          </div>
+          <button
+            onClick={handleMigrate}
+            disabled={migrating}
+            className="text-xs px-3 py-1.5 rounded bg-violet-600 hover:bg-violet-500 text-white font-medium transition-colors disabled:opacity-50 whitespace-nowrap"
+          >
+            {migrating ? 'Flytter…' : 'Flytt til felles'}
+          </button>
+        </div>
       )}
 
       {/* Oversikt */}

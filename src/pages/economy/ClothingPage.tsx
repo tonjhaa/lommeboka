@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
-import { Plus, Minus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Search, X, Pencil, Lock, LockOpen } from 'lucide-react'
+import { Plus, Minus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Search, X, Pencil, Lock, LockOpen, Share2 } from 'lucide-react'
 import { useEconomyStore } from '@/application/useEconomyStore'
+import { useSharedKlaerStore } from '@/store/useSharedKlaerStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -56,10 +57,20 @@ const EMPTY_ITEM = (): Omit<ClothingItem, 'id'> => ({ name: '', note: '', storeU
 // ─── Store hook ───────────────────────────────────────────────────────────────
 
 function useClothing() {
-  const items = useEconomyStore((s) => s.clothingItems ?? []) as ClothingItem[]
-  const setItems = useEconomyStore((s) => s.setClothingItems)
+  const shared = useSharedKlaerStore()
+  const personalItems = useEconomyStore((s) => s.clothingItems ?? []) as ClothingItem[]
+  const setPersonalItems = useEconomyStore((s) => s.setClothingItems)
+  const isShared = shared.partnershipId !== null
+  // Bruk delt data kun etter at migrering er gjort ELLER delt liste allerede har innhold
+  const sharedHasData = (shared.data?.length ?? 0) > 0 || shared.migrated
+  const useShared = isShared && sharedHasData
+  const items = useShared ? (shared.data ?? []) : personalItems
+  const setItems = (next: ClothingItem[]) => { if (useShared) void shared.setData(next); else setPersonalItems(next) }
+
   return {
     items,
+    isShared, personalItems, migrated: shared.migrated,
+    migrateFrom: () => shared.migrateFrom(personalItems, (d) => d.length === 0),
     init: () => setItems(INITIAL_ITEMS.map(i => ({ ...i, id: newId() }))),
     save: (item: ClothingItem) => {
       const exists = items.some(i => i.id === item.id)
@@ -74,7 +85,7 @@ function useClothing() {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function ClothingPage() {
-  const { items, init, save, remove, setSize } = useClothing()
+  const { items, init, save, remove, setSize, isShared, personalItems, migrated, migrateFrom } = useClothing()
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
@@ -82,6 +93,14 @@ export function ClothingPage() {
   const [isNew, setIsNew] = useState(false)
   /** Låst som default — hindrer at antall/rader endres ved et uhell når man bare skal se */
   const [editMode, setEditMode] = useState(false)
+  const sharedIsEmpty = useSharedKlaerStore((s) => (s.data?.length ?? 0) === 0 && !s.loading)
+  const needsMigration = isShared && personalItems.length > 0 && sharedIsEmpty && !migrated
+  const [migrating, setMigrating] = useState(false)
+
+  async function handleMigrate() {
+    setMigrating(true)
+    try { await migrateFrom() } finally { setMigrating(false) }
+  }
 
   const filtered = useMemo(() => {
     let list = [...items]
@@ -139,6 +158,28 @@ export function ClothingPage() {
           onClose={closeDialog}
           onDelete={isNew ? undefined : () => { remove(editing.id); closeDialog() }}
         />
+      )}
+
+      {/* Del med partner */}
+      {needsMigration && (
+        <div className="mx-5 mt-4 rounded-lg border border-violet-500/40 bg-violet-500/10 px-4 py-3 flex items-center justify-between gap-3 shrink-0">
+          <div>
+            <p className="text-sm font-medium text-violet-300 flex items-center gap-1.5">
+              <Share2 className="h-4 w-4" />
+              Del kleslisten med partner
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {personalItems.length} plaggtyper er klare til å flyttes til den felles listen.
+            </p>
+          </div>
+          <button
+            onClick={handleMigrate}
+            disabled={migrating}
+            className="text-xs px-3 py-1.5 rounded bg-violet-600 hover:bg-violet-500 text-white font-medium transition-colors disabled:opacity-50 whitespace-nowrap"
+          >
+            {migrating ? 'Flytter…' : 'Flytt til felles'}
+          </button>
+        </div>
       )}
 
       {/* Oversikt */}

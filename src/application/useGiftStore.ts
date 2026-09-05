@@ -139,6 +139,27 @@ export const useGiftStore = create<GiftState>()(
   )
 )
 
+// ── Delt gaveplanlegger (partnerskap) ────────────────────────────
+// Selve delingen skjer via en toveis speiling (src/lib/giftSync.ts) mot
+// useSharedGaverStore istedenfor å bytte lesekilde i hvert av GiftPage sine
+// mange lesepunkter — se den filen for hvorfor.
+
+export interface GaverSharedData {
+  settings: GiftSettings
+  weightRules: WeightRules
+  recipients: GiftRecipient[]
+  events: GiftEvent[]
+}
+
+export function giftSharedSlice(): GaverSharedData {
+  const s = useGiftStore.getState()
+  return { settings: s.settings, weightRules: s.weightRules, recipients: s.recipients, events: s.events }
+}
+
+export function giftSliceIsEmpty(d: GaverSharedData): boolean {
+  return d.recipients.length === 0 && d.events.length === 0
+}
+
 // ── Hjelpefunksjon for nytt event med beregnet beløp ─────────────
 
 export function createGiftEvent(
