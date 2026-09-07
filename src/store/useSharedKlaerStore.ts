@@ -1,4 +1,8 @@
 import { createSharedDataStore } from './createSharedDataStore'
-import type { ClothingItem } from '@/pages/economy/ClothingPage'
+import { normalizeClothingItem, type ClothingItem } from '@/domain/clothing/clothingTypes'
 
-export const useSharedKlaerStore = createSharedDataStore<ClothingItem[]>('klaer', [])
+export const useSharedKlaerStore = createSharedDataStore<ClothingItem[]>(
+  'klaer',
+  [],
+  (items) => items.map(normalizeClothingItem),
+)

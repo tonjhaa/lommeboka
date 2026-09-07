@@ -41,6 +41,8 @@ import type {
   BankSpendingTransaction,
   CategoryRule,
 } from '@/types/economy'
+import type { ClothingItem } from '@/domain/clothing/clothingTypes'
+import { normalizeClothingItem } from '@/domain/clothing/clothingTypes'
 import { POLICY_RATE_HISTORY, LONNSVEKST_DEFAULT, GRUNNBELOP_VEKST_DEFAULT } from '@/config/economy.config'
 import { DEFAULT_BANK_PRESETS } from '@/config/bankPresets'
 import { calibrateProfile } from '@/domain/economy/forecastCalibration'
@@ -109,7 +111,7 @@ export interface EconomyState {
   setLastGlobalPriceCheckAt: (ts: number) => void
 
   // Baby-klesliste (størrelsesmatrise)
-  clothingItems: import('../pages/economy/ClothingPage').ClothingItem[]
+  clothingItems: ClothingItem[]
 
   // Fond (KRON-portefølje)
   fondPortfolio: FondPortfolio
@@ -211,7 +213,7 @@ export interface EconomyState {
   setIvfSettings: (settings: Partial<IVFSettings>) => void
 
   setBabyShoppingItems: (items: import('../pages/economy/BabyShoppingPage').BabyShoppingItem[]) => void
-  setClothingItems: (items: import('../pages/economy/ClothingPage').ClothingItem[]) => void
+  setClothingItems: (items: ClothingItem[]) => void
 
   setFondPortfolio: (p: FondPortfolio) => void
   addFondSnapshot: (snapshot: FondPortfolioSnapshot) => void
@@ -1361,7 +1363,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 31,
+      version: 32,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v20 → v21: migrer tieredRates (snapshot) til tieredRateHistory (tidsserie)
@@ -1630,13 +1632,15 @@ export const useEconomyStore = create<EconomyState>()(
             ? state.babyShoppingItems
             : []) as import('../pages/economy/BabyShoppingPage').BabyShoppingItem[]
           const klaer = shopping.filter((i) => i.category === 'Klær')
+          // Legacy-form (navnebasert) på dette tidspunktet i kjeden — v31→v32 lenger ned
+          // konverterer til kategori/tag-modellen uansett hvilken form dataene starter i.
           state.clothingItems = klaer.map((i) => ({
             id: i.id,
             name: i.name,
             note: i.note,
             storeUrl: i.storeUrl,
             sizes: {},
-          })) satisfies import('../pages/economy/ClothingPage').ClothingItem[]
+          }))
           if (klaer.length > 0) {
             state.babyShoppingItems = shopping.filter((i) => i.category !== 'Klær')
           }
@@ -1655,13 +1659,20 @@ export const useEconomyStore = create<EconomyState>()(
             'Votter', 'Lue, bomull', 'Lue, ull', 'Ytterdrakt/vognpose', 'Regndress',
             'Fleecedress/-jakke', 'Ullundertøy-sett', 'Sko, myke',
           ]
-          const cleaned = (state.clothingItems as import('../pages/economy/ClothingPage').ClothingItem[])
+          const cleaned = (state.clothingItems as { id: string; name: string; note: string; storeUrl?: string; sizes: Record<string, number> }[])
             .map((i) => ({ ...i, name: stripQty(i.name) }))
           const existingNames = new Set(cleaned.map((i) => i.name.toLowerCase()))
           const missing = standardTypes
             .filter((name) => !existingNames.has(name.toLowerCase()))
             .map((name) => ({ id: crypto.randomUUID(), name, note: '', sizes: {} }))
           state.clothingItems = [...cleaned, ...missing]
+        }
+        // v31 → v32: kategori/tag-modell — "Body, kortermet" o.l. blir { category: "Body",
+        // tags: [...] } istedenfor ett sammensatt fritekstnavn, slik at varianter kan
+        // grupperes under samme hovedkategori i tabellen (se ClothingPage.tsx).
+        // normalizeClothingItem er idempotent — kjenner igjen data som allerede er migrert.
+        if (fromVersion < 32 && Array.isArray(state.clothingItems)) {
+          state.clothingItems = state.clothingItems.map(normalizeClothingItem) satisfies ClothingItem[]
         }
         return state
       },

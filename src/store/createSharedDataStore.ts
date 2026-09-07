@@ -21,7 +21,13 @@ export interface SharedDataState<T> {
  *  (se useSharedUtstyrStore.ts, useSharedKlaerStore.ts, useSharedGaverStore.ts). Samme
  *  livssyklus-mønster som useSharedProjectStore, men for én hel JSON-verdi per nøkkel
  *  istedenfor én rad per transaksjon. */
-export function createSharedDataStore<T>(key: string, fallback: T): UseBoundStore<StoreApi<SharedDataState<T>>> {
+export function createSharedDataStore<T>(
+  key: string,
+  fallback: T,
+  /** Kjøres på data lest fra Supabase (initial last + hver realtime-oppdatering) — brukes
+   *  til å migrere eldre lagret form til dagens shape uten en egen SQL-datamigrering. */
+  normalize: (raw: T) => T = (d) => d,
+): UseBoundStore<StoreApi<SharedDataState<T>>> {
   return create<SharedDataState<T>>((set, get) => ({
     data: null,
     partnershipId: null,
@@ -36,10 +42,10 @@ export function createSharedDataStore<T>(key: string, fallback: T): UseBoundStor
       set({ loading: true, error: null, partnershipId })
 
       try {
-        const data = await loadSharedData<T>(partnershipId, key, fallback)
+        const data = normalize(await loadSharedData<T>(partnershipId, key, fallback))
         set({ data, loading: false })
 
-        const unsub = subscribeToSharedData<T>(partnershipId, key, (d) => set({ data: d }))
+        const unsub = subscribeToSharedData<T>(partnershipId, key, (d) => set({ data: normalize(d) }))
         set({ _unsubscribe: unsub })
       } catch (err) {
         set({ loading: false, error: String(err) })
