@@ -42,7 +42,7 @@ import type {
   CategoryRule,
 } from '@/types/economy'
 import type { ClothingItem } from '@/domain/clothing/clothingTypes'
-import { normalizeClothingItem } from '@/domain/clothing/clothingTypes'
+import { normalizeClothingItem, dedupeClothingItemsByCategory } from '@/domain/clothing/clothingTypes'
 import { POLICY_RATE_HISTORY, LONNSVEKST_DEFAULT, GRUNNBELOP_VEKST_DEFAULT } from '@/config/economy.config'
 import { DEFAULT_BANK_PRESETS } from '@/config/bankPresets'
 import { calibrateProfile } from '@/domain/economy/forecastCalibration'
@@ -1363,7 +1363,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 32,
+      version: 33,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v20 → v21: migrer tieredRates (snapshot) til tieredRateHistory (tidsserie)
@@ -1673,6 +1673,13 @@ export const useEconomyStore = create<EconomyState>()(
         // normalizeClothingItem er idempotent — kjenner igjen data som allerede er migrert.
         if (fromVersion < 32 && Array.isArray(state.clothingItems)) {
           state.clothingItems = state.clothingItems.map(normalizeClothingItem) satisfies ClothingItem[]
+        }
+        // v32 → v33: fjern variant-rader per kategori (risikerte dobbelttelling når samme
+        // plagg fikk flere overlappende tag-rader, f.eks. "Body" som både "Ensfarget" og
+        // "Langermet") — slå sammen til én rad per kategori, tagger unioneres og antall
+        // per størrelse summeres. dedupeClothingItemsByCategory er idempotent.
+        if (fromVersion < 33 && Array.isArray(state.clothingItems)) {
+          state.clothingItems = dedupeClothingItemsByCategory(state.clothingItems)
         }
         return state
       },

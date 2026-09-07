@@ -1,8 +1,8 @@
 import { createSharedDataStore } from './createSharedDataStore'
-import { normalizeClothingItem, type ClothingItem } from '@/domain/clothing/clothingTypes'
+import { dedupeClothingItemsByCategory, type ClothingItem } from '@/domain/clothing/clothingTypes'
 
 export const useSharedKlaerStore = createSharedDataStore<ClothingItem[]>(
   'klaer',
   [],
-  (items) => items.map(normalizeClothingItem),
+  (items) => dedupeClothingItemsByCategory(items),
 )
