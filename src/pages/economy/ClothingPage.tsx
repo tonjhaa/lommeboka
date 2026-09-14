@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import {
   Plus, Minus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Search, X, Pencil,
-  Lock, LockOpen, Share2, ExternalLink, List, Store,
+  Lock, LockOpen, Share2, ChevronRight, ChevronDown,
 } from 'lucide-react'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { useSharedKlaerStore } from '@/store/useSharedKlaerStore'
@@ -20,14 +20,13 @@ export type { ClothingItem }
 
 type SortKey = 'name' | 'total'
 type SortDir = 'asc' | 'desc'
-type View = 'liste' | 'nettbutikk'
 
 const SCALE_ORDER: SizeScaleKey[] = ['hoyde', 'sko', 'alder']
 
 /** Standard plaggtyper — brukt både til "Last inn standardliste" og til å fylle på
  *  manglende typer i eksisterende kleslister (se useEconomyStore-migreringen). Én rad
- *  per kategori — tagger legges på i etterkant hvis man vil beskrive varianter. */
-const STANDARD_CLOTHING_ITEMS: Omit<ClothingItem, 'id' | 'note' | 'storeUrl' | 'sizes' | 'tags'>[] = [
+ *  per kategori — underkategorier (Langermet, Ull osv.) legges på i etterkant. */
+const STANDARD_CLOTHING_ITEMS: Omit<ClothingItem, 'id' | 'note' | 'storeUrl' | 'sizes' | 'subcategory'>[] = [
   { category: 'Body', sizeScale: 'hoyde' },
   { category: 'Sparkebukse/onesie', sizeScale: 'hoyde' },
   { category: 'Pyjamas', sizeScale: 'hoyde' },
@@ -43,11 +42,36 @@ const STANDARD_CLOTHING_ITEMS: Omit<ClothingItem, 'id' | 'note' | 'storeUrl' | '
   { category: 'Sko', sizeScale: 'sko' },
 ]
 
-const INITIAL_ITEMS: Omit<ClothingItem, 'id'>[] = STANDARD_CLOTHING_ITEMS.map((i) => ({ ...i, tags: [], note: '', sizes: {} }))
+const INITIAL_ITEMS: Omit<ClothingItem, 'id'>[] = STANDARD_CLOTHING_ITEMS.map((i) => ({ ...i, subcategory: '', note: '', sizes: {} }))
 
 function newId() { return crypto.randomUUID() }
 
-const EMPTY_ITEM = (): Omit<ClothingItem, 'id'> => ({ category: '', sizeScale: DEFAULT_SIZE_SCALE, tags: [], note: '', storeUrl: '', sizes: {} })
+const EMPTY_ITEM = (category = ''): Omit<ClothingItem, 'id'> => ({
+  category, subcategory: '', sizeScale: category ? inferSizeScale(category) : DEFAULT_SIZE_SCALE, note: '', storeUrl: '', sizes: {},
+})
+
+interface CategoryGroup {
+  category: string
+  items: ClothingItem[]
+}
+
+function groupByCategory(items: ClothingItem[]): CategoryGroup[] {
+  const map = new Map<string, ClothingItem[]>()
+  for (const item of items) {
+    const list = map.get(item.category) ?? []
+    list.push(item)
+    map.set(item.category, list)
+  }
+  return Array.from(map.entries()).map(([category, items]) => ({ category, items }))
+}
+
+function groupTotal(group: CategoryGroup): number {
+  return group.items.reduce((s, i) => s + totalQty(i), 0)
+}
+
+function groupSizeSum(group: CategoryGroup, size: string): number {
+  return group.items.reduce((s, i) => s + (i.sizes[size] ?? 0), 0)
+}
 
 // ─── Store hook ───────────────────────────────────────────────────────────────
 
@@ -81,7 +105,6 @@ function useClothing() {
 
 export function ClothingPage() {
   const { items, init, save, remove, setSize, isShared, personalItems, migrated, migrateFrom } = useClothing()
-  const [view, setView] = useState<View>('liste')
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
@@ -89,7 +112,7 @@ export function ClothingPage() {
   const [isNew, setIsNew] = useState(false)
   /** Låst som default — hindrer at antall/rader endres ved et uhell når man bare skal se */
   const [editMode, setEditMode] = useState(false)
-  const [activeTagFilters, setActiveTagFilters] = useState<Set<string>>(new Set())
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const sharedIsEmpty = useSharedKlaerStore((s) => (s.data?.length ?? 0) === 0 && !s.loading)
   const needsMigration = isShared && personalItems.length > 0 && sharedIsEmpty && !migrated
   const [migrating, setMigrating] = useState(false)
@@ -100,19 +123,16 @@ export function ClothingPage() {
   }
 
   const categories = useMemo(() => Array.from(new Set(items.map(i => i.category))).sort(), [items])
-  const tagSuggestions = useMemo(() => Array.from(new Set(items.flatMap(i => i.tags))).sort(), [items])
+  const subcategorySuggestions = useMemo(() => Array.from(new Set(items.map(i => i.subcategory).filter(Boolean))).sort(), [items])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     let list = [...items]
     if (q) list = list.filter(i =>
       i.category.toLowerCase().includes(q) ||
-      i.tags.some(t => t.toLowerCase().includes(q)) ||
+      i.subcategory.toLowerCase().includes(q) ||
       i.note.toLowerCase().includes(q)
     )
-    if (activeTagFilters.size > 0) {
-      list = list.filter(i => Array.from(activeTagFilters).every(t => i.tags.includes(t)))
-    }
     list.sort((a, b) => {
       let va: string | number = '', vb: string | number = ''
       if (sortKey === 'name') { va = a.category; vb = b.category }
@@ -122,23 +142,24 @@ export function ClothingPage() {
       return 0
     })
     return list
-  }, [items, search, activeTagFilters, sortKey, sortDir])
+  }, [items, search, sortKey, sortDir])
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
   }
 
-  function toggleTagFilter(tag: string) {
-    setActiveTagFilters(prev => {
+  function toggleExpand(category: string) {
+    setExpandedCategories(prev => {
       const next = new Set(prev)
-      if (next.has(tag)) next.delete(tag); else next.add(tag)
+      if (next.has(category)) next.delete(category); else next.add(category)
       return next
     })
   }
+  const isExpanded = (category: string) => search.trim() !== '' || expandedCategories.has(category)
 
-  function openNew() {
-    setEditing({ ...EMPTY_ITEM(), id: newId() })
+  function openNew(category?: string) {
+    setEditing({ ...EMPTY_ITEM(category), id: newId() })
     setIsNew(true)
   }
   function openEdit(item: ClothingItem) {
@@ -158,6 +179,7 @@ export function ClothingPage() {
   }
 
   const totalPlagg = items.reduce((s, i) => s + totalQty(i), 0)
+  const totalKategorier = categories.length
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -167,8 +189,9 @@ export function ClothingPage() {
         <ClothingDialog
           item={editing}
           isNew={isNew}
+          items={items}
           categories={categories}
-          tagSuggestions={tagSuggestions}
+          subcategorySuggestions={subcategorySuggestions}
           onSave={handleSave}
           onClose={closeDialog}
           onDelete={isNew ? undefined : () => { remove(editing.id); closeDialog() }}
@@ -200,8 +223,8 @@ export function ClothingPage() {
       {/* Oversikt */}
       <div className="px-5 pt-4 pb-3 grid grid-cols-2 gap-3 shrink-0">
         <div className="rounded-lg border border-border bg-card px-4 py-3">
-          <p className="text-[11px] text-muted-foreground mb-0.5">Plaggtyper</p>
-          <p className="text-base font-semibold">{items.length}</p>
+          <p className="text-[11px] text-muted-foreground mb-0.5">Kategorier</p>
+          <p className="text-base font-semibold">{totalKategorier}</p>
         </div>
         <div className="rounded-lg border border-border bg-card px-4 py-3">
           <p className="text-[11px] text-muted-foreground mb-0.5">Totalt antall plagg</p>
@@ -209,17 +232,11 @@ export function ClothingPage() {
         </div>
       </div>
 
-      {/* Visningsbryter */}
-      <div className="px-5 pb-2 flex items-center gap-1 shrink-0">
-        <ViewTab active={view === 'liste'} onClick={() => setView('liste')} icon={List} label="Liste" />
-        <ViewTab active={view === 'nettbutikk'} onClick={() => setView('nettbutikk')} icon={Store} label="Nettbutikk" />
-      </div>
-
       {/* Filter-rad */}
       <div className="px-5 pb-3 flex flex-wrap items-center gap-2 shrink-0">
         <div className="relative flex-1 min-w-[160px]">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Søk kategori eller tag..." className="h-8 text-xs pl-8" />
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Søk kategori eller underkategori..." className="h-8 text-xs pl-8" />
           {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>}
         </div>
         <span className="text-xs text-muted-foreground ml-auto">{filtered.length} plagg</span>
@@ -236,92 +253,53 @@ export function ClothingPage() {
           />
         </div>
         {editMode && (
-          <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={openNew}>
+          <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => openNew()}>
             <Plus className="h-3.5 w-3.5" /> Legg til plagg
           </Button>
         )}
       </div>
 
-      {/* Tag-filter (begge visninger) */}
-      {tagSuggestions.length > 0 && (
-        <div className="px-5 pb-3 flex flex-wrap items-center gap-1.5 shrink-0">
-          <span className="text-[11px] text-muted-foreground mr-1">Filtrer på:</span>
-          {tagSuggestions.map(tag => (
-            <button
-              key={tag}
-              onClick={() => toggleTagFilter(tag)}
-              className={cn(
-                'rounded-full px-2 py-0.5 text-[11px] border transition-colors',
-                activeTagFilters.has(tag)
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-muted/40 text-muted-foreground border-border hover:text-foreground'
-              )}
-            >
-              {tag}
-            </button>
-          ))}
-          {activeTagFilters.size > 0 && (
-            <button onClick={() => setActiveTagFilters(new Set())} className="text-[11px] text-muted-foreground hover:text-foreground underline ml-1">
-              Nullstill
-            </button>
-          )}
-        </div>
-      )}
-
-      {view === 'liste' ? (
-        <ClothingTable
-          items={filtered}
-          sortKey={sortKey}
-          sortDir={sortDir}
-          onSort={toggleSort}
-          editMode={editMode}
-          onEdit={openEdit}
-          onRemove={remove}
-          onSetSize={setSize}
-        />
-      ) : (
-        <ClothingShop items={filtered} editMode={editMode} onEdit={openEdit} />
-      )}
+      <ClothingTable
+        items={filtered}
+        sortKey={sortKey}
+        sortDir={sortDir}
+        onSort={toggleSort}
+        editMode={editMode}
+        isExpanded={isExpanded}
+        onToggleExpand={toggleExpand}
+        onEdit={openEdit}
+        onAddVariant={openNew}
+        onRemove={remove}
+        onSetSize={setSize}
+      />
     </div>
   )
 }
 
-// ─── Visningsfane ───────────────────────────────────────────────────────────
+// ─── Listevisning (tabell, gruppert per størrelsesskala og kategori) ───────────
 
-function ViewTab({ active, onClick, icon: Icon, label }: { active: boolean; onClick: () => void; icon: typeof List; label: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
-        active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
-      )}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {label}
-    </button>
-  )
-}
-
-// ─── Listevisning (tabell, gruppert per størrelsesskala) ───────────────────────
-
-function ClothingTable({ items, sortKey, sortDir, onSort, editMode, onEdit, onRemove, onSetSize }: {
+function ClothingTable({
+  items, sortKey, sortDir, onSort, editMode, isExpanded, onToggleExpand, onEdit, onAddVariant, onRemove, onSetSize,
+}: {
   items: ClothingItem[]
   sortKey: SortKey
   sortDir: SortDir
   onSort: (k: SortKey) => void
   editMode: boolean
+  isExpanded: (category: string) => boolean
+  onToggleExpand: (category: string) => void
   onEdit: (item: ClothingItem) => void
+  onAddVariant: (category: string) => void
   onRemove: (id: string) => void
   onSetSize: (id: string, size: string, qty: number) => void
 }) {
-  const groups = SCALE_ORDER
-    .map(scale => ({ scale, items: items.filter(i => i.sizeScale === scale) }))
-    .filter(g => g.items.length > 0)
+  const scaleGroups = SCALE_ORDER
+    .map(scale => ({ scale, groups: groupByCategory(items.filter(i => i.sizeScale === scale)) }))
+    .filter(g => g.groups.length > 0)
 
   return (
     <div className="flex-1 overflow-auto px-5 pb-4 space-y-6">
-      {groups.map(({ scale, items: scaleItems }) => (
+      {scaleGroups.map(({ scale, groups }) => (
         <div key={scale}>
           <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
             {SIZE_SCALES[scale].label}
@@ -344,33 +322,92 @@ function ClothingTable({ items, sortKey, sortDir, onSort, editMode, onEdit, onRe
               </tr>
             </thead>
             <tbody>
-              {scaleItems.map(item => (
-                <tr key={item.id} className="border-b border-border/40 group hover:bg-muted/10 transition-colors">
-                  <td className={cn('py-2 px-3', editMode && 'cursor-pointer')} onClick={() => editMode && onEdit(item)}>
-                    <span className="font-medium">{item.category || <span className="text-muted-foreground italic">Uten navn</span>}</span>
-                    {item.tags.length > 0 && (
-                      <span className="ml-1.5 inline-flex gap-1">
-                        {item.tags.map(t => <TagChip key={t}>{t}</TagChip>)}
-                      </span>
-                    )}
-                    {item.note && <p className="text-[10px] text-muted-foreground mt-0.5">{item.note}</p>}
-                  </td>
-                  {SIZE_SCALES[scale].sizes.map(sz => (
-                    <td key={sz} className="py-1 px-1">
-                      <SizeCell value={item.sizes[sz] ?? 0} onChange={v => onSetSize(item.id, sz, v)} editable={editMode} />
-                    </td>
-                  ))}
-                  <td className="py-2 px-3 text-right font-mono text-muted-foreground">{totalQty(item) || '—'}</td>
-                  <td className="py-2 pl-1">
-                    {editMode && (
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => onEdit(item)} className="text-muted-foreground hover:text-foreground p-1"><Pencil className="h-3.5 w-3.5" /></button>
-                        <button onClick={() => onRemove(item.id)} className="text-muted-foreground hover:text-red-400 p-1"><Trash2 className="h-3.5 w-3.5" /></button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {groups.map(group => {
+                const isMulti = group.items.length > 1
+                if (!isMulti) {
+                  const item = group.items[0]
+                  return (
+                    <tr key={item.id} className="border-b border-border/40 group hover:bg-muted/10 transition-colors">
+                      <td className={cn('py-2 px-3', editMode && 'cursor-pointer')} onClick={() => editMode && onEdit(item)}>
+                        <span className="font-medium">{item.category || <span className="text-muted-foreground italic">Uten navn</span>}</span>
+                        {item.subcategory && <span className="ml-1.5 text-muted-foreground">— {item.subcategory}</span>}
+                        {item.note && <p className="text-[10px] text-muted-foreground mt-0.5">{item.note}</p>}
+                      </td>
+                      {SIZE_SCALES[scale].sizes.map(sz => (
+                        <td key={sz} className="py-1 px-1">
+                          <SizeCell value={item.sizes[sz] ?? 0} onChange={v => onSetSize(item.id, sz, v)} editable={editMode} />
+                        </td>
+                      ))}
+                      <td className="py-2 px-3 text-right font-mono text-muted-foreground">{totalQty(item) || '—'}</td>
+                      <td className="py-2 pl-1">
+                        {editMode && (
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => onEdit(item)} className="text-muted-foreground hover:text-foreground p-1"><Pencil className="h-3.5 w-3.5" /></button>
+                            <button onClick={() => onRemove(item.id)} className="text-muted-foreground hover:text-red-400 p-1"><Trash2 className="h-3.5 w-3.5" /></button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                }
+
+                const expanded = isExpanded(group.category)
+                return (
+                  <Fragment key={group.category}>
+                    <tr
+                      className="border-b border-border/40 bg-muted/5 hover:bg-muted/15 transition-colors cursor-pointer"
+                      onClick={() => onToggleExpand(group.category)}
+                    >
+                      <td className="py-2 px-3">
+                        <span className="inline-flex items-center gap-1 font-medium">
+                          {expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                          {group.category}
+                          <span className="text-[10px] text-muted-foreground font-normal">({group.items.length} underkategorier)</span>
+                        </span>
+                      </td>
+                      {SIZE_SCALES[scale].sizes.map(sz => (
+                        <td key={sz} className="py-2 px-1 text-center font-mono text-muted-foreground">
+                          {groupSizeSum(group, sz) || '—'}
+                        </td>
+                      ))}
+                      <td className="py-2 px-3 text-right font-mono">{groupTotal(group) || '—'}</td>
+                      <td className="py-2 pl-1">
+                        {editMode && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onAddVariant(group.category) }}
+                            className="text-muted-foreground hover:text-foreground p-1"
+                            title="Legg til underkategori"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                    {expanded && group.items.map(item => (
+                      <tr key={item.id} className="border-b border-border/40 group hover:bg-muted/10 transition-colors">
+                        <td className={cn('py-2 pl-8 pr-3', editMode && 'cursor-pointer')} onClick={() => editMode && onEdit(item)}>
+                          <span>{item.subcategory || <span className="text-muted-foreground italic">Uten underkategori</span>}</span>
+                          {item.note && <p className="text-[10px] text-muted-foreground mt-0.5">{item.note}</p>}
+                        </td>
+                        {SIZE_SCALES[scale].sizes.map(sz => (
+                          <td key={sz} className="py-1 px-1">
+                            <SizeCell value={item.sizes[sz] ?? 0} onChange={v => onSetSize(item.id, sz, v)} editable={editMode} />
+                          </td>
+                        ))}
+                        <td className="py-2 px-3 text-right font-mono text-muted-foreground">{totalQty(item) || '—'}</td>
+                        <td className="py-2 pl-1">
+                          {editMode && (
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => onEdit(item)} className="text-muted-foreground hover:text-foreground p-1"><Pencil className="h-3.5 w-3.5" /></button>
+                              <button onClick={() => onRemove(item.id)} className="text-muted-foreground hover:text-red-400 p-1"><Trash2 className="h-3.5 w-3.5" /></button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -379,76 +416,6 @@ function ClothingTable({ items, sortKey, sortDir, onSort, editMode, onEdit, onRe
         <p className="text-center text-muted-foreground text-xs py-8">Ingen plagg matcher filteret.</p>
       )}
     </div>
-  )
-}
-
-// ─── Nettbutikk-visning (filtrerbart kort-galleri) ──────────────────────────
-
-function ClothingShop({ items, editMode, onEdit }: {
-  items: ClothingItem[]
-  editMode: boolean
-  onEdit: (item: ClothingItem) => void
-}) {
-  return (
-    <div className="flex-1 overflow-auto px-5 pb-4">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        {items.map(item => {
-          const inStock = totalQty(item) > 0
-          const sizeLabels = SIZE_SCALES[item.sizeScale].sizes
-          let hostname = ''
-          if (item.storeUrl) { try { hostname = new URL(item.storeUrl).hostname.replace('www.', '') } catch { hostname = item.storeUrl } }
-          return (
-            <div
-              key={item.id}
-              onClick={() => editMode && onEdit(item)}
-              className={cn(
-                'rounded-lg border border-border bg-card p-3 flex flex-col gap-2',
-                editMode && 'cursor-pointer hover:border-foreground/30 transition-colors'
-              )}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="text-sm font-medium">{item.category}</span>
-                <span className={cn('shrink-0 h-2 w-2 rounded-full mt-1.5', inStock ? 'bg-green-500' : 'bg-muted')} title={inStock ? 'På lager' : 'Ikke på lager'} />
-              </div>
-              {item.tags.length > 0 ? (
-                <div className="flex flex-wrap gap-1">
-                  {item.tags.map(t => <TagChip key={t}>{t}</TagChip>)}
-                </div>
-              ) : (
-                <span className="text-[11px] text-muted-foreground italic">Ingen tagger</span>
-              )}
-              <div className="flex flex-wrap gap-1 mt-auto pt-1">
-                {sizeLabels.filter(sz => (item.sizes[sz] ?? 0) > 0).map(sz => (
-                  <span key={sz} className="rounded border border-border px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
-                    {sz}: {item.sizes[sz]}
-                  </span>
-                ))}
-                {totalQty(item) === 0 && <span className="text-[11px] text-muted-foreground/60">Ingen på lager</span>}
-              </div>
-              {item.note && <p className="text-[10px] text-muted-foreground">{item.note}</p>}
-              {hostname && (
-                <a href={item.storeUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-[11px] text-primary hover:underline">
-                  <ExternalLink className="h-3 w-3 shrink-0" /> {hostname}
-                </a>
-              )}
-            </div>
-          )
-        })}
-      </div>
-      {items.length === 0 && (
-        <p className="text-center text-muted-foreground text-xs py-8">Ingen plagg matcher filteret.</p>
-      )}
-    </div>
-  )
-}
-
-// ─── Tag-chip ───────────────────────────────────────────────────────────────
-
-function TagChip({ children }: { children: string }) {
-  return (
-    <span className="inline-block rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground whitespace-nowrap">
-      {children}
-    </span>
   )
 }
 
@@ -506,59 +473,14 @@ function Th({ k, label, sortKey, sortDir, onSort, right }: {
   )
 }
 
-// ─── Tag-input (frie merkelapper) ──────────────────────────────────────────────
-
-function TagInput({ tags, onChange, suggestions }: {
-  tags: string[]
-  onChange: (tags: string[]) => void
-  suggestions: string[]
-}) {
-  const [draft, setDraft] = useState('')
-
-  function commit() {
-    const v = draft.trim()
-    if (v && !tags.some(t => t.toLowerCase() === v.toLowerCase())) onChange([...tags, v])
-    setDraft('')
-  }
-  function remove(t: string) { onChange(tags.filter(x => x !== t)) }
-
-  return (
-    <div>
-      {tags.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-1.5">
-          {tags.map(t => (
-            <span key={t} className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px]">
-              {t}
-              <button type="button" onClick={() => remove(t)} className="text-muted-foreground hover:text-foreground">
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      <Input
-        list="clothing-tag-suggestions"
-        value={draft}
-        onChange={e => setDraft(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commit() } }}
-        onBlur={commit}
-        placeholder="f.eks. Hvit, trykk Enter..."
-        className="text-xs h-8"
-      />
-      <datalist id="clothing-tag-suggestions">
-        {suggestions.map(s => <option key={s} value={s} />)}
-      </datalist>
-    </div>
-  )
-}
-
 // ─── Add / Edit dialog ────────────────────────────────────────────────────────
 
-function ClothingDialog({ item, isNew, categories, tagSuggestions, onSave, onClose, onDelete }: {
+function ClothingDialog({ item, isNew, items, categories, subcategorySuggestions, onSave, onClose, onDelete }: {
   item: ClothingItem
   isNew: boolean
+  items: ClothingItem[]
   categories: string[]
-  tagSuggestions: string[]
+  subcategorySuggestions: string[]
   onSave: (item: ClothingItem) => void
   onClose: () => void
   onDelete?: () => void
@@ -576,8 +498,12 @@ function ClothingDialog({ item, isNew, categories, tagSuggestions, onSave, onClo
   }
 
   const trimmedCategory = form.category.trim().toLowerCase()
-  const otherCategories = categories.filter(c => c.toLowerCase() !== item.category.trim().toLowerCase())
-  const isDuplicate = trimmedCategory !== '' && otherCategories.some(c => c.toLowerCase() === trimmedCategory)
+  const trimmedSub = form.subcategory.trim().toLowerCase()
+  const isDuplicate = trimmedCategory !== '' && items.some(i =>
+    i.id !== form.id &&
+    i.category.trim().toLowerCase() === trimmedCategory &&
+    i.subcategory.trim().toLowerCase() === trimmedSub
+  )
 
   return (
     <Dialog open onOpenChange={v => !v && onClose()}>
@@ -600,11 +526,27 @@ function ClothingDialog({ item, isNew, categories, tagSuggestions, onSave, onClo
             <datalist id="clothing-category-suggestions">
               {categories.map(c => <option key={c} value={c} />)}
             </datalist>
-            {isDuplicate ? (
-              <p className="text-[11px] text-red-400">Denne kategorien finnes allerede — rediger den raden i stedet, eller velg et annet navn.</p>
-            ) : (
-              <p className="text-[11px] text-muted-foreground">Én rad per kategori. Bruk tagger under for å beskrive varianter (farge, lengde osv.).</p>
+          </div>
+
+          {/* Underkategori */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Underkategori (valgfritt)</Label>
+            <Input
+              list="clothing-subcategory-suggestions"
+              value={form.subcategory}
+              onChange={e => set({ subcategory: e.target.value })}
+              placeholder="f.eks. Langermet, Ull..."
+              className="text-xs h-8"
+            />
+            <datalist id="clothing-subcategory-suggestions">
+              {subcategorySuggestions.map(s => <option key={s} value={s} />)}
+            </datalist>
+            {isDuplicate && (
+              <p className="text-[11px] text-red-400">Denne kombinasjonen finnes allerede — rediger den raden i stedet.</p>
             )}
+            <p className="text-[11px] text-muted-foreground">
+              Samme kategori som et annet plagg grupperer dem sammen, med underkategorien som skiller radene (f.eks. "Body" → "Langermet" / "Kortermet" / "Ull").
+            </p>
           </div>
 
           {/* Størrelsesskala */}
@@ -617,13 +559,6 @@ function ClothingDialog({ item, isNew, categories, tagSuggestions, onSave, onClo
             >
               {SCALE_ORDER.map(key => <option key={key} value={key}>{SIZE_SCALES[key].label}</option>)}
             </select>
-            <p className="text-[11px] text-muted-foreground">Sko, sokker/luer/votter osv. måles ikke i høyde-cm som andre klær.</p>
-          </div>
-
-          {/* Tagger */}
-          <div className="space-y-1.5">
-            <Label className="text-xs">Tagger (valgfritt)</Label>
-            <TagInput tags={form.tags} onChange={tags => set({ tags })} suggestions={tagSuggestions} />
           </div>
 
           {/* Nettbutikk */}

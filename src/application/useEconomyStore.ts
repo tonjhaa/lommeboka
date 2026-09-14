@@ -42,7 +42,7 @@ import type {
   CategoryRule,
 } from '@/types/economy'
 import type { ClothingItem } from '@/domain/clothing/clothingTypes'
-import { normalizeClothingItem, dedupeClothingItemsByCategory } from '@/domain/clothing/clothingTypes'
+import { normalizeClothingItem, dedupeClothingItems } from '@/domain/clothing/clothingTypes'
 import { POLICY_RATE_HISTORY, LONNSVEKST_DEFAULT, GRUNNBELOP_VEKST_DEFAULT } from '@/config/economy.config'
 import { DEFAULT_BANK_PRESETS } from '@/config/bankPresets'
 import { calibrateProfile } from '@/domain/economy/forecastCalibration'
@@ -1363,7 +1363,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 34,
+      version: 35,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v20 → v21: migrer tieredRates (snapshot) til tieredRateHistory (tidsserie)
@@ -1677,17 +1677,25 @@ export const useEconomyStore = create<EconomyState>()(
         // v32 → v33: fjern variant-rader per kategori (risikerte dobbelttelling når samme
         // plagg fikk flere overlappende tag-rader, f.eks. "Body" som både "Ensfarget" og
         // "Langermet") — slå sammen til én rad per kategori, tagger unioneres og antall
-        // per størrelse summeres. dedupeClothingItemsByCategory er idempotent.
+        // per størrelse summeres. dedupeClothingItems er idempotent.
         if (fromVersion < 33 && Array.isArray(state.clothingItems)) {
-          state.clothingItems = dedupeClothingItemsByCategory(state.clothingItems)
+          state.clothingItems = dedupeClothingItems(state.clothingItems)
         }
         // v33 → v34: sko/sokker/luer/votter måler ikke i høyde-cm som andre klær — hver
         // kategori har nå sin egen størrelsesskala (sizeScale, se domain/clothing).
-        // dedupeClothingItemsByCategory kjører normalizeClothingItem per rad, som nå også
+        // dedupeClothingItems kjører normalizeClothingItem per rad, som nå også
         // setter sizeScale og flytter antall som ikke passer inn i den nye skalaen til
         // skalaens første bøtte (flagget i merknaden — ingen tap av antall).
         if (fromVersion < 34 && Array.isArray(state.clothingItems)) {
-          state.clothingItems = dedupeClothingItemsByCategory(state.clothingItems)
+          state.clothingItems = dedupeClothingItems(state.clothingItems)
+        }
+        // v34 → v35: tag-systemet (frie, kombinerbare merkelapper) er byttet ut med et enkelt
+        // underkategori-felt (én tekst per rad, f.eks. "Langermet") — enklere og lettere å lese
+        // enn tagger, på bekostning av å ikke kunne kombinere flere egenskaper på samme rad.
+        // dedupeClothingItems kjører normalizeClothingItem per rad, som slår sammen eventuelle
+        // tagger til én kommaseparert underkategori-streng.
+        if (fromVersion < 35 && Array.isArray(state.clothingItems)) {
+          state.clothingItems = dedupeClothingItems(state.clothingItems)
         }
         return state
       },

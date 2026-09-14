@@ -17,14 +17,13 @@ export type ClothingSize = string
 
 export interface ClothingItem {
   id: string
-  /** Plaggtype/navn, f.eks. "Body" — én rad per kategori, håndheves som unik (se ClothingPage) */
+  /** Hovedkategori, f.eks. "Body" — rader med samme kategori grupperes i tabellen */
   category: string
+  /** Underkategori innenfor kategorien, f.eks. "Langermet" eller "Ull" — én rad per
+   *  kombinasjon av kategori+underkategori (tomstreng hvis kategorien ikke har varianter) */
+  subcategory: string
   /** Hvilken størrelsesskala denne kategorien bruker (høyde/sko/alder) */
   sizeScale: SizeScaleKey
-  /** Frie beskrivende merkelapper, f.eks. ["Hvit", "Langermet"] — ren informasjon, teller
-   *  ikke separat. Bevisst ikke faste dropdown-felt (farge/lengde), siden plagget kan være
-   *  flere ting samtidig (hvit OG langermet) uten at det er egne rader å holde styr på. */
-  tags: string[]
   note: string
   storeUrl?: string
   sizes: Partial<Record<string, number>>
@@ -43,34 +42,56 @@ export function inferSizeScale(category: string): SizeScaleKey {
   return CATEGORY_SIZE_SCALE[category.trim().toLowerCase()] ?? DEFAULT_SIZE_SCALE
 }
 
-/** Formen ClothingItem hadde før kategori/tag-modellen (2026-09-07) — én rad per plagg
- *  med et sammensatt fritekstnavn som "Body, kortermet". Se useEconomyStore v31→v32. */
-interface LegacyClothingItem {
+/** Eldre former ClothingItem har hatt — rå JSON fra localStorage/Supabase kan i praksis
+ *  være hvilken som helst av disse. `unknown` i normalizeClothingItem er bevisst, ikke en
+ *  avlatsseddel; disse typene finnes bare for å gi feltuthentingen under litt struktur. */
+interface LegacyNameShape {
   id: string
   name: string
   note?: string
   storeUrl?: string
   sizes?: Partial<Record<string, number>>
 }
+interface LegacyTagShape {
+  id: string
+  category: string
+  tags: string[]
+  note: string
+  storeUrl?: string
+  sizes: Partial<Record<string, number>>
+  sizeScale?: SizeScaleKey
+}
 
 /** Kun "Body"-klyngen hadde et navnemønster vi faktisk vet betydningen av
  *  ("Body, kortermet" / "Body, langermet" / "Bodyer") — alt annet blir sin egen
- *  kategori uten tagger, som gir samme enkeltrad som før (ingen visuell endring). */
-function splitLegacyName(name: string): { category: string; tags: string[] } {
+ *  kategori uten underkategori, som gir samme enkeltrad som før. */
+function splitLegacyName(name: string): { category: string; subcategory: string } {
   const bodyMatch = name.match(/^Body(?:er)?(?:,\s*(.+))?$/i)
   if (bodyMatch) {
     const rest = bodyMatch[1]?.trim()
-    return { category: 'Body', tags: rest ? [rest[0].toUpperCase() + rest.slice(1)] : [] }
+    return { category: 'Body', subcategory: rest ? rest[0].toUpperCase() + rest.slice(1) : '' }
   }
-  return { category: name, tags: [] }
+  return { category: name, subcategory: '' }
 }
 
-function isCurrentShape(raw: ClothingItem | LegacyClothingItem): raw is ClothingItem {
-  return typeof (raw as ClothingItem).category === 'string' && Array.isArray((raw as ClothingItem).tags)
+function extractFields(raw: unknown): { category: string; subcategory: string; note: string; storeUrl?: string; sizes: Partial<Record<string, number>> } {
+  const item = raw as ClothingItem | LegacyTagShape | LegacyNameShape
+  if (typeof (item as ClothingItem).subcategory === 'string') {
+    const i = item as ClothingItem
+    return { category: i.category, subcategory: i.subcategory, note: i.note, storeUrl: i.storeUrl, sizes: i.sizes }
+  }
+  if (typeof (item as LegacyTagShape).category === 'string' && Array.isArray((item as LegacyTagShape).tags)) {
+    const i = item as LegacyTagShape
+    return { category: i.category, subcategory: i.tags.join(', '), note: i.note, storeUrl: i.storeUrl, sizes: i.sizes }
+  }
+  const i = item as LegacyNameShape
+  const split = splitLegacyName(i.name)
+  return { category: split.category, subcategory: split.subcategory, note: i.note ?? '', storeUrl: i.storeUrl, sizes: i.sizes ?? {} }
 }
 
-function hasSizeScale(item: ClothingItem): item is ClothingItem & { sizeScale: SizeScaleKey } {
-  return typeof item.sizeScale === 'string' && item.sizeScale in SIZE_SCALES
+function hasSizeScale(raw: unknown): raw is { sizeScale: SizeScaleKey } {
+  const scale = (raw as { sizeScale?: unknown }).sizeScale
+  return typeof scale === 'string' && scale in SIZE_SCALES
 }
 
 /** Flytter eksisterende antall til riktig skala når kategorien får en ny (eller sin første)
@@ -96,28 +117,17 @@ function remapSizes(
   return { sizes: kept, flagged: orphaned }
 }
 
-/** Tar imot både dagens form og eldre former (rå JSON fra localStorage/Supabase kan i
- *  praksis være hva som helst) — `unknown` er bevisst, ikke en avlatsseddel. Setter/
- *  migrerer `sizeScale` og flytter antall som ikke passer inn i den nye skalaen. */
+/** Tar imot alle tidligere lagrede former (navnebasert, tag-basert, dagens
+ *  kategori/underkategori-form) og normaliserer til dagens ClothingItem — idempotent. */
 export function normalizeClothingItem(raw: unknown): ClothingItem {
-  const item = raw as ClothingItem | LegacyClothingItem
-  if (isCurrentShape(item) && hasSizeScale(item)) return item
-
-  let category: string, tags: string[], note: string, storeUrl: string | undefined, sizes: Partial<Record<string, number>>
-  if (isCurrentShape(item)) {
-    category = item.category; tags = item.tags; note = item.note; storeUrl = item.storeUrl; sizes = item.sizes
-  } else {
-    const split = splitLegacyName(item.name)
-    category = split.category; tags = split.tags; note = item.note ?? ''; storeUrl = item.storeUrl; sizes = item.sizes ?? {}
-  }
-
-  const sizeScale = inferSizeScale(category)
+  const { category, subcategory, note, storeUrl, sizes } = extractFields(raw)
+  const sizeScale = hasSizeScale(raw) ? raw.sizeScale : inferSizeScale(category)
   const { sizes: remapped, flagged } = remapSizes(sizes, sizeScale)
   return {
-    id: item.id,
+    id: (raw as { id: string }).id,
     category,
+    subcategory,
     sizeScale,
-    tags,
     note: flagged > 0 ? `${note} (${flagged} flyttet fra gammel størrelsesskala — sjekk at størrelsen er riktig)`.trim() : note,
     storeUrl,
     sizes: remapped,
@@ -141,22 +151,21 @@ function mergeSizes(
   return out
 }
 
-/** Slår sammen rader med samme kategori (case-insensitivt) — brukt til å rydde opp i data fra
- *  variant-modellen (2026-09-07–2026-09-08, forkastet: risikerte dobbelttelling når samme
- *  plagg fikk flere overlappende tag-rader). Tagger unioneres, antall per størrelse summeres.
- *  Idempotent: kjøres på allerede-slått-sammen data uten å endre noe. */
-export function dedupeClothingItemsByCategory(raw: unknown[]): ClothingItem[] {
+/** Slår sammen rader med samme kategori+underkategori (case-insensitivt) — idempotent,
+ *  rydder opp i dubletter fra tidligere datamodeller (navn-baserte, tag-baserte). Antall
+ *  per størrelse summeres. */
+export function dedupeClothingItems(raw: unknown[]): ClothingItem[] {
   const merged = new Map<string, ClothingItem>()
   for (const r of raw) {
     const item = normalizeClothingItem(r)
-    const key = item.category.trim().toLowerCase()
+    const key = `${item.category.trim().toLowerCase()}|${item.subcategory.trim().toLowerCase()}`
     const existing = merged.get(key)
     if (!existing) { merged.set(key, item); continue }
     merged.set(key, {
       id: existing.id,
       category: existing.category,
+      subcategory: existing.subcategory,
       sizeScale: existing.sizeScale,
-      tags: Array.from(new Set([...existing.tags, ...item.tags])),
       note: existing.note || item.note,
       storeUrl: existing.storeUrl || item.storeUrl,
       sizes: mergeSizes(existing.sizes, item.sizes),
