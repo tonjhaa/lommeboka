@@ -326,15 +326,21 @@ function ClothingTable({ items, sortKey, sortDir, onSort, editMode, onEdit, onRe
           <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
             {SIZE_SCALES[scale].label}
           </p>
-          <table className="w-full text-xs border-collapse">
+          <table className="text-xs border-collapse table-fixed">
+            <colgroup>
+              <col className="w-56" />
+              {SIZE_SCALES[scale].sizes.map(sz => <col key={sz} className="w-20" />)}
+              <col className="w-20" />
+              <col className="w-16" />
+            </colgroup>
             <thead className="sticky top-0 z-10 bg-background border-b border-border">
               <tr>
                 <Th k="name" label="Hva" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 {SIZE_SCALES[scale].sizes.map(sz => (
-                  <th key={sz} className="py-2 px-1 text-center font-medium text-muted-foreground min-w-[56px] whitespace-nowrap">{sz}</th>
+                  <th key={sz} className="py-2 px-1 text-center font-medium text-muted-foreground whitespace-nowrap">{sz}</th>
                 ))}
                 <Th k="total" label="Antall" sortKey={sortKey} sortDir={sortDir} onSort={onSort} right />
-                <th className="w-16 py-2" />
+                <th className="py-2" />
               </tr>
             </thead>
             <tbody>
