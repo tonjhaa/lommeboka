@@ -5,7 +5,10 @@ import {
 } from 'lucide-react'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { useSharedKlaerStore } from '@/store/useSharedKlaerStore'
-import { CLOTHING_SIZES, type ClothingSize, type ClothingItem, totalQty } from '@/domain/clothing/clothingTypes'
+import {
+  SIZE_SCALES, DEFAULT_SIZE_SCALE, inferSizeScale, totalQty,
+  type SizeScaleKey, type ClothingItem,
+} from '@/domain/clothing/clothingTypes'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,37 +16,38 @@ import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
-export type { ClothingSize, ClothingItem }
-export { CLOTHING_SIZES }
+export type { ClothingItem }
 
 type SortKey = 'name' | 'total'
 type SortDir = 'asc' | 'desc'
 type View = 'liste' | 'nettbutikk'
 
+const SCALE_ORDER: SizeScaleKey[] = ['hoyde', 'sko', 'alder']
+
 /** Standard plaggtyper — brukt både til "Last inn standardliste" og til å fylle på
  *  manglende typer i eksisterende kleslister (se useEconomyStore-migreringen). Én rad
  *  per kategori — tagger legges på i etterkant hvis man vil beskrive varianter. */
 const STANDARD_CLOTHING_ITEMS: Omit<ClothingItem, 'id' | 'note' | 'storeUrl' | 'sizes' | 'tags'>[] = [
-  { category: 'Body' },
-  { category: 'Sparkebukse/onesie' },
-  { category: 'Pyjamas' },
-  { category: 'Strømpebukse' },
-  { category: 'Sokker' },
-  { category: 'Ullsokker' },
-  { category: 'Votter' },
-  { category: 'Lue' },
-  { category: 'Ytterdrakt/vognpose' },
-  { category: 'Regndress' },
-  { category: 'Fleecedress/-jakke' },
-  { category: 'Ullundertøy-sett' },
-  { category: 'Sko' },
+  { category: 'Body', sizeScale: 'hoyde' },
+  { category: 'Sparkebukse/onesie', sizeScale: 'hoyde' },
+  { category: 'Pyjamas', sizeScale: 'hoyde' },
+  { category: 'Strømpebukse', sizeScale: 'hoyde' },
+  { category: 'Sokker', sizeScale: 'alder' },
+  { category: 'Ullsokker', sizeScale: 'alder' },
+  { category: 'Votter', sizeScale: 'alder' },
+  { category: 'Lue', sizeScale: 'alder' },
+  { category: 'Ytterdrakt/vognpose', sizeScale: 'hoyde' },
+  { category: 'Regndress', sizeScale: 'hoyde' },
+  { category: 'Fleecedress/-jakke', sizeScale: 'hoyde' },
+  { category: 'Ullundertøy-sett', sizeScale: 'hoyde' },
+  { category: 'Sko', sizeScale: 'sko' },
 ]
 
 const INITIAL_ITEMS: Omit<ClothingItem, 'id'>[] = STANDARD_CLOTHING_ITEMS.map((i) => ({ ...i, tags: [], note: '', sizes: {} }))
 
 function newId() { return crypto.randomUUID() }
 
-const EMPTY_ITEM = (): Omit<ClothingItem, 'id'> => ({ category: '', tags: [], note: '', storeUrl: '', sizes: {} })
+const EMPTY_ITEM = (): Omit<ClothingItem, 'id'> => ({ category: '', sizeScale: DEFAULT_SIZE_SCALE, tags: [], note: '', storeUrl: '', sizes: {} })
 
 // ─── Store hook ───────────────────────────────────────────────────────────────
 
@@ -68,7 +72,7 @@ function useClothing() {
       setItems(exists ? items.map(i => i.id === item.id ? item : i) : [...items, item])
     },
     remove: (id: string) => setItems(items.filter(i => i.id !== id)),
-    setSize: (id: string, size: ClothingSize, qty: number) =>
+    setSize: (id: string, size: string, qty: number) =>
       setItems(items.map(i => i.id === id ? { ...i, sizes: { ...i.sizes, [size]: Math.max(0, qty) } } : i)),
   }
 }
@@ -299,7 +303,7 @@ function ViewTab({ active, onClick, icon: Icon, label }: { active: boolean; onCl
   )
 }
 
-// ─── Listevisning (tabell) ──────────────────────────────────────────────────
+// ─── Listevisning (tabell, gruppert per størrelsesskala) ───────────────────────
 
 function ClothingTable({ items, sortKey, sortDir, onSort, editMode, onEdit, onRemove, onSetSize }: {
   items: ClothingItem[]
@@ -309,51 +313,62 @@ function ClothingTable({ items, sortKey, sortDir, onSort, editMode, onEdit, onRe
   editMode: boolean
   onEdit: (item: ClothingItem) => void
   onRemove: (id: string) => void
-  onSetSize: (id: string, size: ClothingSize, qty: number) => void
+  onSetSize: (id: string, size: string, qty: number) => void
 }) {
+  const groups = SCALE_ORDER
+    .map(scale => ({ scale, items: items.filter(i => i.sizeScale === scale) }))
+    .filter(g => g.items.length > 0)
+
   return (
-    <div className="flex-1 overflow-auto px-5 pb-4">
-      <table className="w-full text-xs border-collapse">
-        <thead className="sticky top-0 z-10 bg-background border-b border-border">
-          <tr>
-            <Th k="name" label="Hva" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-            {CLOTHING_SIZES.map(sz => (
-              <th key={sz} className="py-2 px-1 text-center font-medium text-muted-foreground w-12">{sz}</th>
-            ))}
-            <Th k="total" label="Antall" sortKey={sortKey} sortDir={sortDir} onSort={onSort} right />
-            <th className="w-16 py-2" />
-          </tr>
-        </thead>
-        <tbody>
-          {items.map(item => (
-            <tr key={item.id} className="border-b border-border/40 group hover:bg-muted/10 transition-colors">
-              <td className={cn('py-2 px-3', editMode && 'cursor-pointer')} onClick={() => editMode && onEdit(item)}>
-                <span className="font-medium">{item.category || <span className="text-muted-foreground italic">Uten navn</span>}</span>
-                {item.tags.length > 0 && (
-                  <span className="ml-1.5 inline-flex gap-1">
-                    {item.tags.map(t => <TagChip key={t}>{t}</TagChip>)}
-                  </span>
-                )}
-                {item.note && <p className="text-[10px] text-muted-foreground mt-0.5">{item.note}</p>}
-              </td>
-              {CLOTHING_SIZES.map(sz => (
-                <td key={sz} className="py-1 px-1">
-                  <SizeCell value={item.sizes[sz] ?? 0} onChange={v => onSetSize(item.id, sz, v)} editable={editMode} />
-                </td>
+    <div className="flex-1 overflow-auto px-5 pb-4 space-y-6">
+      {groups.map(({ scale, items: scaleItems }) => (
+        <div key={scale}>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+            {SIZE_SCALES[scale].label}
+          </p>
+          <table className="w-full text-xs border-collapse">
+            <thead className="sticky top-0 z-10 bg-background border-b border-border">
+              <tr>
+                <Th k="name" label="Hva" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                {SIZE_SCALES[scale].sizes.map(sz => (
+                  <th key={sz} className="py-2 px-1 text-center font-medium text-muted-foreground min-w-[56px] whitespace-nowrap">{sz}</th>
+                ))}
+                <Th k="total" label="Antall" sortKey={sortKey} sortDir={sortDir} onSort={onSort} right />
+                <th className="w-16 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {scaleItems.map(item => (
+                <tr key={item.id} className="border-b border-border/40 group hover:bg-muted/10 transition-colors">
+                  <td className={cn('py-2 px-3', editMode && 'cursor-pointer')} onClick={() => editMode && onEdit(item)}>
+                    <span className="font-medium">{item.category || <span className="text-muted-foreground italic">Uten navn</span>}</span>
+                    {item.tags.length > 0 && (
+                      <span className="ml-1.5 inline-flex gap-1">
+                        {item.tags.map(t => <TagChip key={t}>{t}</TagChip>)}
+                      </span>
+                    )}
+                    {item.note && <p className="text-[10px] text-muted-foreground mt-0.5">{item.note}</p>}
+                  </td>
+                  {SIZE_SCALES[scale].sizes.map(sz => (
+                    <td key={sz} className="py-1 px-1">
+                      <SizeCell value={item.sizes[sz] ?? 0} onChange={v => onSetSize(item.id, sz, v)} editable={editMode} />
+                    </td>
+                  ))}
+                  <td className="py-2 px-3 text-right font-mono text-muted-foreground">{totalQty(item) || '—'}</td>
+                  <td className="py-2 pl-1">
+                    {editMode && (
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => onEdit(item)} className="text-muted-foreground hover:text-foreground p-1"><Pencil className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => onRemove(item.id)} className="text-muted-foreground hover:text-red-400 p-1"><Trash2 className="h-3.5 w-3.5" /></button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
               ))}
-              <td className="py-2 px-3 text-right font-mono text-muted-foreground">{totalQty(item) || '—'}</td>
-              <td className="py-2 pl-1">
-                {editMode && (
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => onEdit(item)} className="text-muted-foreground hover:text-foreground p-1"><Pencil className="h-3.5 w-3.5" /></button>
-                    <button onClick={() => onRemove(item.id)} className="text-muted-foreground hover:text-red-400 p-1"><Trash2 className="h-3.5 w-3.5" /></button>
-                  </div>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+            </tbody>
+          </table>
+        </div>
+      ))}
       {items.length === 0 && (
         <p className="text-center text-muted-foreground text-xs py-8">Ingen plagg matcher filteret.</p>
       )}
@@ -373,6 +388,7 @@ function ClothingShop({ items, editMode, onEdit }: {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {items.map(item => {
           const inStock = totalQty(item) > 0
+          const sizeLabels = SIZE_SCALES[item.sizeScale].sizes
           let hostname = ''
           if (item.storeUrl) { try { hostname = new URL(item.storeUrl).hostname.replace('www.', '') } catch { hostname = item.storeUrl } }
           return (
@@ -396,7 +412,7 @@ function ClothingShop({ items, editMode, onEdit }: {
                 <span className="text-[11px] text-muted-foreground italic">Ingen tagger</span>
               )}
               <div className="flex flex-wrap gap-1 mt-auto pt-1">
-                {CLOTHING_SIZES.filter(sz => (item.sizes[sz] ?? 0) > 0).map(sz => (
+                {sizeLabels.filter(sz => (item.sizes[sz] ?? 0) > 0).map(sz => (
                   <span key={sz} className="rounded border border-border px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
                     {sz}: {item.sizes[sz]}
                   </span>
@@ -542,8 +558,16 @@ function ClothingDialog({ item, isNew, categories, tagSuggestions, onSave, onClo
   onDelete?: () => void
 }) {
   const [form, setForm] = useState<ClothingItem>(item)
+  const [scaleTouched, setScaleTouched] = useState(!isNew)
 
   function set(patch: Partial<ClothingItem>) { setForm(f => ({ ...f, ...patch })) }
+
+  function setCategory(value: string) {
+    // For et nytt plagg foreslår vi størrelsesskala basert på navnet, med mindre
+    // brukeren allerede har valgt skala manuelt.
+    if (isNew && !scaleTouched) set({ category: value, sizeScale: inferSizeScale(value) })
+    else set({ category: value })
+  }
 
   const trimmedCategory = form.category.trim().toLowerCase()
   const otherCategories = categories.filter(c => c.toLowerCase() !== item.category.trim().toLowerCase())
@@ -563,7 +587,7 @@ function ClothingDialog({ item, isNew, categories, tagSuggestions, onSave, onClo
             <Input
               list="clothing-category-suggestions"
               value={form.category}
-              onChange={e => set({ category: e.target.value })}
+              onChange={e => setCategory(e.target.value)}
               placeholder="f.eks. Body"
               className="text-xs h-8"
             />
@@ -575,6 +599,19 @@ function ClothingDialog({ item, isNew, categories, tagSuggestions, onSave, onClo
             ) : (
               <p className="text-[11px] text-muted-foreground">Én rad per kategori. Bruk tagger under for å beskrive varianter (farge, lengde osv.).</p>
             )}
+          </div>
+
+          {/* Størrelsesskala */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Størrelsestype</Label>
+            <select
+              value={form.sizeScale}
+              onChange={e => { setScaleTouched(true); set({ sizeScale: e.target.value as SizeScaleKey }) }}
+              className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs"
+            >
+              {SCALE_ORDER.map(key => <option key={key} value={key}>{SIZE_SCALES[key].label}</option>)}
+            </select>
+            <p className="text-[11px] text-muted-foreground">Sko, sokker/luer/votter osv. måles ikke i høyde-cm som andre klær.</p>
           </div>
 
           {/* Tagger */}

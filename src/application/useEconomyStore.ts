@@ -1363,7 +1363,7 @@ export const useEconomyStore = create<EconomyState>()(
     }),
     {
       name: 'min-okonomi-v1',
-      version: 33,
+      version: 34,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown>
         // v20 → v21: migrer tieredRates (snapshot) til tieredRateHistory (tidsserie)
@@ -1679,6 +1679,14 @@ export const useEconomyStore = create<EconomyState>()(
         // "Langermet") — slå sammen til én rad per kategori, tagger unioneres og antall
         // per størrelse summeres. dedupeClothingItemsByCategory er idempotent.
         if (fromVersion < 33 && Array.isArray(state.clothingItems)) {
+          state.clothingItems = dedupeClothingItemsByCategory(state.clothingItems)
+        }
+        // v33 → v34: sko/sokker/luer/votter måler ikke i høyde-cm som andre klær — hver
+        // kategori har nå sin egen størrelsesskala (sizeScale, se domain/clothing).
+        // dedupeClothingItemsByCategory kjører normalizeClothingItem per rad, som nå også
+        // setter sizeScale og flytter antall som ikke passer inn i den nye skalaen til
+        // skalaens første bøtte (flagget i merknaden — ingen tap av antall).
+        if (fromVersion < 34 && Array.isArray(state.clothingItems)) {
           state.clothingItems = dedupeClothingItemsByCategory(state.clothingItems)
         }
         return state
