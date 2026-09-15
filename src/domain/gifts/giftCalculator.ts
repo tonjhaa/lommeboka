@@ -361,6 +361,7 @@ export function isEventArchived(event: GiftEvent, today: Date = new Date()): boo
  * - receivesBirthdayGift + birthDate  → neste bursdag
  * - receivesChristmasGift             → jul (desember)
  * Returnerer kun hendelser som ikke allerede finnes i storedEvents (per recipientId + occasion).
+ * Filtrerer ut arkiverte hendelser slik at gamle kjøpte gaver ikke blokkerer regenerering.
  */
 export function deriveAutoEvents(
   recipients: GiftRecipient[],
@@ -368,13 +369,17 @@ export function deriveAutoEvents(
   weightRules: WeightRules,
   settings: GiftSettings,
 ): GiftEvent[] {
-  const manualKeys = new Set(storedEvents.map((e) => `${e.recipientId}-${e.occasion}`))
-  const auto: GiftEvent[] = []
   const today = new Date()
+  const activeKeys = new Set(
+    storedEvents
+      .filter((e) => !isEventArchived(e, today))
+      .map((e) => `${e.recipientId}-${e.occasion}`)
+  )
+  const auto: GiftEvent[] = []
   const currentYear = today.getFullYear()
 
   for (const r of recipients) {
-    if (r.receivesBirthdayGift && r.birthDate && !manualKeys.has(`${r.id}-bursdag`)) {
+    if (r.receivesBirthdayGift && r.birthDate && !activeKeys.has(`${r.id}-bursdag`)) {
       const [, mo, day] = r.birthDate.split('-').map(Number)
       const thisYearDate = new Date(currentYear, mo - 1, day)
       const bYear = thisYearDate < today ? currentYear + 1 : currentYear
@@ -393,12 +398,13 @@ export function deriveAutoEvents(
       auto.push({ ...event, calculatedAmount: roundGiftAmount(raw, settings.roundingNearest) })
     }
 
-    if (r.receivesChristmasGift && !manualKeys.has(`${r.id}-jul`)) {
+    if (r.receivesChristmasGift && !activeKeys.has(`${r.id}-jul`)) {
       const event: GiftEvent = {
         id: `auto-jul-${r.id}`,
         recipientId: r.id,
         occasion: 'jul',
         month: 12,
+        year: currentYear,
         ownership: r.ownership,
         calculatedAmount: 0,
         isLocked: false,
