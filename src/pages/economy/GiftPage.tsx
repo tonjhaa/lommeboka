@@ -20,7 +20,7 @@ import {
 } from '@/domain/gifts/defaultWeights'
 import {
   calculateGiftAmount, calculateGiftResult, calculateActualVsPlanned,
-  giftAmountExplanation, roundGiftAmount, deriveAutoEvents,
+  giftAmountExplanation, roundGiftAmount, deriveAutoEvents, isEventArchived,
 } from '@/domain/gifts/giftCalculator'
 import type {
   GiftRecipient, GiftEvent, Occasion, RelationshipType,
@@ -99,13 +99,20 @@ function OverviewTab({ setTab }: { setTab: (tab: GiftTab) => void }) {
   const updateEvent = useGiftStore((s) => s.updateEvent)
   const weightRules = useGiftStore((s) => s.weightRules)
   const [prefill, setPrefill] = useState<{ recipientId: string; occasion: Occasion } | null>(null)
+  const [markBoughtTarget, setMarkBoughtTarget] = useState<GiftEvent | null>(null)
+  const [editingHistoryEvent, setEditingHistoryEvent] = useState<GiftEvent | null>(null)
 
   const autoEvents = useMemo(
     () => deriveAutoEvents(recipients, events, weightRules, settings),
     [recipients, events, weightRules, settings]
   )
 
-  const effectiveEvents = useMemo(() => [...events, ...autoEvents], [events, autoEvents])
+  const activeStoredEvents = useMemo(() => events.filter((e) => !isEventArchived(e)), [events])
+  const historyEvents = useMemo(
+    () => events.filter((e) => isEventArchived(e)).sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')),
+    [events]
+  )
+  const effectiveEvents = useMemo(() => [...activeStoredEvents, ...autoEvents], [activeStoredEvents, autoEvents])
 
   const excludeXmas = settings.excludeChristmasFromSavings ?? false
 
@@ -325,6 +332,10 @@ function OverviewTab({ setTab }: { setTab: (tab: GiftTab) => void }) {
 
               function promoteOrUpdate(newStatus: import('@/types/gifts').EventStatus) {
                 const stored = events.find((se) => se.recipientId === e.recipientId && se.occasion === e.occasion)
+                if (newStatus === 'kjøpt') {
+                  setMarkBoughtTarget(stored ?? { ...e, id: '' })
+                  return
+                }
                 if (stored) {
                   updateEvent(stored.id, { status: newStatus })
                 } else {
@@ -440,6 +451,90 @@ function OverviewTab({ setTab }: { setTab: (tab: GiftTab) => void }) {
         )
       })()}
 
+      {/* Faktisk vs. planlagt */}
+      {(() => {
+        const avp = calculateActualVsPlanned(events)
+        if (avp.planned === 0) return null
+        return (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Faktisk vs. planlagt (kjøpte gaver)</p>
+            <div className="rounded border border-border bg-muted/10 px-3 py-2.5 text-xs space-y-2">
+              <div className="flex gap-6">
+                <div>
+                  <p className="text-muted-foreground">Planlagt</p>
+                  <p className="font-mono">{fmtNOK(avp.planned)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Faktisk</p>
+                  <p className="font-mono">{fmtNOK(avp.actual)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Avvik</p>
+                  <p className={cn('font-mono', avp.deviation > 0 ? 'text-red-400' : 'text-green-400')}>
+                    {avp.deviation > 0 ? '+' : ''}{fmtNOK(avp.deviation)}
+                  </p>
+                </div>
+              </div>
+              {avp.byRecipient.length > 1 && (
+                <div className="space-y-1 border-t border-border/30 pt-2">
+                  {avp.byRecipient.map((row) => {
+                    const rec = recipientMap.get(row.recipientId)
+                    return (
+                      <div key={row.recipientId} className="flex items-center justify-between text-muted-foreground">
+                        <span>{rec?.name ?? '—'}</span>
+                        <span className={cn('font-mono', row.deviation > 0 ? 'text-red-400' : row.deviation < 0 ? 'text-green-400' : '')}>
+                          {fmtNOK(row.actual)} <span className="opacity-50">({row.deviation > 0 ? '+' : ''}{fmtNOK(row.deviation)})</span>
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Historikk */}
+      {historyEvents.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Historikk</p>
+          <div className="space-y-1.5">
+            {historyEvents.map((ev) => {
+              const rec = recipientMap.get(ev.recipientId)
+              const amount = ev.manualAmount ?? ev.calculatedAmount
+              return (
+                <button
+                  key={ev.id}
+                  onClick={() => setEditingHistoryEvent(ev)}
+                  className={cn(
+                    'w-full flex items-center justify-between rounded border px-3 py-2 text-xs text-left transition-colors hover:border-border',
+                    ev.status === 'kjøpt' ? 'border-green-500/20 bg-green-500/5' :
+                    ev.status === 'droppet' ? 'border-border/20 bg-muted/5 opacity-60' :
+                    'border-border/40 bg-muted/10'
+                  )}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{rec?.name ?? '—'}</span>
+                      <span className="text-muted-foreground">{OCCASION_LABELS[ev.occasion]}</span>
+                      {ev.status === 'kjøpt' && <span className="text-green-400">✓</span>}
+                      {ev.status === 'droppet' && <span className="text-muted-foreground/50">✕</span>}
+                      {ev.boughtUsed && <span className="text-muted-foreground/50">· brukt</span>}
+                      {ev.linkedEventId && <span className="text-muted-foreground/50">· slått sammen</span>}
+                    </div>
+                    <p className="text-muted-foreground mt-0.5">
+                      {ev.date ? new Date(ev.date).toLocaleDateString('no-NO', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                    </p>
+                  </div>
+                  <span className="font-mono font-medium shrink-0 ml-3">{fmtNOK(ev.actualAmount ?? amount)}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* EventModal for suggestions */}
       {prefill && (
         <EventModal
@@ -451,6 +546,41 @@ function OverviewTab({ setTab }: { setTab: (tab: GiftTab) => void }) {
           weightRules={weightRules}
           onSave={(ev) => { addEvent({ ...ev, id: crypto.randomUUID() }); setPrefill(null) }}
           onClose={() => setPrefill(null)}
+        />
+      )}
+
+      {/* Marker som kjøpt */}
+      {markBoughtTarget && (
+        <EventModal
+          open
+          initial={{ ...markBoughtTarget, status: 'kjøpt' }}
+          recipients={recipients}
+          settings={settings}
+          weightRules={weightRules}
+          linkableEvents={events.filter((se) => se.id !== markBoughtTarget.id && !isEventArchived(se) && se.status !== 'droppet')}
+          onSave={(ev) => {
+            if (ev.id) {
+              updateEvent(ev.id, ev)
+            } else {
+              addEvent({ ...ev, id: crypto.randomUUID() })
+            }
+            setMarkBoughtTarget(null)
+          }}
+          onClose={() => setMarkBoughtTarget(null)}
+        />
+      )}
+
+      {/* Rediger historikk */}
+      {editingHistoryEvent && (
+        <EventModal
+          open
+          initial={editingHistoryEvent}
+          recipients={recipients}
+          settings={settings}
+          weightRules={weightRules}
+          linkableEvents={events.filter((se) => se.id !== editingHistoryEvent.id && se.status !== 'droppet')}
+          onSave={(ev) => { updateEvent(ev.id, ev); setEditingHistoryEvent(null) }}
+          onClose={() => setEditingHistoryEvent(null)}
         />
       )}
     </div>
