@@ -1345,10 +1345,10 @@ function EventModal({
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Eller måned</Label>
-              <Select value={month} onValueChange={setMonth}>
+              <Select value={month || '_none'} onValueChange={(v) => setMonth(v === '_none' ? '' : v)}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Velg" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="" className="text-xs">— Ingen —</SelectItem>
+                  <SelectItem value="_none" className="text-xs">— Ingen —</SelectItem>
                   {Array.from({ length: 12 }, (_, i) => (
                     <SelectItem key={i + 1} value={String(i + 1)} className="text-xs">{fmtMonth(i + 1)}</SelectItem>
                   ))}
