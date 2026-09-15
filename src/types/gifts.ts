@@ -52,6 +52,10 @@ export interface GiftEvent {
   status: EventStatus
   actualAmount?: number
   notes?: string
+  boughtUsed?: boolean          // kjøpt brukt/secondhand
+  sharedPurchaseNote?: string   // info: kjøpt sammen med folk utenfor appen
+  sharedPurchaseTotal?: number  // info: totalpris for det delte kjøpet (kun til info — actualAmount er brukerens andel)
+  linkedEventId?: string        // peker på en annen GiftEvent (samme gave, delt på to mottakere) — kostnaden telles kun på den andre
 }
 
 export interface HouseholdMember {
@@ -104,11 +108,3 @@ export interface GiftCalculationResult {
   insights: string[]
 }
 
-export interface GiftPurchase {
-  id: string
-  giftEventId: string
-  plannedAmount: number
-  actualAmount: number
-  purchasedDate: string
-  notes?: string
-}
