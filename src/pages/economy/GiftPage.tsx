@@ -1036,7 +1036,8 @@ function RecipientModal({
 
 
 function EventModal({
-  open, initial, defaultRecipientId, defaultOccasion, recipients, settings, weightRules, onSave, onClose,
+  open, initial, defaultRecipientId, defaultOccasion, recipients, settings, weightRules,
+  linkableEvents = [], onSave, onClose,
 }: {
   open: boolean
   initial?: GiftEvent
@@ -1045,6 +1046,7 @@ function EventModal({
   recipients: GiftRecipient[]
   settings: ReturnType<typeof useGiftStore.getState>['settings']
   weightRules: ReturnType<typeof useGiftStore.getState>['weightRules']
+  linkableEvents?: GiftEvent[]
   onSave: (ev: GiftEvent) => void
   onClose: () => void
 }) {
@@ -1059,6 +1061,10 @@ function EventModal({
   const [status, setStatus] = useState<EventStatus>(initial?.status ?? 'planlagt')
   const [actualAmount, setActualAmount] = useState(initial?.actualAmount != null ? String(initial.actualAmount) : '')
   const [notes, setNotes] = useState(initial?.notes ?? '')
+  const [boughtUsed, setBoughtUsed] = useState(initial?.boughtUsed ?? false)
+  const [sharedPurchaseNote, setSharedPurchaseNote] = useState(initial?.sharedPurchaseNote ?? '')
+  const [sharedPurchaseTotal, setSharedPurchaseTotal] = useState(initial?.sharedPurchaseTotal != null ? String(initial.sharedPurchaseTotal) : '')
+  const [linkedEventId, setLinkedEventId] = useState(initial?.linkedEventId ?? '')
 
   useEffect(() => {
     setRecipientId(initial?.recipientId ?? defaultRecipientId ?? (recipients[0]?.id ?? ''))
@@ -1071,6 +1077,10 @@ function EventModal({
     setStatus(initial?.status ?? 'planlagt')
     setActualAmount(initial?.actualAmount != null ? String(initial.actualAmount) : '')
     setNotes(initial?.notes ?? '')
+    setBoughtUsed(initial?.boughtUsed ?? false)
+    setSharedPurchaseNote(initial?.sharedPurchaseNote ?? '')
+    setSharedPurchaseTotal(initial?.sharedPurchaseTotal != null ? String(initial.sharedPurchaseTotal) : '')
+    setLinkedEventId(initial?.linkedEventId ?? '')
   }, [initial, defaultRecipientId, defaultOccasion, recipients])
 
   const recipient = recipients.find((r) => r.id === recipientId)
@@ -1101,6 +1111,10 @@ function EventModal({
       status,
       actualAmount: actualAmount ? parseFloat(actualAmount) : undefined,
       notes: notes.trim() || undefined,
+      boughtUsed: boughtUsed || undefined,
+      sharedPurchaseNote: sharedPurchaseNote.trim() || undefined,
+      sharedPurchaseTotal: sharedPurchaseTotal ? parseFloat(sharedPurchaseTotal) : undefined,
+      linkedEventId: linkedEventId || undefined,
     }
     onSave(ev)
   }
@@ -1229,6 +1243,59 @@ function EventModal({
               </div>
             )}
           </div>
+
+          {status === 'kjøpt' && (
+            <div className="space-y-2 rounded border border-border/30 bg-muted/5 px-3 py-2.5">
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <Switch checked={boughtUsed} onCheckedChange={setBoughtUsed} />
+                Kjøpt brukt
+              </label>
+              <div className="space-y-1">
+                <Label className="text-xs">Delt kjøp med andre (valgfritt)</Label>
+                <Input
+                  value={sharedPurchaseNote}
+                  onChange={(e) => setSharedPurchaseNote(e.target.value)}
+                  placeholder="F.eks. «Delt med Kari og Ola»"
+                  className="h-8 text-xs"
+                />
+              </div>
+              {sharedPurchaseNote && (
+                <div className="space-y-1">
+                  <Label className="text-xs">Total pris for det delte kjøpet</Label>
+                  <Input
+                    type="number"
+                    value={sharedPurchaseTotal}
+                    onChange={(e) => setSharedPurchaseTotal(e.target.value)}
+                    placeholder="Kun til info — faktisk beløp over er din andel"
+                    className="h-8 text-xs"
+                  />
+                  <p className="text-xs text-muted-foreground/70">Kun din andel (Faktisk beløp) telles i sparepulsen.</p>
+                </div>
+              )}
+              {linkableEvents.length > 0 && (
+                <div className="space-y-1">
+                  <Label className="text-xs">Slå sammen med en annen gave (valgfritt)</Label>
+                  <Select value={linkedEventId || '_none'} onValueChange={(v) => setLinkedEventId(v === '_none' ? '' : v)}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none" className="text-xs">— Ingen —</SelectItem>
+                      {linkableEvents.map((le) => {
+                        const leRecipient = recipients.find((r) => r.id === le.recipientId)
+                        return (
+                          <SelectItem key={le.id} value={le.id} className="text-xs">
+                            {leRecipient?.name ?? '—'} · {OCCASION_LABELS[le.occasion]}
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground/70">
+                    Kostnaden telles kun på den valgte gaven — denne blir en informasjonsrad.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           <label className="flex items-center gap-2 text-xs cursor-pointer">
             <Switch checked={isLocked} onCheckedChange={setIsLocked} />
