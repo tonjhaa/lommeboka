@@ -1671,7 +1671,10 @@ function SavingsPlanTab() {
   const excludeXmas = settings.excludeChristmasFromSavings ?? false
 
   const allEffectiveEvents = useMemo(
-    () => [...events, ...deriveAutoEvents(recipients, events, weightRules, settings)],
+    () => [
+      ...events.filter((e) => !isEventArchived(e)),
+      ...deriveAutoEvents(recipients, events, weightRules, settings),
+    ],
     [events, recipients, weightRules, settings]
   )
 
@@ -1786,33 +1789,6 @@ function SavingsPlanTab() {
           )}
         </div>
       </div>
-
-      {/* Avvik */}
-      {(() => {
-        const avp = calculateActualVsPlanned(events)
-        if (avp.planned === 0) return null
-        return (
-          <div className="rounded border border-border bg-muted/10 px-3 py-2.5 text-xs">
-            <p className="font-semibold mb-1">Faktisk vs planlagt (kjøpte gaver)</p>
-            <div className="flex gap-6">
-              <div>
-                <p className="text-muted-foreground">Planlagt</p>
-                <p className="font-mono">{fmtNOK(avp.planned)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Faktisk</p>
-                <p className="font-mono">{fmtNOK(avp.actual)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Avvik</p>
-                <p className={cn('font-mono', avp.deviation > 0 ? 'text-red-400' : 'text-green-400')}>
-                  {avp.deviation > 0 ? '+' : ''}{fmtNOK(avp.deviation)}
-                </p>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
     </div>
   )
 }
