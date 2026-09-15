@@ -1113,7 +1113,7 @@ function EventModal({
       notes: notes.trim() || undefined,
       boughtUsed: boughtUsed || undefined,
       sharedPurchaseNote: sharedPurchaseNote.trim() || undefined,
-      sharedPurchaseTotal: sharedPurchaseTotal ? parseFloat(sharedPurchaseTotal) : undefined,
+      sharedPurchaseTotal: (sharedPurchaseNote && sharedPurchaseTotal) ? parseFloat(sharedPurchaseTotal) : undefined,
       linkedEventId: linkedEventId || undefined,
     }
     onSave(ev)
