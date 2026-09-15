@@ -669,6 +669,7 @@ function RecipientsTab() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [specialEventRecipient, setSpecialEventRecipient] = useState<string | null>(null)
   const [specialEventKey, setSpecialEventKey] = useState(0)
+  const [markBoughtTarget, setMarkBoughtTarget] = useState<GiftEvent | null>(null)
 
   function openAdding() { setModalKey((k) => k + 1); setAdding(true) }
   function openEditing(r: GiftRecipient) { setModalKey((k) => k + 1); setEditing(r) }
@@ -677,6 +678,10 @@ function RecipientsTab() {
 
   function promoteEvent(autoEvent: import('@/types/gifts').GiftEvent, status: import('@/types/gifts').EventStatus) {
     const stored = events.find((e) => e.recipientId === autoEvent.recipientId && e.occasion === autoEvent.occasion)
+    if (status === 'kjøpt') {
+      setMarkBoughtTarget(stored ?? { ...autoEvent, id: '' })
+      return
+    }
     if (stored) {
       updateEvent(stored.id, { status })
     } else {
@@ -984,6 +989,27 @@ function RecipientsTab() {
         onSave={(ev) => { addEvent({ ...ev, id: ev.id || crypto.randomUUID() }); setSpecialEventRecipient(null) }}
         onClose={() => setSpecialEventRecipient(null)}
       />
+
+      {/* Marker som kjøpt */}
+      {markBoughtTarget && (
+        <EventModal
+          open
+          initial={{ ...markBoughtTarget, status: 'kjøpt' }}
+          recipients={recipients}
+          settings={settings}
+          weightRules={weightRules}
+          linkableEvents={events.filter((e) => e.id !== markBoughtTarget.id && e.status !== 'droppet' && !isEventArchived(e))}
+          onSave={(ev) => {
+            if (ev.id) {
+              updateEvent(ev.id, ev)
+            } else {
+              addEvent({ ...ev, id: crypto.randomUUID() })
+            }
+            setMarkBoughtTarget(null)
+          }}
+          onClose={() => setMarkBoughtTarget(null)}
+        />
+      )}
     </div>
   )
 }
