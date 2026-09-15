@@ -108,10 +108,16 @@ function OverviewTab({ setTab }: { setTab: (tab: GiftTab) => void }) {
   )
 
   const activeStoredEvents = useMemo(() => events.filter((e) => !isEventArchived(e)), [events])
-  const historyEvents = useMemo(
-    () => events.filter((e) => isEventArchived(e)).sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')),
-    [events]
-  )
+  const historyEvents = useMemo(() => {
+    function sortableDate(e: GiftEvent): string {
+      if (e.date) return e.date
+      if (e.year) return `${e.year}-${String(e.month ?? 12).padStart(2, '0')}-01`
+      return '0000-00-00'
+    }
+    return events
+      .filter((e) => isEventArchived(e))
+      .sort((a, b) => sortableDate(b).localeCompare(sortableDate(a)))
+  }, [events])
   const effectiveEvents = useMemo(() => [...activeStoredEvents, ...autoEvents], [activeStoredEvents, autoEvents])
 
   const excludeXmas = settings.excludeChristmasFromSavings ?? false
