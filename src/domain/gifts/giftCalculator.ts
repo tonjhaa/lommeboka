@@ -417,16 +417,32 @@ export function deriveAutoEvents(
   return auto
 }
 
-/** Beregner faktisk vs planlagt avvik */
+/** Beregner faktisk vs planlagt avvik, totalt og per mottaker. Sammenslåtte gaver (linkedEventId satt) telles kun på primærraden. */
 export function calculateActualVsPlanned(events: GiftEvent[]): {
   planned: number
   actual: number
   deviation: number
+  byRecipient: { recipientId: string; planned: number; actual: number; deviation: number }[]
 } {
-  const purchased = events.filter((e) => e.status === 'kjøpt')
+  const purchased = events.filter((e) => e.status === 'kjøpt' && !e.linkedEventId)
   const planned = purchased.reduce((s, e) => s + (e.manualAmount ?? e.calculatedAmount), 0)
   const actual = purchased.reduce((s, e) => s + (e.actualAmount ?? 0), 0)
-  return { planned, actual, deviation: actual - planned }
+
+  const byRecipientMap = new Map<string, { planned: number; actual: number }>()
+  for (const e of purchased) {
+    const cur = byRecipientMap.get(e.recipientId) ?? { planned: 0, actual: 0 }
+    cur.planned += e.manualAmount ?? e.calculatedAmount
+    cur.actual += e.actualAmount ?? 0
+    byRecipientMap.set(e.recipientId, cur)
+  }
+  const byRecipient = Array.from(byRecipientMap.entries()).map(([recipientId, v]) => ({
+    recipientId,
+    planned: v.planned,
+    actual: v.actual,
+    deviation: v.actual - v.planned,
+  }))
+
+  return { planned, actual, deviation: actual - planned, byRecipient }
 }
 
 const MONTH_NO = ['jan', 'feb', 'mar', 'apr', 'mai', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'des']

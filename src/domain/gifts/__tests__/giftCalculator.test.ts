@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { isEventArchived, deriveAutoEvents } from '../giftCalculator'
+import { isEventArchived, deriveAutoEvents, calculateActualVsPlanned } from '../giftCalculator'
 import { DEFAULT_WEIGHT_RULES, DEFAULT_GIFT_SETTINGS } from '@/domain/gifts/defaultWeights'
 import type { GiftEvent, GiftRecipient } from '@/types/gifts'
 
@@ -106,5 +106,35 @@ describe('deriveAutoEvents — årlig gjenbruk etter arkivering', () => {
     const auto = deriveAutoEvents([julRecipient], [], DEFAULT_WEIGHT_RULES, DEFAULT_GIFT_SETTINGS)
     expect(auto).toHaveLength(1)
     expect(auto[0].year).toBe(2026)
+  })
+})
+
+describe('calculateActualVsPlanned', () => {
+  it('grupperer avvik per mottaker', () => {
+    const events: GiftEvent[] = [
+      { id: 'a', recipientId: 'r1', occasion: 'bursdag', ownership: 'felles', calculatedAmount: 500, isLocked: false, status: 'kjøpt', actualAmount: 600 },
+      { id: 'b', recipientId: 'r2', occasion: 'jul', ownership: 'felles', calculatedAmount: 300, isLocked: false, status: 'kjøpt', actualAmount: 250 },
+    ]
+    const result = calculateActualVsPlanned(events)
+    expect(result.planned).toBe(800)
+    expect(result.actual).toBe(850)
+    expect(result.deviation).toBe(50)
+    expect(result.byRecipient).toEqual(
+      expect.arrayContaining([
+        { recipientId: 'r1', planned: 500, actual: 600, deviation: 100 },
+        { recipientId: 'r2', planned: 300, actual: 250, deviation: -50 },
+      ])
+    )
+  })
+
+  it('hopper over sekundære rader i en sammenslått gave (linkedEventId satt)', () => {
+    const events: GiftEvent[] = [
+      { id: 'primary', recipientId: 'r1', occasion: 'bursdag', ownership: 'felles', calculatedAmount: 500, isLocked: false, status: 'kjøpt', actualAmount: 500 },
+      { id: 'secondary', recipientId: 'r2', occasion: 'bursdag', ownership: 'felles', calculatedAmount: 0, isLocked: false, status: 'kjøpt', actualAmount: 0, linkedEventId: 'primary' },
+    ]
+    const result = calculateActualVsPlanned(events)
+    expect(result.planned).toBe(500)
+    expect(result.actual).toBe(500)
+    expect(result.byRecipient).toEqual([{ recipientId: 'r1', planned: 500, actual: 500, deviation: 0 }])
   })
 })
