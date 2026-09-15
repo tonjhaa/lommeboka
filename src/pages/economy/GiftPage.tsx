@@ -1230,6 +1230,7 @@ function EventModal({
     if (!recipientId) return
     const ev: GiftEvent = {
       id: initial?.id ?? '',
+      year: initial?.year,
       recipientId,
       occasion,
       date: date || undefined,
