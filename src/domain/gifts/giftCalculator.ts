@@ -335,6 +335,27 @@ export function calculateGiftResult(
   }
 }
 
+// ── Arkivering ──────────────────────────────────────────────────
+
+/**
+ * Avgjør om en hendelse er "arkivert" — dvs. hører til et tidligere år og
+ * ikke lenger skal telle som den aktive hendelsen for mottaker+anledning.
+ * Beregnet fra dato, ikke lagret som flagg — historikk forblir redigerbar.
+ * Gjelder kun bursdag og jul; andre anledninger arkiveres ikke automatisk.
+ */
+export function isEventArchived(event: GiftEvent, today: Date = new Date()): boolean {
+  if (event.occasion === 'jul') {
+    const y = event.year ?? today.getFullYear()
+    return today >= new Date(y + 1, 0, 1)
+  }
+  if (event.occasion === 'bursdag' && event.date) {
+    const d = new Date(event.date)
+    d.setMonth(d.getMonth() + 3)
+    return today >= d
+  }
+  return false
+}
+
 /**
  * Utleder auto-genererte gavehendelser fra mottakerdata.
  * - receivesBirthdayGift + birthDate  → neste bursdag
