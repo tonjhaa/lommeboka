@@ -5,7 +5,7 @@
 export type RelationshipType =
   | 'partner' | 'foreldre' | 'svigerforeldre' | 'søsken' | 'svigersøsken'
   | 'besteforeldre' | 'barn' | 'stebarn' | 'tante_onkel' | 'niese_nevø'
-  | 'fadderbarn' | 'nær_venn' | 'venn' | 'kollega' | 'nabo'
+  | 'fadderbarn' | 'nær_venn' | 'venn' | 'barn_av_venn' | 'kollega' | 'nabo'
   | 'vertskap' | 'annet'
 
 export type LifePhase =

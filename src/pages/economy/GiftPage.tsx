@@ -709,6 +709,8 @@ function RecipientsTab() {
 
   const FAMILY_RELS = new Set<RelationshipType>(['partner', 'foreldre', 'svigerforeldre', 'søsken', 'svigersøsken', 'besteforeldre', 'barn', 'stebarn', 'tante_onkel', 'niese_nevø', 'fadderbarn'])
   const FRIEND_RELS = new Set<RelationshipType>(['nær_venn', 'venn'])
+  const CHILD_OF_FRIEND_RELS = new Set<RelationshipType>(['barn_av_venn'])
+  const [view, setView] = useState<'kort' | 'liste'>('kort')
 
   function nextBDays(r: GiftRecipient): number {
     if (!r.birthDate) return 9999
@@ -751,10 +753,11 @@ function RecipientsTab() {
       return [{ title: '', items: sorted }] as Section[]
     }
     if (sort === 'relasjon') {
-      const groups: Record<string, GiftRecipient[]> = { Familie: [], Venner: [], Andre: [] }
+      const groups: Record<string, GiftRecipient[]> = { Familie: [], Venner: [], 'Barn av venner': [], Andre: [] }
       for (const r of sorted) {
         if (FAMILY_RELS.has(r.relationshipType)) groups.Familie.push(r)
         else if (FRIEND_RELS.has(r.relationshipType)) groups.Venner.push(r)
+        else if (CHILD_OF_FRIEND_RELS.has(r.relationshipType)) groups['Barn av venner'].push(r)
         else groups.Andre.push(r)
       }
       return Object.entries(groups).filter(([, v]) => v.length > 0).map(([t, v]) => ({ title: t, items: v })) as Section[]
@@ -793,9 +796,25 @@ function RecipientsTab() {
             </button>
           ))}
         </div>
-        <Button size="sm" onClick={openAdding} className="shrink-0">
-          <Plus className="h-3.5 w-3.5 mr-1" /> Legg til
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex gap-0.5 rounded-full border border-border/40 p-0.5">
+            {([['kort', 'Kort'], ['liste', 'Liste']] as ['kort' | 'liste', string][]).map(([v, label]) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={cn(
+                  'text-xs px-2.5 py-1 rounded-full transition-colors',
+                  view === v ? 'bg-primary/10 text-foreground' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <Button size="sm" onClick={openAdding} className="shrink-0">
+            <Plus className="h-3.5 w-3.5 mr-1" /> Legg til
+          </Button>
+        </div>
       </div>
 
       {/* Seksjoner */}
@@ -813,6 +832,55 @@ function RecipientsTab() {
                 {title} <span className="font-normal opacity-60">({items.length})</span>
               </p>
             )}
+            {view === 'liste' ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-muted-foreground/60 text-left">
+                      <th className="font-normal pb-1.5 pr-2">Navn</th>
+                      <th className="font-normal pb-1.5 pr-2">Relasjon</th>
+                      <th className="font-normal pb-1.5 pr-2 text-right">🎂 Bursdag</th>
+                      <th className="font-normal pb-1.5 pr-2 text-right">🎄 Jul</th>
+                      <th className="font-normal pb-1.5 pr-2">Neste</th>
+                      <th className="font-normal pb-1.5 w-14"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((r) => {
+                      const nextB = nextBStr(r)
+                      const bVal = calcOccasionAmount(r, 'bursdag')
+                      const jVal = calcOccasionAmount(r, 'jul')
+                      return (
+                        <tr
+                          key={r.id}
+                          onClick={() => toggleSelected(r.id)}
+                          className={cn(
+                            'cursor-pointer border-t border-border/20 transition-colors',
+                            selectedId === r.id ? 'bg-primary/5' : 'hover:bg-muted/10'
+                          )}
+                        >
+                          <td className="py-1.5 pr-2 font-medium truncate max-w-[160px]" title={r.name}>{r.name}</td>
+                          <td className="py-1.5 pr-2 text-muted-foreground truncate">{RELATIONSHIP_LABELS[r.relationshipType]}</td>
+                          <td className={cn('py-1.5 pr-2 text-right', r.receivesBirthdayGift ? 'text-foreground/80' : 'text-muted-foreground/25')}>{fmtNOK(bVal)}</td>
+                          <td className={cn('py-1.5 pr-2 text-right', r.receivesChristmasGift ? 'text-foreground/80' : 'text-muted-foreground/25')}>{fmtNOK(jVal)}</td>
+                          <td className="py-1.5 pr-2 text-muted-foreground/60">{nextB ?? '—'}</td>
+                          <td className="py-1.5">
+                            <div className="flex gap-0.5 justify-end">
+                              <button className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground/50 hover:text-foreground" onClick={(e) => { e.stopPropagation(); openEditing(r) }}>
+                                <Pencil className="h-3 w-3" />
+                              </button>
+                              <button className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground/50 hover:text-red-400" onClick={(e) => { e.stopPropagation(); removeRecipient(r.id) }}>
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
             <div className="grid grid-cols-2 gap-2">
               {items.map((r) => {
                 const initials = r.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
@@ -887,6 +955,7 @@ function RecipientsTab() {
                 )
               })}
             </div>
+            )}
           </div>
         ))
       )}
@@ -1896,6 +1965,7 @@ function RatesTab() {
     { label: 'Fadderbarn',                keys: ['fadderbarn'] },
     { label: 'Nær venn',                  keys: ['nær_venn'] },
     { label: 'Venn',                      keys: ['venn'] },
+    { label: 'Barn av venn',              keys: ['barn_av_venn'] },
     { label: 'Kollega',                   keys: ['kollega'] },
     { label: 'Nabo',                      keys: ['nabo'] },
     { label: 'Vertskap',                  keys: ['vertskap'] },
@@ -1912,7 +1982,7 @@ function RatesTab() {
         <div className="space-y-4">
           {SLIDER_GROUPS.map(({ label, keys }) => {
             const primaryKey = keys[0]
-            const value = weightRules.relationshipBaseAmounts[primaryKey]
+            const value = weightRules.relationshipBaseAmounts[primaryKey] ?? DEFAULT_WEIGHT_RULES.relationshipBaseAmounts[primaryKey] ?? 0
             const julAmount = weightRules.occasionOverrides?.[primaryKey]?.['jul']
             const rundDagAmount = weightRules.occasionOverrides?.[primaryKey]?.['rund_dag']
             // Other overrides (not jul/rund_dag)
