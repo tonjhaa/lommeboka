@@ -21,6 +21,7 @@ function makeFakeChannel(): FakeChannel {
 const channelMock = vi.fn((..._args: unknown[]) => makeFakeChannel())
 const removeChannelMock = vi.fn()
 const captureMessageMock = vi.fn()
+const addBreadcrumbMock = vi.fn()
 
 vi.mock('@/lib/supabase', () => ({
   supabase: {
@@ -31,6 +32,7 @@ vi.mock('@/lib/supabase', () => ({
 
 vi.mock('@sentry/react', () => ({
   captureMessage: (...args: unknown[]) => captureMessageMock(...args),
+  addBreadcrumb: (...args: unknown[]) => addBreadcrumbMock(...args),
 }))
 
 import { subscribeToSharedData } from '../sharedData'
@@ -42,6 +44,7 @@ describe('subscribeToSharedData — delt kanal per partnerskap', () => {
     channelMock.mockClear()
     removeChannelMock.mockClear()
     captureMessageMock.mockClear()
+    addBreadcrumbMock.mockClear()
   })
 
   afterEach(() => {
@@ -97,6 +100,23 @@ describe('subscribeToSharedData — delt kanal per partnerskap', () => {
     channelInstances[2]._statusCb?.('CHANNEL_ERROR')
     expect(captureMessageMock).toHaveBeenCalledTimes(2)
 
+    unsub()
+  })
+
+  it('legger inn breadcrumb ved gjenoppkobling, men ikke ved første tilkobling', () => {
+    const unsub = subscribeToSharedData('p1', 'gaver', vi.fn())
+    channelInstances[0]._statusCb?.('SUBSCRIBED')
+    expect(addBreadcrumbMock).not.toHaveBeenCalled()
+
+    channelInstances[0]._statusCb?.('CHANNEL_ERROR')
+    vi.advanceTimersByTime(1000)
+    channelInstances[1]._statusCb?.('SUBSCRIBED')
+
+    expect(addBreadcrumbMock).toHaveBeenCalledTimes(1)
+    expect(addBreadcrumbMock.mock.calls[0][0]).toMatchObject({
+      category: 'realtime',
+      data: { attempts: 1, downMs: 1000 },
+    })
     unsub()
   })
 

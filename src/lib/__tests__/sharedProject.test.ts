@@ -29,6 +29,7 @@ vi.mock('@/lib/supabase', () => ({
 
 vi.mock('@sentry/react', () => ({
   captureMessage: vi.fn(),
+  addBreadcrumb: vi.fn(),
 }))
 
 import { subscribeToSharedProject } from '../sharedProject'

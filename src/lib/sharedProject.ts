@@ -74,6 +74,7 @@ export function subscribeToSharedProject(
   let stopped = false
   let retryTimer: ReturnType<typeof setTimeout> | null = null
   let attempt = 0
+  let downSince = 0
   let channel: ReturnType<typeof supabase.channel> | null = null
 
   function connect() {
@@ -96,11 +97,20 @@ export function subscribeToSharedProject(
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
+          if (attempt > 0) {
+            Sentry.addBreadcrumb({
+              category: 'realtime',
+              level: 'info',
+              message: 'Realtime shared-project gjenopprettet',
+              data: { attempts: attempt, downMs: Date.now() - downSince },
+            })
+          }
           attempt = 0
           return
         }
         if (status !== 'CHANNEL_ERROR' && status !== 'TIMED_OUT') return
         if (stopped) return
+        if (attempt === 0) downSince = Date.now()
         if (attempt === 0) Sentry.captureMessage(`Realtime shared-project ${status} (partnership ${partnershipId})`, 'warning')
         if (channel) supabase.removeChannel(channel)
         attempt += 1

@@ -160,6 +160,7 @@ export function subscribeToPartnerData(
   let stopped = false
   let retryTimer: ReturnType<typeof setTimeout> | null = null
   let attempt = 0
+  let downSince = 0
   let channel: ReturnType<typeof supabase.channel> | null = null
 
   function connect() {
@@ -176,11 +177,20 @@ export function subscribeToPartnerData(
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
+          if (attempt > 0) {
+            Sentry.addBreadcrumb({
+              category: 'realtime',
+              level: 'info',
+              message: 'Realtime partner-data gjenopprettet',
+              data: { attempts: attempt, downMs: Date.now() - downSince },
+            })
+          }
           attempt = 0
           return
         }
         if (status !== 'CHANNEL_ERROR' && status !== 'TIMED_OUT') return
         if (stopped) return
+        if (attempt === 0) downSince = Date.now()
         if (attempt === 0) Sentry.captureMessage(`Realtime partner-data ${status} (partner ${partnerId})`, 'warning')
         if (channel) supabase.removeChannel(channel)
         attempt += 1
