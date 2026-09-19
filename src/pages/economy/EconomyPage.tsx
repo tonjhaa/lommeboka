@@ -48,9 +48,6 @@ const VeikartPage = lazyWithRetry(() =>
 const GiftPage = lazyWithRetry(() =>
   import('./GiftPage').then((m) => ({ default: m.GiftPage }))
 )
-const NavnejaktPage = lazyWithRetry(() =>
-  import('./NavnejaktPage').then((m) => ({ default: m.NavnejaktPage }))
-)
 const PensionPage = lazyWithRetry(() =>
   import('./PensionPage').then((m) => ({ default: m.PensionPage }))
 )
@@ -120,7 +117,7 @@ class PageErrorBoundary extends Component<
 const KNOWN_PAGES: ReadonlySet<EconomySubPage> = new Set<EconomySubPage>([
   'dashboard', 'budget', 'salary', 'atf', 'savings', 'fond', 'debt', 'absence',
   'tax', 'subscriptions', 'feriepenger', 'vacation', 'veikart', 'pension',
-  'gaver', 'navnejakten', 'scenario', 'settings',
+  'gaver', 'scenario', 'settings',
 ])
 
 export function EconomyPage() {
@@ -168,7 +165,6 @@ export function EconomyPage() {
           {page === 'veikart' && <VeikartPage />}
           {page === 'pension' && <PensionPage />}
           {page === 'gaver' && <GiftPage />}
-          {page === 'navnejakten' && <NavnejaktPage />}
           {page === 'scenario' && <ScenarioPage />}
           {page === 'settings' && <EconomySettingsPage />}
         </Suspense>

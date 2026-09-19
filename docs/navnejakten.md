@@ -1,6 +1,6 @@
 # Navnejakten
 
-«Tinder for babynavn» for to koblede kontoer. Ligger under **Livet → Navnejakten** (`src/pages/economy/NavnejaktPage.tsx`).
+«Tinder for babynavn» for to koblede kontoer. Ligger som fane under **Livet → Prosjekt → Navnejakten** (`src/pages/economy/NavnejaktPage.tsx`, lazy-lastet fra `ProsjektPage.tsx` først når fanen åpnes). Den følger dermed Prosjekt-modulen (`ivf`) i Innstillinger → Moduler. Lagret navigasjon til den gamle egne siden migreres i `migrateAppState` (persist v5).
 
 ## Datakilde: SSB tabell 10467
 «Fødte, etter jente- eller guttenavn, statistikkvariabel og år» (1880–siste år, antall og andel av fødte).

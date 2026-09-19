@@ -82,7 +82,6 @@ const GROUPS: NavGroup[] = [
     items: [
       { label: 'Ferie', target: { kind: 'economy', page: 'vacation' }, requiresTab: 'vacation' },
       { label: 'Gaver', target: { kind: 'economy', page: 'gaver' }, requiresTab: 'gaver' },
-      { label: 'Navnejakten', target: { kind: 'economy', page: 'navnejakten' } },
       { label: 'Prosjekt', target: { kind: 'view', view: 'ivf' }, requiresTab: 'ivf' },
       { label: 'Partner', target: { kind: 'view', view: 'partner' }, requiresTab: 'partner' },
     ],
@@ -246,8 +245,8 @@ export function MainNav() {
                 )}
               >
                 {item.label}
-                {item.label === 'Navnejakten' && unseenNameMatches > 0 && (
-                  <span aria-label={`${unseenNameMatches} nye matcher`} className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-primary align-middle" />
+                {item.label === 'Prosjekt' && unseenNameMatches > 0 && (
+                  <span aria-label={unseenNameMatches === 1 ? '1 ny navnematch' : `${unseenNameMatches} nye navnematcher`} className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-primary align-middle" />
                 )}
               </button>
             )
