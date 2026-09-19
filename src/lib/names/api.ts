@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/react'
 import { supabase } from '@/lib/supabase'
-import type { MatchRow, NameRow, NameStat, SyncInfo, Vote } from './types'
+import type { MatchNote, MatchRow, NameRow, NameStat, SyncInfo, Vote } from './types'
 import type { Tournament, FinalRank } from './tournament'
 
 // Alle tilgangsregler håndheves av RLS/triggere i databasen (supabase/migrations/20260919000000_navnejakten.sql).
@@ -114,6 +114,30 @@ export async function fetchPartnerStats(): Promise<PartnerStats | null> {
   if (error) throw new Error(error.message)
   const row = (data as Array<{ rated: number; yes_count: number; maybe_count: number }> | null)?.[0]
   return row ? { rated: Number(row.rated), yes: Number(row.yes_count), maybe: Number(row.maybe_count) } : null
+}
+
+// ── Notater på matcher (Rls: bare på matcher, leses bare mens matchen finnes)
+
+interface NoteDbRow { name_id: string; user_id: string; note: string; updated_at: string }
+
+export async function fetchNotes(): Promise<MatchNote[]> {
+  const rows = await fetchAll<NoteDbRow>((from, to) =>
+    supabase.from('name_match_notes').select('name_id, user_id, note, updated_at').order('updated_at').range(from, to))
+  return rows.map((r) => ({ nameId: r.name_id, userId: r.user_id, note: r.note, updatedAt: r.updated_at }))
+}
+
+export async function saveNote(partnershipId: string, userId: string, nameId: string, note: string): Promise<void> {
+  const { error } = await supabase.from('name_match_notes').upsert(
+    { partnership_id: partnershipId, name_id: nameId, user_id: userId, note, updated_at: new Date().toISOString() },
+    { onConflict: 'partnership_id,name_id,user_id' },
+  )
+  if (error) throw new Error(error.message)
+}
+
+export async function deleteNote(partnershipId: string, userId: string, nameId: string): Promise<void> {
+  const { error } = await supabase.from('name_match_notes').delete()
+    .eq('partnership_id', partnershipId).eq('name_id', nameId).eq('user_id', userId)
+  if (error) throw new Error(error.message)
 }
 
 // ── Finalen

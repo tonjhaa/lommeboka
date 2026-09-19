@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, Heart, HelpCircle, Layers, Trophy, Users } from 'lucide-react'
+import { BarChart3, Heart, HelpCircle, Layers, Shuffle, Trophy, Users } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 import { usePartnershipStore } from '@/store/usePartnershipStore'
-import { useNavnejaktStore } from '@/store/useNavnejaktStore'
+import { selectUnseenMatchCount, useNavnejaktStore } from '@/store/useNavnejaktStore'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { cn } from '@/lib/utils'
+import { CombinationsTab } from '@/components/navnejakt/CombinationsTab'
 import { FinalTab } from '@/components/navnejakt/FinalTab'
 import { MatchesTab } from '@/components/navnejakt/MatchesTab'
 import { MatchOverlay } from '@/components/navnejakt/MatchOverlay'
@@ -12,7 +13,7 @@ import { MaybeTab } from '@/components/navnejakt/MaybeTab'
 import { StatsTab } from '@/components/navnejakt/StatsTab'
 import { SwipeTab } from '@/components/navnejakt/SwipeTab'
 
-type NavnejaktTab = 'swipe' | 'matcher' | 'kanskje' | 'finalen' | 'statistikk'
+type NavnejaktTab = 'swipe' | 'matcher' | 'kanskje' | 'kombinasjoner' | 'finalen' | 'statistikk'
 
 export function NavnejaktPage() {
   const [tab, setTab] = useState<NavnejaktTab>('swipe')
@@ -28,6 +29,7 @@ export function NavnejaktPage() {
   const loadStatus = useNavnejaktStore((s) => s.status)
   const error = useNavnejaktStore((s) => s.error)
   const matchCount = useNavnejaktStore((s) => s.matches.length)
+  const unseenCount = useNavnejaktStore(selectUnseenMatchCount)
   const maybeCount = useNavnejaktStore((s) => { let n = 0; for (const v of s.votes.values()) if (v === 'maybe') n++; return n })
   const celebrate = useNavnejaktStore((s) => s.celebrate)
   const dismissCelebrate = useNavnejaktStore((s) => s.dismissCelebrate)
@@ -44,6 +46,7 @@ export function NavnejaktPage() {
     { id: 'swipe', label: 'Swipe', Icon: Layers },
     { id: 'matcher', label: 'Matcher', Icon: Heart, count: matchCount },
     { id: 'kanskje', label: 'Kanskje', Icon: HelpCircle, count: maybeCount },
+    { id: 'kombinasjoner', label: 'Kombinasjoner', Icon: Shuffle },
     { id: 'finalen', label: 'Finalen', Icon: Trophy },
     { id: 'statistikk', label: 'Statistikk', Icon: BarChart3 },
   ]
@@ -63,7 +66,11 @@ export function NavnejaktPage() {
           >
             <Icon className="h-3.5 w-3.5" />
             <span>{label}</span>
-            {count !== undefined && count > 0 && <span className="rounded-full bg-muted px-1.5 text-[10px] tabular-nums">{count}</span>}
+            {count !== undefined && count > 0 && (
+              <span className={cn('rounded-full px-1.5 text-[10px] tabular-nums', id === 'matcher' && unseenCount > 0 ? 'bg-primary text-primary-foreground' : 'bg-muted')}>
+                {id === 'matcher' && unseenCount > 0 ? `${unseenCount} ny${unseenCount === 1 ? '' : 'e'}` : count}
+              </span>
+            )}
           </button>
         ))}
         {!connected && (
@@ -86,7 +93,8 @@ export function NavnejaktPage() {
         ) : (
           <>
             {tab === 'swipe' && <div className="h-full min-h-[30rem]"><SwipeTab /></div>}
-            {tab === 'matcher' && <MatchesTab connected={connected} />}
+            {tab === 'matcher' && <MatchesTab connected={connected} partnerName={partnerLabel} />}
+            {tab === 'kombinasjoner' && <CombinationsTab />}
             {tab === 'kanskje' && <MaybeTab />}
             {tab === 'finalen' && userId && <FinalTab connected={connected} partnershipId={partnershipId} userId={userId} partnerName={partnerLabel} />}
             {tab === 'statistikk' && <StatsTab connected={connected} partnerName={partnerLabel} />}

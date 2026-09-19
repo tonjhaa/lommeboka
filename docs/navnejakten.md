@@ -27,3 +27,9 @@ Lik sum = delt plass; ingen tie-breaker. Minst 4 matcher.
 
 ## Filtre
 Standard viser bare navn med SSB-tall for siste år; «Eldre navn» tar med resten. «Sjeldnere navn» = rang ≥ 250 eller ikke registrert siste år.
+
+## Versjon 2
+- **Ny-match-markering:** «sett» lagres lokalt per bruker (`seenMatchIds`). `loadMatchIndicator` (kalles fra `App.tsx`) henter bare matcher, slik at prikken i navigasjonen og «n nye» på Matcher-fanen virker fra alle sider — også for matcher som kom mens appen var lukket. Matcher blir markert som sett 1,5 s etter at Matcher-fanen åpnes.
+- **Kombinasjoner:** fornavn + valgfritt mellomnavn fra matchene, med etternavn (lagres kun i nettleseren). Merkene «samme forbokstav» og «samme bokstav i skjøten» er rent mekaniske (`src/lib/names/combinations.ts`).
+- **Notater:** `name_match_notes` (migrasjon `20260920000000_navnejakten_notes.sql`) — ett notat per partner per match, maks 280 tegn, synlig for begge. RLS tillater bare notater på navn som er en match, og de leses bare mens matchen finnes. Test: `supabase/tests/navnejakten_notes.sql`.
+- **Ikke bygget:** push-varsel (krever service worker, push-abonnement og server-utsending).

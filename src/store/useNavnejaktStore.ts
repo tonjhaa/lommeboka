@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import * as api from '@/lib/names/api'
 import { DEFAULT_FILTERS, type NameFilters } from '@/lib/names/filters'
-import type { MatchRow, NameRow, SyncInfo, Vote } from '@/lib/names/types'
+import { NOTE_MAX_LENGTH, type MatchNote, type MatchRow, type NameRow, type SyncInfo, type Vote } from '@/lib/names/types'
 
 interface HistoryEntry { nameId: string; prev: Vote | null }
 
@@ -17,6 +17,11 @@ interface NavnejaktState {
   latestYear: number
   votes: Map<string, Vote>
   matches: MatchRow[]
+  notes: MatchNote[]
+  /** Matcher brukeren har sett, per bruker-id (lagres lokalt) */
+  seenMatchIds: Record<string, string[]>
+  /** Etternavn til navnekombinasjoner — lagres bare i denne nettleseren */
+  surname: string
   favorites: Set<string>
   syncInfo: SyncInfo | null
   syncing: boolean
@@ -29,6 +34,12 @@ interface NavnejaktState {
   _unsubscribe: (() => void) | null
 
   initialize: (userId: string, partnershipId: string | null) => Promise<void>
+  /** Lett innlasting av bare matcher (uten navnelisten), slik at «ny match»-markering virker fra alle sider */
+  loadMatchIndicator: (userId: string, partnershipId: string) => Promise<void>
+  markMatchesSeen: (ids?: string[]) => void
+  refreshNotes: () => Promise<void>
+  saveNote: (nameId: string, text: string) => Promise<void>
+  setSurname: (surname: string) => void
   reset: () => void
   vote: (nameId: string, vote: Vote) => Promise<void>
   undo: () => Promise<void>
@@ -38,6 +49,13 @@ interface NavnejaktState {
   refreshMatches: () => Promise<void>
   syncFromSsb: () => Promise<void>
   clearError: () => void
+}
+
+/** Antall matcher brukeren ikke har sett ennå. */
+export const selectUnseenMatchCount = (s: Pick<NavnejaktState, 'userId' | 'matches' | 'seenMatchIds'>): number => {
+  if (!s.userId) return 0
+  const seen = new Set(s.seenMatchIds[s.userId] ?? [])
+  return s.matches.filter((m) => !seen.has(m.id)).length
 }
 
 const HISTORY_LIMIT = 50
@@ -79,6 +97,9 @@ export const useNavnejaktStore = create<NavnejaktState>()(
         latestYear: 0,
         votes: new Map(),
         matches: [],
+        notes: [],
+        seenMatchIds: {},
+        surname: '',
         favorites: new Set(),
         syncInfo: null,
         syncing: false,
@@ -96,17 +117,18 @@ export const useNavnejaktStore = create<NavnejaktState>()(
           s._unsubscribe?.()
           set({ status: 'loading', error: null, userId, partnershipId, _unsubscribe: null })
           try {
-            const [names, votes, matches, favorites, syncInfo] = await Promise.all([
+            const [names, votes, matches, favorites, syncInfo, notes] = await Promise.all([
               api.fetchNames(),
               api.fetchMyVotes(),
               partnershipId ? api.fetchMatches() : Promise.resolve([] as MatchRow[]),
               api.fetchFavorites(),
               api.fetchSyncInfo(),
+              partnershipId ? api.fetchNotes().catch(() => [] as MatchNote[]) : Promise.resolve([] as MatchNote[]),
             ])
             const latestYear = names.reduce((y, n) => Math.max(y, n.latestYear), syncInfo?.latestYear ?? 0)
             set({
               status: 'ready', names, namesById: new Map(names.map((n) => [n.id, n])), latestYear,
-              votes, matches, favorites, syncInfo, history: [],
+              votes, matches, notes, favorites, syncInfo, history: [],
               seed: get().seed || Math.floor(Math.random() * 2 ** 31),
             })
             if (partnershipId) {
@@ -121,7 +143,7 @@ export const useNavnejaktStore = create<NavnejaktState>()(
           get()._unsubscribe?.()
           set({
             status: 'idle', error: null, userId: null, partnershipId: null, names: [], namesById: new Map(), latestYear: 0,
-            votes: new Map(), matches: [], favorites: new Set(), syncInfo: null, history: [], celebrate: null, _unsubscribe: null,
+            votes: new Map(), matches: [], notes: [], favorites: new Set(), syncInfo: null, history: [], celebrate: null, _unsubscribe: null,
           })
         },
 
@@ -171,7 +193,62 @@ export const useNavnejaktStore = create<NavnejaktState>()(
           }
         },
 
-        dismissCelebrate: () => set({ celebrate: null }),
+        dismissCelebrate: () => {
+          const c = get().celebrate
+          set({ celebrate: null })
+          const match = c ? get().matches.find((m) => m.nameId === c.id) : undefined
+          if (match) get().markMatchesSeen([match.id])
+        },
+
+        loadMatchIndicator: async (userId, partnershipId) => {
+          const s = get()
+          if (s.status === 'ready' || s.status === 'loading') return
+          set({ userId, partnershipId })
+          try {
+            const matches = await api.fetchMatches()
+            if (get().status === 'idle') set({ matches })
+            if (!get()._unsubscribe && get().status === 'idle') {
+              set({ _unsubscribe: api.subscribeToNameMatches(partnershipId, () => { void loadMatches().catch(() => undefined) }) })
+            }
+          } catch {
+            // Indikatoren er valgfri — feil her skal ikke forstyrre resten av appen
+          }
+        },
+
+        markMatchesSeen: (ids) => set((s) => {
+          if (!s.userId) return {}
+          const seen = new Set(s.seenMatchIds[s.userId] ?? [])
+          const before = seen.size
+          for (const id of ids ?? s.matches.map((m) => m.id)) seen.add(id)
+          if (seen.size === before) return {}
+          const current = new Set(s.matches.map((m) => m.id))
+          return { seenMatchIds: { ...s.seenMatchIds, [s.userId]: [...seen].filter((id) => current.has(id)) } }
+        }),
+
+        refreshNotes: async () => {
+          if (!get().partnershipId) return
+          try { set({ notes: await api.fetchNotes() }) } catch { /* notater er sekundære */ }
+        },
+
+        saveNote: async (nameId, text) => {
+          const { userId, partnershipId, notes } = get()
+          if (!userId || !partnershipId) return
+          const trimmed = text.trim().slice(0, NOTE_MAX_LENGTH)
+          const others = notes.filter((n) => !(n.nameId === nameId && n.userId === userId))
+          set({
+            notes: trimmed
+              ? [...others, { nameId, userId, note: trimmed, updatedAt: new Date().toISOString() }]
+              : others,
+          })
+          try {
+            if (trimmed) await api.saveNote(partnershipId, userId, nameId, trimmed)
+            else await api.deleteNote(partnershipId, userId, nameId)
+          } catch (err) {
+            set({ notes, error: `Kunne ikke lagre notatet: ${err instanceof Error ? err.message : String(err)}` })
+          }
+        },
+
+        setSurname: (surname) => set({ surname: surname.slice(0, 60) }),
 
         setFilters: (patch) => set((s) => ({ filters: { ...s.filters, ...patch } })),
 
@@ -217,7 +294,7 @@ export const useNavnejaktStore = create<NavnejaktState>()(
     {
       name: 'lommeboka-navnejakt-v1',
       version: 1,
-      partialize: (s) => ({ filters: s.filters, seed: s.seed }),
+      partialize: (s) => ({ filters: s.filters, seed: s.seed, seenMatchIds: s.seenMatchIds, surname: s.surname }),
     },
   ),
 )

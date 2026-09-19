@@ -11,6 +11,7 @@ import { useSharedProjectStore } from '@/store/useSharedProjectStore'
 import { useSharedUtstyrStore } from '@/store/useSharedUtstyrStore'
 import { useSharedKlaerStore } from '@/store/useSharedKlaerStore'
 import { useSharedGaverStore } from '@/store/useSharedGaverStore'
+import { useNavnejaktStore } from '@/store/useNavnejaktStore'
 import { startGiftSync } from '@/lib/giftSync'
 import { LoginPage } from '@/pages/LoginPage'
 import { loadFromSupabase, startAutoSync, setImporting } from '@/lib/syncEconomyData'
@@ -157,6 +158,7 @@ function App() {
         useSharedUtstyrStore.getState().initialize(partnership.id)
         useSharedKlaerStore.getState().initialize(partnership.id)
         useSharedGaverStore.getState().initialize(partnership.id)
+        void useNavnejaktStore.getState().loadMatchIndicator(userId, partnership.id)
       }
     }
     initPartnership()

@@ -4,10 +4,11 @@ import type { MatchRow, NameRow, Vote } from '@/lib/names/types'
 const api = vi.hoisted(() => ({
   fetchNames: vi.fn(), fetchMyVotes: vi.fn(), fetchMatches: vi.fn(), fetchFavorites: vi.fn(), fetchSyncInfo: vi.fn(),
   upsertVote: vi.fn(), deleteVote: vi.fn(), setFavorite: vi.fn(), invokeSsbSync: vi.fn(), subscribeToNameMatches: vi.fn(),
+  fetchNotes: vi.fn(), saveNote: vi.fn(), deleteNote: vi.fn(),
 }))
 vi.mock('@/lib/names/api', () => api)
 
-import { useNavnejaktStore } from '../useNavnejaktStore'
+import { selectUnseenMatchCount, useNavnejaktStore } from '../useNavnejaktStore'
 
 const name = (id: string): NameRow => ({
   id, name: id, gender: 'girl', letters: 5, latestYear: 2025, latestCount: 100, latestRank: 10, latestShare: 0.4, trend: 'stable', timeless: false,
@@ -20,6 +21,7 @@ async function init(opts: { votes?: Array<[string, Vote]>; matches?: MatchRow[];
   api.fetchMatches.mockResolvedValue(opts.matches ?? [])
   api.fetchFavorites.mockResolvedValue(new Set())
   api.fetchSyncInfo.mockResolvedValue({ syncedAt: '2026-01-01', latestYear: 2025, namesCount: 3 })
+  api.fetchNotes.mockResolvedValue([])
   api.subscribeToNameMatches.mockReturnValue(() => undefined)
   await useNavnejaktStore.getState().initialize('u1', opts.partnershipId === undefined ? 'p1' : opts.partnershipId)
 }
@@ -31,6 +33,9 @@ describe('useNavnejaktStore', () => {
     Object.values(api).forEach((fn) => fn.mockReset())
     api.upsertVote.mockResolvedValue(undefined)
     api.deleteVote.mockResolvedValue(undefined)
+    api.saveNote.mockResolvedValue(undefined)
+    api.deleteNote.mockResolvedValue(undefined)
+    useNavnejaktStore.setState({ seenMatchIds: {}, surname: '' })
   })
 
   it('laster egne stemmer fra serveren slik at et refresh midt i swipe fortsetter der man slapp', async () => {
@@ -138,5 +143,108 @@ describe('useNavnejaktStore', () => {
     expect(s().names).toHaveLength(3)
     expect(s().syncMessage).toBe('SSB svarte 500')
     expect(s().syncing).toBe(false)
+  })
+
+  describe('ny-match-markering', () => {
+    const m = (id: string, nameId: string): MatchRow => ({ id, nameId, matchedAt: '2026-09-19' })
+    const unseen = () => selectUnseenMatchCount(s())
+
+    it('teller matcher brukeren ikke har sett, og markerer alle som sett', async () => {
+      await init({ matches: [m('m1', 'a'), m('m2', 'b')] })
+      expect(unseen()).toBe(2)
+      s().markMatchesSeen()
+      expect(unseen()).toBe(0)
+      expect(s().seenMatchIds.u1.sort()).toEqual(['m1', 'm2'])
+    })
+
+    it('holder «sett» per bruker, slik at en annen bruker på samme enhet ser dem som nye', async () => {
+      await init({ matches: [m('m1', 'a')] })
+      s().markMatchesSeen()
+      useNavnejaktStore.setState({ userId: 'u2' })
+      expect(unseen()).toBe(1)
+    })
+
+    it('feirer og markerer bare den viste matchen som sett når overlayet lukkes', async () => {
+      await init({ matches: [m('m1', 'a'), m('m2', 'b')] })
+      useNavnejaktStore.setState({ celebrate: name('a') })
+      s().dismissCelebrate()
+      expect(s().celebrate).toBeNull()
+      expect(s().seenMatchIds.u1).toEqual(['m1'])
+      expect(unseen()).toBe(1)
+    })
+
+    it('rydder bort «sett»-id-er for matcher som ikke finnes lenger', async () => {
+      await init({ matches: [m('m1', 'a')] })
+      s().markMatchesSeen()
+      useNavnejaktStore.setState({ matches: [m('m9', 'a')] })
+      s().markMatchesSeen()
+      expect(s().seenMatchIds.u1).toEqual(['m9'])
+    })
+
+    it('loadMatchIndicator henter bare matcher (ikke navnelisten) og abonnerer', async () => {
+      useNavnejaktStore.getState().reset()
+      api.fetchMatches.mockResolvedValue([m('m1', 'a')])
+      api.subscribeToNameMatches.mockReturnValue(() => undefined)
+      await s().loadMatchIndicator('u1', 'p1')
+      expect(api.fetchNames).not.toHaveBeenCalled()
+      expect(s().matches).toHaveLength(1)
+      expect(s().status).toBe('idle')
+      expect(unseen()).toBe(1)
+      expect(api.subscribeToNameMatches).toHaveBeenCalledTimes(1)
+    })
+
+    it('loadMatchIndicator svelger feil og rører ikke en ferdig innlastet store', async () => {
+      useNavnejaktStore.getState().reset()
+      api.fetchMatches.mockRejectedValue(new Error('nede'))
+      await expect(s().loadMatchIndicator('u1', 'p1')).resolves.toBeUndefined()
+      await init({ matches: [m('m1', 'a')] })
+      api.fetchMatches.mockClear()
+      await s().loadMatchIndicator('u1', 'p1')
+      expect(api.fetchMatches).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('notater', () => {
+    it('lagrer eget notat optimistisk (trimmet) og sender det til databasen', async () => {
+      await init()
+      await s().saveNote('a', '  Etter bestemor  ')
+      expect(s().notes).toEqual([expect.objectContaining({ nameId: 'a', userId: 'u1', note: 'Etter bestemor' })])
+      expect(api.saveNote).toHaveBeenCalledWith('p1', 'u1', 'a', 'Etter bestemor')
+    })
+
+    it('erstatter eget notat uten å røre partnerens', async () => {
+      await init()
+      useNavnejaktStore.setState({ notes: [{ nameId: 'a', userId: 'u2', note: 'Fint', updatedAt: 'x' }, { nameId: 'a', userId: 'u1', note: 'gammelt', updatedAt: 'x' }] })
+      await s().saveNote('a', 'nytt')
+      expect(s().notes.map((n) => `${n.userId}:${n.note}`).sort()).toEqual(['u1:nytt', 'u2:Fint'])
+    })
+
+    it('tomt notat sletter det, og feil ruller tilbake med melding', async () => {
+      await init()
+      useNavnejaktStore.setState({ notes: [{ nameId: 'a', userId: 'u1', note: 'x', updatedAt: 'x' }] })
+      await s().saveNote('a', '   ')
+      expect(api.deleteNote).toHaveBeenCalledWith('p1', 'u1', 'a')
+      expect(s().notes).toHaveLength(0)
+
+      api.saveNote.mockRejectedValueOnce(new Error('offline'))
+      await s().saveNote('b', 'hei')
+      expect(s().notes).toHaveLength(0)
+      expect(s().error).toMatch(/offline/)
+    })
+
+    it('kutter notat til 280 tegn og gjør ingenting uten partnerskap', async () => {
+      await init()
+      await s().saveNote('a', 'x'.repeat(400))
+      expect(s().notes[0].note).toHaveLength(280)
+      await init({ partnershipId: null })
+      api.saveNote.mockClear()
+      await s().saveNote('a', 'hei')
+      expect(api.saveNote).not.toHaveBeenCalled()
+    })
+  })
+
+  it('lagrer etternavn (maks 60 tegn) lokalt i storen', () => {
+    s().setSurname('H'.repeat(100))
+    expect(s().surname).toHaveLength(60)
   })
 })

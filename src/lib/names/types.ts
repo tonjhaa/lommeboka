@@ -40,3 +40,12 @@ export interface SyncInfo {
 export const GENDER_LABEL: Record<Gender, string> = { girl: 'Jentenavn', boy: 'Guttenavn' }
 export const GENDER_LABEL_SHORT: Record<Gender, string> = { girl: 'jenter', boy: 'gutter' }
 export const TREND_LABEL: Record<Trend, string> = { rising: 'Økende', stable: 'Stabil', falling: 'Synkende' }
+
+export interface MatchNote {
+  nameId: string
+  userId: string
+  note: string
+  updatedAt: string
+}
+
+export const NOTE_MAX_LENGTH = 280
