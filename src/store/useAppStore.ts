@@ -12,7 +12,7 @@ import { defaultConfig } from '@/config/default.config'
 import { DEFAULT_SCENARIO_LEVERS } from '@/domain/economy/scenarioSimulator'
 
 export type AppView = 'calculator' | 'economy' | 'skattekalkulator' | 'partner' | 'ivf' | 'billan' | 'boligsok'
-export type EconomySubPage = 'dashboard' | 'budget' | 'salary' | 'atf' | 'savings' | 'debt' | 'absence' | 'tax' | 'subscriptions' | 'feriepenger' | 'fond' | 'vacation' | 'settings' | 'veikart' | 'gaver' | 'pension' | 'scenario'
+export type EconomySubPage = 'dashboard' | 'budget' | 'salary' | 'atf' | 'savings' | 'debt' | 'absence' | 'tax' | 'subscriptions' | 'feriepenger' | 'fond' | 'vacation' | 'settings' | 'veikart' | 'gaver' | 'pension' | 'scenario' | 'navnejakten'
 
 interface AppState {
   config: AppConfig

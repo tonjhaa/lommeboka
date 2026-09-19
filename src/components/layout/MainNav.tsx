@@ -81,6 +81,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { label: 'Ferie', target: { kind: 'economy', page: 'vacation' }, requiresTab: 'vacation' },
       { label: 'Gaver', target: { kind: 'economy', page: 'gaver' }, requiresTab: 'gaver' },
+      { label: 'Navnejakten', target: { kind: 'economy', page: 'navnejakten' } },
       { label: 'Prosjekt', target: { kind: 'view', view: 'ivf' }, requiresTab: 'ivf' },
       { label: 'Partner', target: { kind: 'view', view: 'partner' }, requiresTab: 'partner' },
     ],
