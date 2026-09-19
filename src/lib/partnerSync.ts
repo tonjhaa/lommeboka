@@ -180,8 +180,8 @@ export function subscribeToPartnerData(
           return
         }
         if (status !== 'CHANNEL_ERROR' && status !== 'TIMED_OUT') return
-        Sentry.captureMessage(`Realtime partner-data ${status} (partner ${partnerId})`, 'warning')
         if (stopped) return
+        if (attempt === 0) Sentry.captureMessage(`Realtime partner-data ${status} (partner ${partnerId})`, 'warning')
         if (channel) supabase.removeChannel(channel)
         attempt += 1
         const delay = Math.min(30000, 1000 * 2 ** (attempt - 1))

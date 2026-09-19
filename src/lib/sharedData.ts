@@ -31,13 +31,20 @@ export async function saveSharedData<T>(partnershipId: string, key: string, data
   if (error) throw new Error(error.message)
 }
 
+interface SharedDataHub {
+  listeners: Map<string, Set<(data: unknown) => void>>
+  stop: () => void
+}
+
+/** Én realtime-kanal per partnerskap, delt av alle nøkler (gaver/utstyr/klaer). Alle nøklene
+ *  lytter på samme tabell og filter, så egne kanaler per nøkkel ga bare flere kanaler som kunne falle. */
+const hubs = new Map<string, SharedDataHub>()
+
 /** Samme reconnect-med-backoff-mønster som subscribeToSharedProject — Supabase sin
- *  realtime-tenant sover ved inaktivitet og river ned kanalen uten selv å re-abonnere. */
-export function subscribeToSharedData<T>(
-  partnershipId: string,
-  key: string,
-  onChange: (data: T) => void,
-): () => void {
+ *  realtime-tenant sover ved inaktivitet og river ned kanalen uten selv å re-abonnere.
+ *  Feil rapporteres til Sentry kun første gang i en feilrekke (til kanalen er SUBSCRIBED igjen). */
+function createHub(partnershipId: string): SharedDataHub {
+  const listeners: SharedDataHub['listeners'] = new Map()
   let stopped = false
   let retryTimer: ReturnType<typeof setTimeout> | null = null
   let attempt = 0
@@ -45,13 +52,14 @@ export function subscribeToSharedData<T>(
 
   function connect() {
     channel = supabase
-      .channel(`shared-data-${partnershipId}-${key}`)
+      .channel(`shared-data-${partnershipId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'shared_project_data', filter: `partnership_id=eq.${partnershipId}` },
         (payload) => {
-          const row = payload.new as { key?: string; data?: T } | undefined
-          if (row?.key === key && row.data !== undefined) onChange(row.data)
+          const row = payload.new as { key?: string; data?: unknown } | undefined
+          if (!row?.key || row.data === undefined) return
+          listeners.get(row.key)?.forEach((cb) => cb(row.data))
         },
       )
       .subscribe((status) => {
@@ -60,8 +68,10 @@ export function subscribeToSharedData<T>(
           return
         }
         if (status !== 'CHANNEL_ERROR' && status !== 'TIMED_OUT') return
-        Sentry.captureMessage(`Realtime shared-data ${status} (partnership ${partnershipId}, key ${key})`, 'warning')
         if (stopped) return
+        if (attempt === 0) {
+          Sentry.captureMessage(`Realtime shared-data ${status} (partnership ${partnershipId})`, 'warning')
+        }
         if (channel) supabase.removeChannel(channel)
         attempt += 1
         const delay = Math.min(30000, 1000 * 2 ** (attempt - 1))
@@ -71,9 +81,39 @@ export function subscribeToSharedData<T>(
 
   connect()
 
+  return {
+    listeners,
+    stop: () => {
+      stopped = true
+      if (retryTimer) clearTimeout(retryTimer)
+      if (channel) supabase.removeChannel(channel)
+    },
+  }
+}
+
+export function subscribeToSharedData<T>(
+  partnershipId: string,
+  key: string,
+  onChange: (data: T) => void,
+): () => void {
+  let hub = hubs.get(partnershipId)
+  if (!hub) {
+    hub = createHub(partnershipId)
+    hubs.set(partnershipId, hub)
+  }
+  const cb = onChange as (data: unknown) => void
+  const set = hub.listeners.get(key) ?? new Set()
+  set.add(cb)
+  hub.listeners.set(key, set)
+
+  const owner = hub
   return () => {
-    stopped = true
-    if (retryTimer) clearTimeout(retryTimer)
-    if (channel) supabase.removeChannel(channel)
+    const current = owner.listeners.get(key)
+    current?.delete(cb)
+    if (current?.size === 0) owner.listeners.delete(key)
+    if (owner.listeners.size === 0) {
+      owner.stop()
+      if (hubs.get(partnershipId) === owner) hubs.delete(partnershipId)
+    }
   }
 }

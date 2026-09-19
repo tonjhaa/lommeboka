@@ -100,8 +100,8 @@ export function subscribeToSharedProject(
           return
         }
         if (status !== 'CHANNEL_ERROR' && status !== 'TIMED_OUT') return
-        Sentry.captureMessage(`Realtime shared-project ${status} (partnership ${partnershipId})`, 'warning')
         if (stopped) return
+        if (attempt === 0) Sentry.captureMessage(`Realtime shared-project ${status} (partnership ${partnershipId})`, 'warning')
         if (channel) supabase.removeChannel(channel)
         attempt += 1
         const delay = Math.min(30000, 1000 * 2 ** (attempt - 1))
