@@ -107,16 +107,19 @@ function App() {
     restoreProfileFromSlips()
   }, [restoreProfileFromSlips])
 
+  // Effekten skal bare kjøre ved faktisk brukerbytte — ikke når auth-hendelser gir ny user-referanse
+  const userId = user?.id ?? null
+
   useEffect(() => {
-    if (!user) return
+    if (!userId) return
 
     // Rydd opp stale data fra en annen bruker på samme enhet
     const STORE_KEYS = ['min-okonomi-v1', 'lommeboka-partner-v1', 'lommeboka-gaver-v1', 'lommeboka-permisjon-v1', 'boligkalkulator-storage', 'lommeboka-bilkalkulator-v1']
     const lastUserId = localStorage.getItem('lommeboka-session-user')
-    if (lastUserId && lastUserId !== user.id) {
+    if (lastUserId && lastUserId !== userId) {
       STORE_KEYS.forEach(k => localStorage.removeItem(k))
     }
-    localStorage.setItem('lommeboka-session-user', user.id)
+    localStorage.setItem('lommeboka-session-user', userId)
 
     setSyncing(true)
     setLoadError(false)
@@ -159,7 +162,7 @@ function App() {
     initPartnership()
 
     return () => { stopSync(); stopGiftSync() }
-  }, [user])
+  }, [userId])
 
   if (!initialized || syncing) {
     return (

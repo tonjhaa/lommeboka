@@ -20,6 +20,9 @@ interface AuthState {
   isMfaEnabled: () => Promise<boolean>
 }
 
+/** onAuthStateChange skal bare registreres én gang (initialize kalles fra en useEffect som kjører to ganger i StrictMode). */
+let authListenerRegistered = false
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   session: null,
@@ -36,8 +39,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       initialized: true,
     })
 
-    supabase.auth.onAuthStateChange((_event, session) => {
-      set({ session, user: session?.user ?? null })
+    if (authListenerRegistered) return
+    authListenerRegistered = true
+    supabase.auth.onAuthStateChange((event, session) => {
+      // session.user er et nytt objekt ved hver hendelse (INITIAL_SESSION, TOKEN_REFRESHED, SIGNED_IN
+      // ved fokus). Behold samme user-referanse når brukeren er den samme, så avhengige effekter
+      // ikke kjører på nytt — men slipp gjennom USER_UPDATED (endret metadata/e-post).
+      const current = get().user
+      const next = session?.user ?? null
+      const keepUser = current !== null && next !== null && current.id === next.id && event !== 'USER_UPDATED'
+      set({ session, user: keepUser ? current : next })
     })
   },
 
