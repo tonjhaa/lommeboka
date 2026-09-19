@@ -6,6 +6,7 @@ import {
 import { useAppStore, type AppView, type EconomySubPage } from '@/store/useAppStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useEconomyStore } from '@/application/useEconomyStore'
+import { selectUnseenMatchCount, useNavnejaktStore } from '@/store/useNavnejaktStore'
 import type { EconomyTab } from '@/types/economy'
 import { cn } from '@/lib/utils'
 
@@ -102,6 +103,7 @@ export function MainNav() {
   const setCurrentEconomyPage = useAppStore((s) => s.setCurrentEconomyPage)
   const userPreferences = useEconomyStore((s) => s.userPreferences)
   const { user, signOut } = useAuthStore()
+  const unseenNameMatches = useNavnejaktStore(selectUnseenMatchCount)
 
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -243,6 +245,9 @@ export function MainNav() {
                 )}
               >
                 {item.label}
+                {item.label === 'Prosjekt' && unseenNameMatches > 0 && (
+                  <span aria-label={unseenNameMatches === 1 ? '1 ny navnematch' : `${unseenNameMatches} nye navnematcher`} className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-primary align-middle" />
+                )}
               </button>
             )
           })}

@@ -29,7 +29,7 @@ interface AppState {
   currentView: AppView
   currentEconomyPage: EconomySubPage
   savingsTab: 'kontoer' | 'fond' | 'måneder' | 'råd'
-  prosjektTab: 'behandling' | 'permisjon' | 'utstyr' | 'klær'
+  prosjektTab: 'behandling' | 'permisjon' | 'utstyr' | 'klær' | 'navnejakten'
 
   /** Avviste Pengepuls-chips: chip-id → ISO-dato chipen er skjult til */
   dismissedChips: Record<string, string>
@@ -43,7 +43,7 @@ interface AppState {
   setCurrentView: (view: AppView) => void
   setCurrentEconomyPage: (page: EconomySubPage) => void
   setSavingsTab: (tab: 'kontoer' | 'fond' | 'måneder' | 'råd') => void
-  setProsjektTab: (tab: 'behandling' | 'permisjon' | 'utstyr' | 'klær') => void
+  setProsjektTab: (tab: 'behandling' | 'permisjon' | 'utstyr' | 'klær' | 'navnejakten') => void
 
   addScenario: (scenario: ScenarioInput) => void
   updateScenario: (id: string, updates: Partial<ScenarioInput>) => void
@@ -57,6 +57,46 @@ interface AppState {
 
   updateConfig: (updates: Partial<AppConfig>) => void
   resetConfig: () => void
+}
+
+/** Migrerer lagret navigasjon/innstillinger mellom persist-versjoner (eksportert for testing). */
+export function migrateAppState(persisted: unknown, version: number): Record<string, unknown> {
+  const state = persisted as Record<string, unknown>
+  if (version < 4 && state.prosjektTab === 'innkjøpsliste') {
+    // Innkjøpsliste-fanen ble delt i to: Utstyr og Klær
+    state.prosjektTab = 'utstyr'
+  }
+  if (version < 5 && state.currentEconomyPage === 'navnejakten') {
+    // Navnejakten ble flyttet fra egen Livet-side til en fane under Prosjekt
+    state.currentView = 'ivf'
+    state.prosjektTab = 'navnejakten'
+    state.currentEconomyPage = 'dashboard'
+  }
+  if (version < 2 && state.config) {
+    // Deep-merge stored config with defaultConfig so new fields get populated
+    state.config = {
+      ...defaultConfig,
+      ...(state.config as object),
+    }
+  }
+  if (version < 3) {
+    // Døde/fjernede views og undersider: koble persisted navigasjon
+    // over på gyldige mål så ingen lander på blank side.
+    const view = state.currentView as string
+    if (view === 'veikart') {
+      state.currentView = 'economy'
+      state.currentEconomyPage = 'veikart'
+    } else if (!['calculator', 'economy', 'skattekalkulator', 'partner', 'ivf'].includes(view)) {
+      state.currentView = 'economy'
+    }
+    const pageMap: Record<string, string> = {
+      ivf: 'dashboard', partner: 'dashboard', permisjon: 'dashboard',
+      formue: 'dashboard', calibration: 'budget', forbruk: 'budget',
+    }
+    const page = state.currentEconomyPage as string
+    if (page in pageMap) state.currentEconomyPage = pageMap[page]
+  }
+  return state
 }
 
 export const useAppStore = create<AppState>()(
@@ -170,39 +210,8 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'boligkalkulator-storage',
-      version: 4,
-      migrate: (persisted: unknown, version: number) => {
-        const state = persisted as Record<string, unknown>
-        if (version < 4 && state.prosjektTab === 'innkjøpsliste') {
-          // Innkjøpsliste-fanen ble delt i to: Utstyr og Klær
-          state.prosjektTab = 'utstyr'
-        }
-        if (version < 2 && state.config) {
-          // Deep-merge stored config with defaultConfig so new fields get populated
-          state.config = {
-            ...defaultConfig,
-            ...(state.config as object),
-          }
-        }
-        if (version < 3) {
-          // Døde/fjernede views og undersider: koble persisted navigasjon
-          // over på gyldige mål så ingen lander på blank side.
-          const view = state.currentView as string
-          if (view === 'veikart') {
-            state.currentView = 'economy'
-            state.currentEconomyPage = 'veikart'
-          } else if (!['calculator', 'economy', 'skattekalkulator', 'partner', 'ivf'].includes(view)) {
-            state.currentView = 'economy'
-          }
-          const pageMap: Record<string, string> = {
-            ivf: 'dashboard', partner: 'dashboard', permisjon: 'dashboard',
-            formue: 'dashboard', calibration: 'budget', forbruk: 'budget',
-          }
-          const page = state.currentEconomyPage as string
-          if (page in pageMap) state.currentEconomyPage = pageMap[page]
-        }
-        return state
-      },
+      version: 5,
+      migrate: migrateAppState,
       partialize: (state) => ({
         scenarios: state.scenarios,
         activeScenarioId: state.activeScenarioId,
