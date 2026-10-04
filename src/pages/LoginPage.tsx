@@ -95,44 +95,24 @@ function MfaForm() {
 }
 
 function AuthForm() {
-  const hasInvite = new URLSearchParams(window.location.search).has('invite')
-  const [mode, setMode] = useState<'login' | 'signup'>(hasInvite ? 'signup' : 'login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
-  const { signIn, signUp, loading, mfaRequired } = useAuthStore()
+  const { signIn, loading, mfaRequired } = useAuthStore()
 
   if (mfaRequired) return <MfaForm />
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
-    setMessage(null)
-
-    if (mode === 'login') {
-      const err = await signIn(email, password)
-      if (err) setError(err)
-    } else {
-      const err = await signUp(email, password)
-      if (err) {
-        setError(err)
-      } else {
-        setMessage('Sjekk e-posten din for å bekrefte kontoen.')
-      }
-    }
+    const err = await signIn(email, password)
+    if (err) setError(err)
   }
 
   return (
     <div className="w-full max-w-sm">
-      <h2 className="text-xl font-semibold mb-1">
-        {mode === 'login' ? 'Logg inn' : 'Opprett konto'}
-      </h2>
-      <p className="text-sm text-muted-foreground mb-6">
-        {mode === 'login'
-          ? 'Velkommen tilbake'
-          : 'Kom i gang på under ett minutt'}
-      </p>
+      <h2 className="text-xl font-semibold mb-1">Logg inn</h2>
+      <p className="text-sm text-muted-foreground mb-6">Velkommen tilbake</p>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
@@ -154,7 +134,7 @@ function AuthForm() {
           <input
             id="password"
             type="password"
-            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+            autoComplete="current-password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -163,30 +143,15 @@ function AuthForm() {
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
-        {message && <p className="text-sm text-green-500">{message}</p>}
 
         <button
           type="submit"
           disabled={loading}
           className="h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
         >
-          {loading ? 'Venter…' : mode === 'login' ? 'Logg inn' : 'Opprett konto'}
+          {loading ? 'Venter…' : 'Logg inn'}
         </button>
       </form>
-
-      <p className="text-sm text-muted-foreground mt-4 text-center">
-        {mode === 'login' ? 'Har du ikke konto?' : 'Har du allerede konto?'}{' '}
-        <button
-          className="underline hover:text-foreground transition-colors"
-          onClick={() => {
-            setMode(mode === 'login' ? 'signup' : 'login')
-            setError(null)
-            setMessage(null)
-          }}
-        >
-          {mode === 'login' ? 'Opprett konto' : 'Logg inn'}
-        </button>
-      </p>
 
     </div>
   )

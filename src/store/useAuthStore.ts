@@ -10,7 +10,6 @@ interface AuthState {
   mfaRequired: boolean
   mfaFactorId: string | null
   signIn: (email: string, password: string) => Promise<string | null>
-  signUp: (email: string, password: string) => Promise<string | null>
   signOut: () => Promise<void>
   initialize: () => Promise<void>
   verifyMfa: (code: string) => Promise<string | null>
@@ -86,19 +85,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (error) return error.message
     set({ mfaRequired: false, mfaFactorId: null })
     return null
-  },
-
-  signUp: async (email, password) => {
-    set({ loading: true })
-    const inviteId = new URLSearchParams(window.location.search).get('invite')
-    if (inviteId) localStorage.setItem('pendingInvite', inviteId)
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: window.location.href },
-    })
-    set({ loading: false })
-    return error?.message ?? null
   },
 
   signOut: async () => {
