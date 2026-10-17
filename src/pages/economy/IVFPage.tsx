@@ -28,9 +28,19 @@ const TYPE_LABELS: Record<IVFTransactionType, string> = {
   KJØP: 'Medisin',
   FAKTURA: 'Faktura',
   FAKTURA_DONOR: 'Faktura donor',
-  ANNET: 'Annet',
+  ANNET: 'Gebyr/annet',
   UTLEGG: 'Utlegg',
+  GRAVIDITET: 'Graviditet',
+  BARNEUTSTYR: 'Barneutstyr',
+  FORELDRE: 'Til oss foreldre',
+  BABYMOON: 'Babymoon',
 }
+
+// Behandling = direkte kostnader ved behandlingen (inkl. gebyrer på kontoen).
+// Andre innkjøp = alt annet som betales fra prosjektkontoen — summeres separat.
+const BEHANDLING_TYPES: IVFTransactionType[] = ['SPARING', 'SVEA', 'KJØP', 'FAKTURA', 'FAKTURA_DONOR', 'ANNET', 'UTLEGG']
+const ANDRE_INNKJOP_TYPES: IVFTransactionType[] = ['GRAVIDITET', 'BARNEUTSTYR', 'FORELDRE', 'BABYMOON']
+const BEHANDLING_UTGIFT_TYPES: IVFTransactionType[] = ['SVEA', 'KJØP', 'FAKTURA', 'FAKTURA_DONOR', 'ANNET']
 
 const TYPE_COLORS: Record<IVFTransactionType, string> = {
   SPARING: 'text-emerald-400',
@@ -40,6 +50,23 @@ const TYPE_COLORS: Record<IVFTransactionType, string> = {
   FAKTURA_DONOR: 'text-pink-400',
   ANNET: 'text-sky-400',
   UTLEGG: 'text-indigo-400',
+  GRAVIDITET: 'text-rose-400',
+  BARNEUTSTYR: 'text-teal-400',
+  FORELDRE: 'text-amber-400',
+  BABYMOON: 'text-cyan-400',
+}
+
+function TypeOptions() {
+  return (
+    <>
+      <optgroup label="Behandling">
+        {BEHANDLING_TYPES.map((t) => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
+      </optgroup>
+      <optgroup label="Andre innkjøp">
+        {ANDRE_INNKJOP_TYPES.map((t) => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
+      </optgroup>
+    </>
+  )
 }
 
 // ------------------------------------------------------------
@@ -93,9 +120,14 @@ function StatsCard() {
     const sveaCount = txs.filter((t) => t.type === 'SVEA').length
     const donorFaktura = txs.filter((t) => t.type === 'FAKTURA_DONOR').reduce((s, t) => s + Math.abs(t.amount), 0)
     const andreFakturaer = txs.filter((t) => t.type === 'FAKTURA').reduce((s, t) => s + Math.abs(t.amount), 0)
-    const annet = txs.filter((t) => t.type === 'ANNET').reduce((s, t) => s + Math.abs(t.amount), 0)
+    // Gebyr/annet: fortegn følger beløpet, så en positiv avrunding reduserer utgiften
+    const annet = -txs.filter((t) => t.type === 'ANNET').reduce((s, t) => s + t.amount, 0)
     const sumUtgifter = medisin + svea + donorFaktura + andreFakturaer + annet
-    return { sumSpart, medisin, svea, sveaCount, donorFaktura, andreFakturaer, annet, sumUtgifter }
+    const andre = Object.fromEntries(
+      ANDRE_INNKJOP_TYPES.map((ty) => [ty, -txs.filter((t) => t.type === ty).reduce((s, t) => s + t.amount, 0)])
+    ) as Record<(typeof ANDRE_INNKJOP_TYPES)[number], number>
+    const sumAndre = ANDRE_INNKJOP_TYPES.reduce((s, ty) => s + andre[ty], 0)
+    return { sumSpart, medisin, svea, sveaCount, donorFaktura, andreFakturaer, annet, sumUtgifter, andre, sumAndre }
   }
 
   const past = calcStats(ivfTransactions.filter((t) => t.date <= today))
@@ -126,7 +158,7 @@ function StatsCard() {
         </div>
         <div className="flex flex-col gap-1 border-t border-border pt-2">
           <div className="flex justify-between items-baseline">
-            <span className="text-xs font-medium text-foreground">Sum utgifter</span>
+            <span className="text-xs font-medium text-foreground">Sum behandling</span>
             <span className="text-sm font-bold text-red-400">{fmt(stats.sumUtgifter, 2)} kr</span>
           </div>
           {stats.medisin > 0 && (
@@ -158,20 +190,34 @@ function StatsCard() {
           )}
           {stats.annet > 0 && (
             <div className="flex justify-between items-baseline pl-3">
-              <span className="text-xs text-muted-foreground">Annet</span>
+              <span className="text-xs text-muted-foreground">Gebyr/annet</span>
               <span className="text-xs tabular-nums text-sky-400">{fmt(stats.annet, 2)} kr</span>
             </div>
           )}
         </div>
+        {stats.sumAndre !== 0 && (
+          <div className="flex flex-col gap-1 border-t border-border pt-2">
+            <div className="flex justify-between items-baseline">
+              <span className="text-xs font-medium text-foreground">Andre innkjøp</span>
+              <span className="text-sm font-bold text-red-400">{fmt(stats.sumAndre, 2)} kr</span>
+            </div>
+            {ANDRE_INNKJOP_TYPES.filter((ty) => stats.andre[ty] !== 0).map((ty) => (
+              <div key={ty} className="flex justify-between items-baseline pl-3">
+                <span className="text-xs text-muted-foreground">{TYPE_LABELS[ty]}</span>
+                <span className={cn('text-xs tabular-nums', TYPE_COLORS[ty])}>{fmt(stats.andre[ty], 2)} kr</span>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="flex justify-between items-baseline border-t border-border pt-1.5">
           <span className="text-xs text-muted-foreground">Netto spart</span>
           <span
             className={cn(
               'text-sm font-bold tabular-nums',
-              stats.sumSpart - stats.sumUtgifter >= 0 ? 'text-emerald-400' : 'text-red-400'
+              stats.sumSpart - stats.sumUtgifter - stats.sumAndre >= 0 ? 'text-emerald-400' : 'text-red-400'
             )}
           >
-            {fmt(stats.sumSpart - stats.sumUtgifter, 2)} kr
+            {fmt(stats.sumSpart - stats.sumUtgifter - stats.sumAndre, 2)} kr
           </span>
         </div>
       </div>
@@ -244,9 +290,7 @@ function EditRow({
           value={type}
           onChange={(e) => setType(e.target.value as IVFTransactionType)}
         >
-          {(Object.keys(TYPE_LABELS) as IVFTransactionType[]).map((t) => (
-            <option key={t} value={t}>{TYPE_LABELS[t]}</option>
-          ))}
+          <TypeOptions />
         </select>
       </td>
       <td className="px-1 py-1">
@@ -322,9 +366,7 @@ function AddTransactionForm({ onClose }: { onClose: () => void }) {
             value={type}
             onChange={(e) => setType(e.target.value as IVFTransactionType)}
           >
-            {(Object.keys(TYPE_LABELS) as IVFTransactionType[]).map((t) => (
-              <option key={t} value={t}>{TYPE_LABELS[t]}</option>
-            ))}
+            <TypeOptions />
           </select>
         </div>
       </div>
@@ -542,19 +584,22 @@ function SummaryStats() {
   const pastTx = ivfTransactions.filter((t) => t.date <= today)
   const saldo = pastTx.reduce((s, t) => s + t.amount, 0)
   const sumSpart = pastTx.filter((t) => t.type === 'SPARING').reduce((s, t) => s + t.amount, 0)
-  const UTGIFT_TYPES: IVFTransactionType[] = ['SVEA', 'KJØP', 'FAKTURA', 'FAKTURA_DONOR', 'ANNET']
   const sumUtgifter = pastTx
-    .filter((t) => UTGIFT_TYPES.includes(t.type))
+    .filter((t) => BEHANDLING_UTGIFT_TYPES.includes(t.type))
+    .reduce((s, t) => s + t.amount, 0)
+  const sumAndre = pastTx
+    .filter((t) => ANDRE_INNKJOP_TYPES.includes(t.type))
     .reduce((s, t) => s + t.amount, 0)
 
   const cards = [
     { label: 'Saldo (hittil)', value: saldo, color: 'text-emerald-400', decimals: 2 },
     { label: 'Sum spart', value: sumSpart, color: 'text-sky-400', decimals: 0 },
-    { label: 'Sum utgifter', value: Math.abs(sumUtgifter), color: 'text-red-400', decimals: 2 },
+    { label: 'Sum behandling', value: Math.abs(sumUtgifter), color: 'text-red-400', decimals: 2 },
+    { label: 'Andre innkjøp', value: Math.abs(sumAndre), color: 'text-amber-400', decimals: 2 },
   ]
 
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
       {cards.map(({ label, value, color, decimals }) => (
         <div key={label} className="rounded-lg border border-border bg-card p-3 flex flex-col gap-1">
           <span className="text-xs text-muted-foreground">{label}</span>

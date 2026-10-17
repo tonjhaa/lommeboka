@@ -610,7 +610,10 @@ export interface PolicyRateEntry {
 // IVF-PROSJEKT
 // ------------------------------------------------------------
 
-export type IVFTransactionType = 'SPARING' | 'SVEA' | 'KJØP' | 'FAKTURA' | 'FAKTURA_DONOR' | 'ANNET' | 'UTLEGG'
+export type IVFTransactionType =
+  | 'SPARING' | 'SVEA' | 'KJØP' | 'FAKTURA' | 'FAKTURA_DONOR' | 'ANNET' | 'UTLEGG'
+  // Andre innkjøp fra prosjektkontoen — holdes utenfor behandlingskostnadene
+  | 'GRAVIDITET' | 'BARNEUTSTYR' | 'FORELDRE' | 'BABYMOON'
 
 export interface IVFTransaction {
   id: string
