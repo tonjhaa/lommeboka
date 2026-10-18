@@ -7,18 +7,18 @@ export const VOTE_FILTER_LABEL: Record<VoteFilter, string> = {
   all: 'Alle', unrated: 'Ikke vurdert', yes: 'Ja', maybe: 'Kanskje', no: 'Nei',
 }
 
-export type SortKey = 'alpha' | 'alphaDesc' | 'popular' | 'shortest' | 'longest'
+export type SortKey = 'alpha' | 'alphaDesc' | 'popular' | 'fewest' | 'shortest' | 'longest'
 
 export const SORT_LABEL: Record<SortKey, string> = {
-  alpha: 'A–Å', alphaDesc: 'Å–A', popular: 'Mest populære', shortest: 'Kortest først', longest: 'Lengst først',
+  alpha: 'A–Å', alphaDesc: 'Å–A', popular: 'Mest populære', fewest: 'Færrest først', shortest: 'Kortest først', longest: 'Lengst først',
 }
 
 const norm = (s: string) => s.trim().toLocaleLowerCase('nb')
 
 /**
  * Søk blant alle navn, uavhengig av swipe-filtre. Ved A–Å kommer treff på starten av navnet før treff midt i.
- * «Mest populære» sorterer på rang siste år, eller i `yearStats` (valgt år) når den er gitt;
- * navn uten tall for året havner sist.
+ * «Mest populære» sorterer på rang og «Færrest først» på antall fødte siste år, eller i `yearStats` (valgt år)
+ * når den er gitt; navn uten tall for året havner sist.
  */
 export function searchNames(
   names: readonly NameRow[],
@@ -38,9 +38,14 @@ export function searchNames(
     if (opts.yearStats) return opts.yearStats.get(n.id)?.rank ?? Infinity
     return n.latestYear === opts.latestYear && n.latestRank !== null ? n.latestRank : Infinity
   }
+  const count = (n: NameRow) => {
+    if (opts.yearStats) return opts.yearStats.get(n.id)?.count ?? Infinity
+    return n.latestYear === opts.latestYear ? n.latestCount : Infinity
+  }
   switch (opts.sort ?? 'alpha') {
     case 'alphaDesc': return rows.sort((a, b) => alpha(b, a))
     case 'popular': return rows.sort((a, b) => (rank(a) === rank(b) ? alpha(a, b) : rank(a) - rank(b)))
+    case 'fewest': return rows.sort((a, b) => (count(a) === count(b) ? alpha(a, b) : count(a) - count(b)))
     case 'shortest': return rows.sort((a, b) => a.letters - b.letters || alpha(a, b))
     case 'longest': return rows.sort((a, b) => b.letters - a.letters || alpha(a, b))
     default: {

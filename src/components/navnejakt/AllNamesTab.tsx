@@ -47,7 +47,7 @@ export function AllNamesTab() {
   const [detail, setDetail] = useState<NameRow | null>(null)
 
   // Rangering i et annet år enn siste: hent rang/antall for det året (ca. 2000 rader)
-  const pickedYear = sort === 'popular' && year !== null && year !== latestYear ? year : null
+  const pickedYear = (sort === 'popular' || sort === 'fewest') && year !== null && year !== latestYear ? year : null
   useEffect(() => {
     if (pickedYear === null) return
     let cancelled = false
@@ -102,9 +102,9 @@ export function AllNamesTab() {
             <Chip key={k} active={sort === k} onClick={() => { setSort(k); setLimit(PAGE) }}>{SORT_LABEL[k]}</Chip>
           ))}
         </div>
-        {sort === 'popular' && (
+        {(sort === 'popular' || sort === 'fewest') && (
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            Rangert etter popularitet i
+            {sort === 'popular' ? 'Rangert etter popularitet i' : 'Antall fødte i'}
             <select
               value={year ?? latestYear}
               onChange={(e) => { setYear(Number(e.target.value)); setLimit(PAGE) }}
@@ -148,7 +148,8 @@ export function AllNamesTab() {
                   {variantLine(n) && <p className="truncate text-xs text-muted-foreground/80">{variantLine(n)}</p>}
                   <p className="text-xs text-muted-foreground">{activeYearStats
                       ? yearLine(activeYearStats.get(n.id), n.gender, pickedYear!)
-                      : rankLine(n, latestYear) ?? `Ikke registrert i ${latestYear}`}</p>
+                      : (rankLine(n, latestYear) ?? `Ikke registrert i ${latestYear}`)
+                        + (sort === 'fewest' && n.latestYear === latestYear ? ` · ${n.latestCount} barn i ${latestYear}` : '')}</p>
                 </button>
                 <div className="flex shrink-0 gap-1.5" role="group" aria-label={`Vurdering av ${n.name}`}>
                   {VOTE_BUTTONS.map(({ vote: v, label, Icon, active }) => (
