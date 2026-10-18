@@ -25,16 +25,17 @@ describe('searchNames', () => {
     expect(ids(searchNames(names, votes, { query: '', gender: 'all', vote: 'yes' }))).toEqual(['a'])
     expect(ids(searchNames(names, votes, { query: '', gender: 'all', vote: 'unrated' }))).toEqual(['b', 'd', 'e'])
   })
-  it('sorterer på alfabet baklengs, rang (uten tall sist) og lengde', () => {
+  it('sorterer på alfabet baklengs, rang og antall (uten tall sist) og lengde', () => {
     const rows = [
-      makeName({ id: 'x', name: 'Ola', gender: 'boy', letters: 3, latestYear: 2025, latestRank: 50 }),
-      makeName({ id: 'y', name: 'Emil', gender: 'boy', letters: 4, latestYear: 2025, latestRank: 5 }),
+      makeName({ id: 'x', name: 'Ola', gender: 'boy', letters: 3, latestYear: 2025, latestRank: 50, latestCount: 10 }),
+      makeName({ id: 'y', name: 'Emil', gender: 'boy', letters: 4, latestYear: 2025, latestRank: 5, latestCount: 80 }),
       makeName({ id: 'z', name: 'Abel', gender: 'boy', letters: 4, latestYear: 2015, latestRank: 1 }),
     ]
     const sorted = (sort: SortKey) => ids(searchNames(rows, new Map(), { query: '', gender: 'all', vote: 'all', sort, latestYear: 2025 }))
     expect(sorted('alpha')).toEqual(['z', 'y', 'x'])
     expect(sorted('alphaDesc')).toEqual(['x', 'y', 'z'])
     expect(sorted('popular')).toEqual(['y', 'x', 'z'])
+    expect(sorted('fewest')).toEqual(['x', 'y', 'z'])
     expect(sorted('shortest')).toEqual(['x', 'z', 'y'])
     expect(sorted('longest')).toEqual(['z', 'y', 'x'])
   })
