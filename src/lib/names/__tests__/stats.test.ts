@@ -19,7 +19,7 @@ describe('computeOwnStats', () => {
     expect(s.matchRate).toBe(1)
     expect(s.avgMatchRank).toBe(10) // c mangler rang siste år og telles ikke
     expect(s.matchGender).toEqual({ girl: 2, boy: 0 })
-    expect(s.yesLength).toEqual({ short: 1, medium: 1, long: 0 })
+    expect(s.yesLength).toEqual({ two: 0, three: 0, four: 1, medium: 1, long: 0 })
     expect(s.yesTop100Share).toBe(0.5)
     expect(s.ratedTop100Share).toBe(0.5)
   })

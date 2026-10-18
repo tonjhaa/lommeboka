@@ -30,7 +30,7 @@ export function computeOwnStats(
   const byId = new Map(names.map((n) => [n.id, n]))
   const s: OwnStats = {
     rated: 0, yes: 0, maybe: 0, no: 0, matches: 0, matchRate: null, avgMatchRank: null,
-    matchGender: { girl: 0, boy: 0 }, yesLength: { short: 0, medium: 0, long: 0 },
+    matchGender: { girl: 0, boy: 0 }, yesLength: { two: 0, three: 0, four: 0, medium: 0, long: 0 },
     yesTop100Share: null, ratedTop100Share: null,
   }
   let yesTop = 0
