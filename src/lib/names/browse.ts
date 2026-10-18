@@ -1,4 +1,5 @@
 import type { Gender, NameRow, Vote, YearStat } from './types'
+import { variantsOf } from './variants'
 
 export type VoteFilter = 'all' | 'unrated' | Vote
 
@@ -29,7 +30,7 @@ export function searchNames(
     if (opts.gender !== 'all' && n.gender !== opts.gender) return false
     const v = votes.get(n.id)
     if (opts.vote === 'unrated' ? v !== undefined : opts.vote !== 'all' && v !== opts.vote) return false
-    return q === '' || norm(n.name).includes(q)
+    return q === '' || variantsOf(n).some((v) => norm(v.name).includes(q))
   })
   const alpha = (a: NameRow, b: NameRow) =>
     a.name.localeCompare(b.name, 'nb') || Number(a.gender === 'boy') - Number(b.gender === 'boy')
@@ -43,7 +44,7 @@ export function searchNames(
     case 'shortest': return rows.sort((a, b) => a.letters - b.letters || alpha(a, b))
     case 'longest': return rows.sort((a, b) => b.letters - a.letters || alpha(a, b))
     default: {
-      const starts = (n: NameRow) => (q !== '' && norm(n.name).startsWith(q) ? 0 : 1)
+      const starts = (n: NameRow) => (q !== '' && variantsOf(n).some((v) => norm(v.name).startsWith(q)) ? 0 : 1)
       return rows.sort((a, b) => starts(a) - starts(b) || alpha(a, b))
     }
   }

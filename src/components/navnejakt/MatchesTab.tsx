@@ -7,6 +7,7 @@ import { formatDate, rankLine, trendLine } from '@/lib/names/format'
 import { GENDER_LABEL, NOTE_MAX_LENGTH, type Gender, type MatchNote, type NameRow } from '@/lib/names/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { variantLine, variantsOf } from '@/lib/names/variants'
 import { cn } from '@/lib/utils'
 import { NameDetailDialog } from './NameDetailDialog'
 import { Chip, GenderTag, TrendIcon } from './shared'
@@ -50,7 +51,7 @@ export function MatchesTab({ connected, partnerName }: { connected: boolean; par
     const shown = all.filter((e) =>
       (!onlyFavs || favorites.has(e.name.id)) &&
       (gender === 'all' || e.name.gender === gender) &&
-      (q === '' || e.name.name.toLocaleLowerCase('nb').includes(q)))
+      (q === '' || variantsOf(e.name).some((v) => v.name.toLocaleLowerCase('nb').includes(q))))
     return sortMatches(shown, sort, latestYear)
   }, [matches, namesById, favorites, sort, onlyFavs, latestYear, query, gender])
   const filtered = onlyFavs || gender !== 'all' || query.trim() !== ''
@@ -102,6 +103,7 @@ export function MatchesTab({ connected, partnerName }: { connected: boolean; par
                 <button type="button" onClick={() => setDetail(name)} className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md" aria-label={`Vis detaljer for ${name.name}`}>
                   <span className="flex items-center gap-2"><GenderTag gender={name.gender} />{newIds.has(match.id) && <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">Ny</span>}</span>
                   <p className="truncate text-2xl font-semibold tracking-tight">{name.name}</p>
+                  {variantLine(name) && <p className="truncate text-xs text-muted-foreground/80">{variantLine(name)}</p>}
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
                     {rank && <span>{rank}</span>}
                     {rank && <span aria-hidden>·</span>}
@@ -115,7 +117,7 @@ export function MatchesTab({ connected, partnerName }: { connected: boolean; par
                   onClick={() => setEditing(editing === name.id ? null : name.id)}
                   aria-expanded={editing === name.id}
                   aria-label={`Notat om ${name.name}`}
-                  className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', notes.some((n) => n.nameId === name.id) ? 'text-primary' : 'text-muted-foreground')}
+                  className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', notes.some((n) => n.nameId === match.nameId) ? 'text-primary' : 'text-muted-foreground')}
                 ><MessageSquare className="h-5 w-5" /></button>
                 <button
                   type="button"
@@ -126,13 +128,13 @@ export function MatchesTab({ connected, partnerName }: { connected: boolean; par
                 ><Star className={cn('h-5 w-5', fav && 'fill-current')} /></button>
                 </div>
                 <NoteSection
-                  notes={notes.filter((n) => n.nameId === name.id)}
+                  notes={notes.filter((n) => n.nameId === match.nameId)}
                   userId={userId}
                   partnerName={partnerName}
                   editing={editing === name.id}
                   onEdit={() => setEditing(name.id)}
                   onClose={() => setEditing(null)}
-                  onSave={(text) => saveNote(name.id, text)}
+                  onSave={(text) => saveNote(match.nameId, text)}
                 />
               </li>
             )
