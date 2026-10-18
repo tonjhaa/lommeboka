@@ -1,24 +1,31 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, HelpCircle, SlidersHorizontal, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { fetchYearStats } from '@/lib/names/api'
 import { useNavnejaktStore } from '@/store/useNavnejaktStore'
-import { searchNames, VOTE_FILTER_LABEL, type VoteFilter } from '@/lib/names/browse'
+import { searchNames, SORT_LABEL, VOTE_FILTER_LABEL, type SortKey, type VoteFilter } from '@/lib/names/browse'
 import { availableLetters, DEFAULT_ATTRIBUTE_FILTERS, matchesAttributes, type AttributeFilters } from '@/lib/names/filters'
 import { rankLine } from '@/lib/names/format'
-import { GENDER_LABEL, type Gender, type NameRow, type Vote } from '@/lib/names/types'
+import { GENDER_LABEL, GENDER_LABEL_SHORT, type Gender, type NameRow, type Vote, type YearStat } from '@/lib/names/types'
 import { cn } from '@/lib/utils'
 import { AttributeFilterGroups } from './AttributeFilterGroups'
 import { NameDetailDialog } from './NameDetailDialog'
 import { Chip, GenderTag } from './shared'
 
 const PAGE = 60
+/** Eldste år SSB-tabellen har tall for. */
+const FIRST_YEAR = 1945
 
 const VOTE_BUTTONS: Array<{ vote: Vote; label: string; Icon: typeof X; active: string }> = [
   { vote: 'no', label: 'Nei', Icon: X, active: 'border-destructive bg-destructive/15 text-destructive' },
   { vote: 'maybe', label: 'Kanskje', Icon: HelpCircle, active: 'border-primary bg-primary/15 text-primary' },
   { vote: 'yes', label: 'Ja', Icon: Check, active: 'border-success bg-success/15 text-success' },
 ]
+
+function yearLine(stat: YearStat | undefined, gender: Gender, year: number): string {
+  return stat ? `#${stat.rank} blant ${GENDER_LABEL_SHORT[gender]} i ${year} · ${stat.count} barn` : `Ikke registrert i ${year}`
+}
 
 /** Alle navn, uavhengig av swipe-filtre — for å finne et navn og se eller endre egen vurdering. */
 export function AllNamesTab() {
@@ -29,16 +36,34 @@ export function AllNamesTab() {
   const [query, setQuery] = useState('')
   const [gender, setGender] = useState<Gender | 'all'>('all')
   const [voteFilter, setVoteFilter] = useState<VoteFilter>('all')
+  const [sort, setSort] = useState<SortKey>('alpha')
+  const [year, setYear] = useState<number | null>(null)
+  const [yearStats, setYearStats] = useState<{ year: number; stats: ReadonlyMap<string, YearStat> } | null>(null)
+  const [yearError, setYearError] = useState(false)
   const [attrs, setAttrs] = useState<AttributeFilters>(DEFAULT_ATTRIBUTE_FILTERS)
   const [showAttrs, setShowAttrs] = useState(false)
   const [limit, setLimit] = useState(PAGE)
   const [detail, setDetail] = useState<NameRow | null>(null)
 
+  // Rangering i et annet år enn siste: hent rang/antall for det året (ca. 2000 rader)
+  const pickedYear = sort === 'popular' && year !== null && year !== latestYear ? year : null
+  useEffect(() => {
+    if (pickedYear === null) return
+    let cancelled = false
+    setYearError(false)
+    fetchYearStats(pickedYear)
+      .then((stats) => { if (!cancelled) setYearStats({ year: pickedYear, stats }) })
+      .catch(() => { if (!cancelled) setYearError(true) })
+    return () => { cancelled = true }
+  }, [pickedYear])
+  const activeYearStats = pickedYear !== null && yearStats?.year === pickedYear ? yearStats.stats : undefined
+  const yearLoading = pickedYear !== null && !activeYearStats && !yearError
+
   const letters = useMemo(() => availableLetters(names), [names])
   const attrCount = attrs.letters.length + attrs.length.length + attrs.syllables.length
   const results = useMemo(
-    () => searchNames(names, votes, { query, gender, vote: voteFilter }).filter((n) => matchesAttributes(n, attrs)),
-    [names, votes, query, gender, voteFilter, attrs],
+    () => searchNames(names, votes, { query, gender, vote: voteFilter, sort, latestYear, yearStats: activeYearStats }).filter((n) => matchesAttributes(n, attrs)),
+    [names, votes, query, gender, voteFilter, sort, latestYear, activeYearStats, attrs],
   )
 
   return (
@@ -67,6 +92,28 @@ export function AllNamesTab() {
             <Chip key={k} active={voteFilter === k} onClick={() => { setVoteFilter(k); setLimit(PAGE) }}>{VOTE_FILTER_LABEL[k]}</Chip>
           ))}
         </div>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Sortering">
+          {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => (
+            <Chip key={k} active={sort === k} onClick={() => { setSort(k); setLimit(PAGE) }}>{SORT_LABEL[k]}</Chip>
+          ))}
+        </div>
+        {sort === 'popular' && (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            Rangert etter popularitet i
+            <select
+              value={year ?? latestYear}
+              onChange={(e) => { setYear(Number(e.target.value)); setLimit(PAGE) }}
+              className="h-8 rounded-md border border-input bg-transparent px-2 text-sm text-foreground"
+              aria-label="År for rangering"
+            >
+              {Array.from({ length: latestYear - FIRST_YEAR + 1 }, (_, i) => latestYear - i).map((y) => (
+                <option key={y} value={y} className="bg-background">{y}</option>
+              ))}
+            </select>
+            {yearLoading && <span>Henter …</span>}
+            {yearError && <span className="text-destructive">Kunne ikke hente tall for året.</span>}
+          </label>
+        )}
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setShowAttrs((v) => !v)} aria-expanded={showAttrs}>
             <SlidersHorizontal /> Forbokstav, lengde, stavelser{attrCount > 0 && <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">{attrCount}</span>}
@@ -93,7 +140,9 @@ export function AllNamesTab() {
                 <button type="button" onClick={() => setDetail(n)} className="min-w-0 flex-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Vis detaljer for ${n.name}`}>
                   <GenderTag gender={n.gender} />
                   <p className="truncate text-xl font-semibold tracking-tight">{n.name}</p>
-                  <p className="text-xs text-muted-foreground">{rankLine(n, latestYear) ?? `Ikke registrert i ${latestYear}`}</p>
+                  <p className="text-xs text-muted-foreground">{activeYearStats
+                      ? yearLine(activeYearStats.get(n.id), n.gender, pickedYear!)
+                      : rankLine(n, latestYear) ?? `Ikke registrert i ${latestYear}`}</p>
                 </button>
                 <div className="flex shrink-0 gap-1.5" role="group" aria-label={`Vurdering av ${n.name}`}>
                   {VOTE_BUTTONS.map(({ vote: v, label, Icon, active }) => (

@@ -299,7 +299,10 @@ export const useNavnejaktStore = create<NavnejaktState>()(
       // Lagrede filtre fra før forbokstav/stavelser ble lagt til mangler feltene — fyll inn standardverdier
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<NavnejaktState>
-        return { ...current, ...p, filters: { ...DEFAULT_FILTERS, ...p.filters } }
+        const filters = { ...DEFAULT_FILTERS, ...p.filters }
+        // «short» (opptil 4 bokstaver) er delt i 2/3/4 bokstaver — behold det lagrede utvalget
+        filters.length = filters.length.flatMap((b) => ((b as string) === 'short' ? ['two', 'three', 'four'] as const : [b]))
+        return { ...current, ...p, filters }
       },
       partialize: (s) => ({ filters: s.filters, seed: s.seed, seenMatchIds: s.seenMatchIds, surname: s.surname }),
     },

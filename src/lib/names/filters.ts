@@ -1,7 +1,7 @@
 import type { NameRow, Trend } from './types'
 
 export type PopularityBucket = 'top10' | 'top50' | 'top100' | 'outside100' | 'rare'
-export type LengthBucket = 'short' | 'medium' | 'long'
+export type LengthBucket = 'two' | 'three' | 'four' | 'medium' | 'long'
 /** Tiåret toppåret ligger i; 1960 = «før 1970», 2020 = «2020-tallet» */
 export type PeakBucket = 'to1969' | '1970' | '1980' | '1990' | '2000' | '2010' | '2020'
 export type SyllableBucket = '1' | '2' | '3' | '4plus'
@@ -39,7 +39,7 @@ export const POPULARITY_LABEL: Record<PopularityBucket, string> = {
   top10: 'Topp 10', top50: 'Topp 50', top100: 'Topp 100', outside100: 'Utenfor topp 100', rare: 'Sjeldnere navn',
 }
 export const LENGTH_LABEL: Record<LengthBucket, string> = {
-  short: 'Opptil 4 bokstaver', medium: '5–6 bokstaver', long: '7+ bokstaver',
+  two: '2 bokstaver', three: '3 bokstaver', four: '4 bokstaver', medium: '5–6 bokstaver', long: '7+ bokstaver',
 }
 export const SYLLABLE_LABEL: Record<SyllableBucket, string> = {
   '1': '1 stavelse', '2': '2 stavelser', '3': '3 stavelser', '4plus': '4 eller flere',
@@ -57,7 +57,9 @@ export function peakBucket(peakYear: number): PeakBucket {
 }
 
 export function lengthBucket(letters: number): LengthBucket {
-  if (letters <= 4) return 'short'
+  if (letters <= 2) return 'two'
+  if (letters === 3) return 'three'
+  if (letters === 4) return 'four'
   if (letters <= 6) return 'medium'
   return 'long'
 }

@@ -37,11 +37,13 @@ describe('matchesFilters', () => {
 
   it('lengde-buckets og trend/tidløse kombineres med OG mellom gruppene og ELLER innenfor', () => {
     const n = makeName({ id: 'a', letters: 5, trend: 'rising' })
-    expect(lengthBucket(4)).toBe('short')
+    expect(lengthBucket(2)).toBe('two')
+    expect(lengthBucket(3)).toBe('three')
+    expect(lengthBucket(4)).toBe('four')
     expect(lengthBucket(6)).toBe('medium')
     expect(lengthBucket(7)).toBe('long')
     expect(matchesFilters(n, f({ length: ['medium', 'long'], trend: ['rising'] }), Y)).toBe(true)
-    expect(matchesFilters(n, f({ length: ['short'], trend: ['rising'] }), Y)).toBe(false)
+    expect(matchesFilters(n, f({ length: ['two', 'three', 'four'], trend: ['rising'] }), Y)).toBe(false)
     expect(matchesFilters(n, f({ trend: ['falling', 'stable'] }), Y)).toBe(false)
     expect(matchesFilters(makeName({ id: 'z', timeless: true }), f({ trend: ['timeless'] }), Y)).toBe(true)
   })
