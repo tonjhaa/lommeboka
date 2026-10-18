@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { DEFAULT_FILTERS, matchesFilters, activeFilterCount, toggleIn, lengthBucket, type NameFilters } from '../filters'
+import { DEFAULT_FILTERS, matchesFilters, activeFilterCount, toggleIn, lengthBucket, syllableCount, availableLetters, peakBucket, type NameFilters } from '../filters'
 import { makeName } from './helpers'
 
 const Y = 2025
@@ -51,5 +51,46 @@ describe('matchesFilters', () => {
     expect(activeFilterCount(f({ gender: 'girl', popularity: ['top10'], includeOlder: true }))).toBe(3)
     expect(toggleIn(['a'], 'b')).toEqual(['a', 'b'])
     expect(toggleIn(['a', 'b'], 'a')).toEqual(['b'])
+  })
+})
+
+describe('forbokstav og stavelser', () => {
+  it('teller stavelser omtrentlig, med diftonger som én og andre vokalrekker delt', () => {
+    const cases: Array<[string, number]> = [
+      ['Per', 1], ['Nora', 2], ['Eirik', 2], ['Noah', 2], ['Maria', 3], ['Sofie', 3],
+      ['Anne-Lise', 4], ['Øyvind', 2], ['Oliver', 3], ['Emilie', 4], ['Ym', 1],
+    ]
+    for (const [name, n] of cases) expect([name, syllableCount(name)]).toEqual([name, n])
+  })
+
+  it('filtrerer på forbokstav (ELLER) og stavelser', () => {
+    const nora = makeName({ id: 'a', name: 'Nora', letters: 4 })
+    const emilie = makeName({ id: 'b', name: 'Emilie', letters: 6 })
+    expect(matchesFilters(nora, f({ letters: ['n', 'å'] }), Y)).toBe(true)
+    expect(matchesFilters(emilie, f({ letters: ['n'] }), Y)).toBe(false)
+    expect(matchesFilters(emilie, f({ syllables: ['4plus'] }), Y)).toBe(true)
+    expect(matchesFilters(nora, f({ syllables: ['4plus', '3'] }), Y)).toBe(false)
+    expect(matchesFilters(nora, f({ letters: ['n'], syllables: ['2'] }), Y)).toBe(true)
+  })
+
+  it('teller nye filter i activeFilterCount og lister forbokstaver med æøå sist', () => {
+    expect(activeFilterCount(f({ letters: ['a', 'b'], syllables: ['2'] }))).toBe(3)
+    expect(availableLetters([{ name: 'Åse' }, { name: 'Anna' }, { name: 'Ole' }, { name: 'Øyvind' }, { name: 'Aksel' }])).toEqual(['a', 'o', 'ø', 'å'])
+  })
+})
+
+describe('mest populær-periode', () => {
+  it('plasserer toppåret i tiår, med alt før 1970 samlet', () => {
+    expect([1925, 1969, 1970, 1999, 2000, 2024].map(peakBucket)).toEqual(['to1969', 'to1969', '1970', '1990', '2000', '2020'])
+  })
+
+  it('filtrerer på tiåret toppåret ligger i, og skjuler navn uten beregnet toppår', () => {
+    const n90 = makeName({ id: 'a', peakFrom: 1992, peakTo: 1996, peakYear: 1994 })
+    const none = makeName({ id: 'b', peakFrom: null, peakTo: null, peakYear: null })
+    expect(matchesFilters(n90, f({ peak: ['1990'] }), Y)).toBe(true)
+    expect(matchesFilters(n90, f({ peak: ['2010', '2020'] }), Y)).toBe(false)
+    expect(matchesFilters(none, f({ peak: ['1990'] }), Y)).toBe(false)
+    expect(matchesFilters(none, DEFAULT_FILTERS, Y)).toBe(true)
+    expect(activeFilterCount(f({ peak: ['1990', '2000'] }))).toBe(2)
   })
 })

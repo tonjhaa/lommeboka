@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, Heart, HelpCircle, Layers, Shuffle, Trophy, Users } from 'lucide-react'
+import { BarChart3, Heart, HelpCircle, Layers, List, Shuffle, Trophy, Users } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 import { usePartnershipStore } from '@/store/usePartnershipStore'
 import { selectUnseenMatchCount, useNavnejaktStore } from '@/store/useNavnejaktStore'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { cn } from '@/lib/utils'
+import { AllNamesTab } from '@/components/navnejakt/AllNamesTab'
 import { CombinationsTab } from '@/components/navnejakt/CombinationsTab'
 import { FinalTab } from '@/components/navnejakt/FinalTab'
 import { MatchesTab } from '@/components/navnejakt/MatchesTab'
@@ -13,7 +14,7 @@ import { MaybeTab } from '@/components/navnejakt/MaybeTab'
 import { StatsTab } from '@/components/navnejakt/StatsTab'
 import { SwipeTab } from '@/components/navnejakt/SwipeTab'
 
-type NavnejaktTab = 'swipe' | 'matcher' | 'kanskje' | 'kombinasjoner' | 'finalen' | 'statistikk'
+type NavnejaktTab = 'swipe' | 'matcher' | 'kanskje' | 'alle' | 'kombinasjoner' | 'finalen' | 'statistikk'
 
 export function NavnejaktPage() {
   const [tab, setTab] = useState<NavnejaktTab>('swipe')
@@ -46,6 +47,7 @@ export function NavnejaktPage() {
     { id: 'swipe', label: 'Swipe', Icon: Layers },
     { id: 'matcher', label: 'Matcher', Icon: Heart, count: matchCount },
     { id: 'kanskje', label: 'Kanskje', Icon: HelpCircle, count: maybeCount },
+    { id: 'alle', label: 'Alle navn', Icon: List },
     { id: 'kombinasjoner', label: 'Kombinasjoner', Icon: Shuffle },
     { id: 'finalen', label: 'Finalen', Icon: Trophy },
     { id: 'statistikk', label: 'Statistikk', Icon: BarChart3 },
@@ -96,6 +98,7 @@ export function NavnejaktPage() {
             {tab === 'matcher' && <MatchesTab connected={connected} partnerName={partnerLabel} />}
             {tab === 'kombinasjoner' && <CombinationsTab />}
             {tab === 'kanskje' && <MaybeTab />}
+            {tab === 'alle' && <AllNamesTab />}
             {tab === 'finalen' && userId && <FinalTab connected={connected} partnershipId={partnershipId} userId={userId} partnerName={partnerLabel} />}
             {tab === 'statistikk' && <StatsTab connected={connected} partnerName={partnerLabel} />}
           </>

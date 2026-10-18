@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { fetchNameStats } from '@/lib/names/api'
-import { countLine, rankLine, trendLine } from '@/lib/names/format'
+import { countLine, peakLine, rankLine, trendLine } from '@/lib/names/format'
 import { GENDER_LABEL, type NameRow, type NameStat } from '@/lib/names/types'
 import { TrendIcon } from './shared'
 import { cn } from '@/lib/utils'
@@ -45,6 +45,7 @@ export function NameDetailDialog({ name, latestYear, onClose }: { name: NameRow 
                 <TrendIcon trend={name.trend} />
                 <span>{trendLine(name.trend)}</span>
               </p>
+              {peakLine(name) && <p>{peakLine(name)}{name.peakYear !== null && ` (toppår ${name.peakYear})`}</p>}
             </div>
 
             {error && <p role="alert" className="text-sm text-destructive">Kunne ikke hente historikk: {error}</p>}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { classifyTrend, rankByCount, transformSsbNames, type JsonStat2 } from './transform'
+import { classifyTrend, findPeak, rankByCount, transformSsbNames, type JsonStat2 } from './transform'
 
 function stat(names: Array<{ code: string; label: string; counts: (number | null)[]; shares?: (number | null)[] }>, years: string[]): JsonStat2 {
   const value: (number | null)[] = []
@@ -93,5 +93,39 @@ describe('transformSsbNames', () => {
     expect(() => transformSsbNames({ ...data, id: ['A', 'B', 'C'] })).toThrow(/Uventet SSB-struktur/)
     const empty = stat([{ code: '1X', label: 'X', counts: [null, null, null, null, null, null] }], years)
     expect(() => transformSsbNames(empty)).toThrow(/ingen navnedata/)
+  })
+})
+
+describe('findPeak', () => {
+  const m = (vals: Record<number, number>) => new Map(Object.entries(vals).map(([y, v]) => [Number(y), v]))
+
+  it('finner femårsperioden med høyest sum og toppåret i den', () => {
+    const p = findPeak(m({ 1990: 1, 1991: 2, 1992: 5, 1993: 3, 1994: 1, 2010: 4, 2011: 1 }), 1980, 2025)
+    expect(p).toEqual({ from: 1990, to: 1994, year: 1992 })
+  })
+  it('holder perioden innenfor dataene, også når toppen er siste år', () => {
+    expect(findPeak(m({ 2025: 9 }), 1980, 2025)).toEqual({ from: 2021, to: 2025, year: 2025 })
+  })
+  it('ved likhet vinner den nyeste toppen, og perioden sentreres rundt toppåret', () => {
+    expect(findPeak(m({ 1990: 3, 2010: 3 }), 1980, 2025)).toEqual({ from: 2008, to: 2012, year: 2010 })
+  })
+  it('null uten verdier, med bare nuller, eller for kort dataperiode', () => {
+    expect(findPeak(m({}), 1980, 2025)).toBeNull()
+    expect(findPeak(m({ 2000: 0 }), 1980, 2025)).toBeNull()
+    expect(findPeak(m({ 2024: 1 }), 2023, 2025)).toBeNull()
+  })
+})
+
+describe('transformSsbNames — toppperiode', () => {
+  it('beregner toppperiode per navn fra andel fødte', () => {
+    const years = ['2019', '2020', '2021', '2022', '2023', '2024', '2025']
+    const res = transformSsbNames(stat([
+      { code: '1EMMA', label: 'Emma', counts: [10, 90, 20, 10, 10, 10, 10] },
+      { code: '1LILLE', label: 'Lille', counts: [null, null, null, null, null, null, 5] },
+    ], years))
+    const emma = res.names.find((n) => n.name === 'Emma')!
+    expect([emma.peakFrom, emma.peakTo, emma.peakYear]).toEqual([2019, 2023, 2020])
+    const lille = res.names.find((n) => n.name === 'Lille')!
+    expect([lille.peakFrom, lille.peakTo, lille.peakYear]).toEqual([2021, 2025, 2025])
   })
 })

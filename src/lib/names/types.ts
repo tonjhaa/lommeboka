@@ -16,6 +16,10 @@ export interface NameRow {
   /** null = for lite data til å beregne trend */
   trend: Trend | null
   timeless: boolean
+  /** Femårsperioden navnet var mest populært, og toppåret — null til navnedata er synket på nytt */
+  peakFrom: number | null
+  peakTo: number | null
+  peakYear: number | null
 }
 
 export interface NameStat {

@@ -22,6 +22,10 @@ export interface NameRecord {
   latestShare: number | null
   trend: Trend | null
   timeless: boolean
+  /** Femårsperioden navnet var mest populært (andel fødte), og toppåret innenfor den. null uten tall. */
+  peakFrom: number | null
+  peakTo: number | null
+  peakYear: number | null
 }
 
 export interface StatRecord {
@@ -46,6 +50,45 @@ export const TREND_RISING_RATIO = 1.15
 export const TREND_FALLING_RATIO = 0.85
 /** Navnet må ha tall alle disse siste årene (og stabil trend) for å regnes som «tidløst». */
 export const TIMELESS_YEARS = 20
+
+/** Lengden på perioden som regnes som «mest populær». */
+export const PEAK_WINDOW_YEARS = 5
+
+export interface Peak { from: number; to: number; year: number }
+
+/**
+ * Femårsperioden med høyest sum av andel fødte (antall hvis SSB ikke gir andel), og året med høyest verdi
+ * innenfor den. Perioden ligger alltid innenfor [firstYear, lastYear]. Ved lik sum vinner perioden som
+ * ligger mest sentrert rundt toppåret (så toppen ikke havner i kanten), deretter den nyeste.
+ * Andel brukes fordi antall fødte varierer mellom årene.
+ */
+export function findPeak(valueByYear: ReadonlyMap<number, number>, firstYear: number, lastYear: number): Peak | null {
+  if (valueByYear.size === 0 || lastYear - firstYear + 1 < PEAK_WINDOW_YEARS) return null
+  let topYear = -1
+  let top = 0
+  for (const [y, v] of valueByYear) {
+    if (v > top || (v === top && v > 0 && y > topYear)) { top = v; topYear = y }
+  }
+  if (topYear < 0) return null
+
+  const half = (PEAK_WINDOW_YEARS - 1) / 2
+  let best: { from: number; sum: number; dist: number } | null = null
+  for (let from = firstYear; from + PEAK_WINDOW_YEARS - 1 <= lastYear; from++) {
+    let sum = 0
+    for (let y = from; y < from + PEAK_WINDOW_YEARS; y++) sum += valueByYear.get(y) ?? 0
+    const dist = Math.abs(from + half - topYear)
+    const better = best === null || sum > best.sum + 1e-9 || (Math.abs(sum - best.sum) <= 1e-9 && dist <= best.dist)
+    if (sum > 0 && better) best = { from, sum, dist }
+  }
+  if (!best) return null
+  let year = best.from
+  let inWindowTop = -1
+  for (let y = best.from; y < best.from + PEAK_WINDOW_YEARS; y++) {
+    const v = valueByYear.get(y) ?? 0
+    if (v >= inWindowTop) { inWindowTop = v; year = y }
+  }
+  return { from: best.from, to: best.from + PEAK_WINDOW_YEARS - 1, year }
+}
 
 function categoryCodes(index: Record<string, number> | string[]): string[] {
   if (Array.isArray(index)) return index
@@ -140,6 +183,7 @@ export function transformSsbNames(data: JsonStat2): TransformResult {
 
   if (raws.length === 0) throw new Error('SSB-svaret inneholdt ingen navnedata')
   const latestYear = Math.max(...raws.map((r) => r.year))
+  const firstYear = Math.min(...raws.map((r) => r.year))
 
   // Rang per (kjønn, år)
   const rankByGroup = new Map<string, Map<string, number>>()
@@ -177,6 +221,8 @@ export function transformSsbNames(data: JsonStat2): TransformResult {
     for (let y = latestYear - TIMELESS_YEARS + 1; timeless && y <= latestYear; y++) {
       if (!presentYears.has(y)) timeless = false
     }
+    const useShare = rows.some((r) => r.share !== null)
+    const peak = findPeak(new Map(rows.map((r) => [r.year, useShare ? r.share ?? 0 : r.count])), firstYear, latestYear)
     names.push({
       name: last.name,
       gender: last.gender,
@@ -187,6 +233,9 @@ export function transformSsbNames(data: JsonStat2): TransformResult {
       latestShare: last.share,
       trend,
       timeless,
+      peakFrom: peak?.from ?? null,
+      peakTo: peak?.to ?? null,
+      peakYear: peak?.year ?? null,
     })
   }
 

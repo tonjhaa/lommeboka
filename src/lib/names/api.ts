@@ -11,6 +11,7 @@ const PAGE = 1000
 interface NameDbRow {
   id: string; name: string; gender: 'girl' | 'boy'; letters: number; latest_year: number; latest_count: number
   latest_rank: number | null; latest_share: number | null; trend: 'rising' | 'stable' | 'falling' | null; timeless: boolean
+  peak_from: number | null; peak_to: number | null; peak_year: number | null
 }
 
 function toName(r: NameDbRow): NameRow {
@@ -18,6 +19,7 @@ function toName(r: NameDbRow): NameRow {
     id: r.id, name: r.name, gender: r.gender, letters: r.letters, latestYear: r.latest_year,
     latestCount: r.latest_count, latestRank: r.latest_rank,
     latestShare: r.latest_share === null ? null : Number(r.latest_share), trend: r.trend, timeless: r.timeless,
+    peakFrom: r.peak_from, peakTo: r.peak_to, peakYear: r.peak_year,
   }
 }
 

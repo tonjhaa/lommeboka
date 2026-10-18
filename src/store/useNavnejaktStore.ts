@@ -41,7 +41,8 @@ interface NavnejaktState {
   saveNote: (nameId: string, text: string) => Promise<void>
   setSurname: (surname: string) => void
   reset: () => void
-  vote: (nameId: string, vote: Vote) => Promise<void>
+  /** `null` fjerner vurderingen, så navnet havner i swipe-bunken igjen */
+  vote: (nameId: string, vote: Vote | null) => Promise<void>
   undo: () => Promise<void>
   dismissCelebrate: () => void
   setFilters: (patch: Partial<NameFilters>) => void
@@ -158,7 +159,8 @@ export const useNavnejaktStore = create<NavnejaktState>()(
             history: [...s.history, { nameId, prev }].slice(-HISTORY_LIMIT),
           }))
           try {
-            await api.upsertVote(userId, nameId, vote)
+            if (vote === null) await api.deleteVote(userId, nameId)
+            else await api.upsertVote(userId, nameId, vote)
             if (partnershipId && (vote === 'yes' || prev === 'yes')) await loadMatches()
           } catch (err) {
             set((s) => ({
@@ -294,6 +296,11 @@ export const useNavnejaktStore = create<NavnejaktState>()(
     {
       name: 'lommeboka-navnejakt-v1',
       version: 1,
+      // Lagrede filtre fra før forbokstav/stavelser ble lagt til mangler feltene — fyll inn standardverdier
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<NavnejaktState>
+        return { ...current, ...p, filters: { ...DEFAULT_FILTERS, ...p.filters } }
+      },
       partialize: (s) => ({ filters: s.filters, seed: s.seed, seenMatchIds: s.seenMatchIds, surname: s.surname }),
     },
   ),
