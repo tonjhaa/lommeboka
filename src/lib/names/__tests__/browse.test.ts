@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { searchNames } from '../browse'
+import { searchNames, type SortKey } from '../browse'
 import { makeName } from './helpers'
 import type { Vote } from '../types'
 
@@ -24,5 +24,18 @@ describe('searchNames', () => {
   it('filtrerer på egen vurdering, inkludert ikke vurdert', () => {
     expect(ids(searchNames(names, votes, { query: '', gender: 'all', vote: 'yes' }))).toEqual(['a'])
     expect(ids(searchNames(names, votes, { query: '', gender: 'all', vote: 'unrated' }))).toEqual(['b', 'd', 'e'])
+  })
+  it('sorterer på alfabet baklengs, rang (uten tall sist) og lengde', () => {
+    const rows = [
+      makeName({ id: 'x', name: 'Ola', gender: 'boy', letters: 3, latestYear: 2025, latestRank: 50 }),
+      makeName({ id: 'y', name: 'Emil', gender: 'boy', letters: 4, latestYear: 2025, latestRank: 5 }),
+      makeName({ id: 'z', name: 'Abel', gender: 'boy', letters: 4, latestYear: 2015, latestRank: 1 }),
+    ]
+    const sorted = (sort: SortKey) => ids(searchNames(rows, new Map(), { query: '', gender: 'all', vote: 'all', sort, latestYear: 2025 }))
+    expect(sorted('alpha')).toEqual(['z', 'y', 'x'])
+    expect(sorted('alphaDesc')).toEqual(['x', 'y', 'z'])
+    expect(sorted('popular')).toEqual(['y', 'x', 'z'])
+    expect(sorted('shortest')).toEqual(['x', 'z', 'y'])
+    expect(sorted('longest')).toEqual(['z', 'y', 'x'])
   })
 })

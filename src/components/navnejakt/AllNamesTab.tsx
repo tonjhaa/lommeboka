@@ -3,7 +3,7 @@ import { Check, HelpCircle, SlidersHorizontal, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useNavnejaktStore } from '@/store/useNavnejaktStore'
-import { searchNames, VOTE_FILTER_LABEL, type VoteFilter } from '@/lib/names/browse'
+import { searchNames, SORT_LABEL, VOTE_FILTER_LABEL, type SortKey, type VoteFilter } from '@/lib/names/browse'
 import { availableLetters, DEFAULT_ATTRIBUTE_FILTERS, matchesAttributes, type AttributeFilters } from '@/lib/names/filters'
 import { rankLine } from '@/lib/names/format'
 import { GENDER_LABEL, type Gender, type NameRow, type Vote } from '@/lib/names/types'
@@ -29,6 +29,7 @@ export function AllNamesTab() {
   const [query, setQuery] = useState('')
   const [gender, setGender] = useState<Gender | 'all'>('all')
   const [voteFilter, setVoteFilter] = useState<VoteFilter>('all')
+  const [sort, setSort] = useState<SortKey>('alpha')
   const [attrs, setAttrs] = useState<AttributeFilters>(DEFAULT_ATTRIBUTE_FILTERS)
   const [showAttrs, setShowAttrs] = useState(false)
   const [limit, setLimit] = useState(PAGE)
@@ -37,8 +38,8 @@ export function AllNamesTab() {
   const letters = useMemo(() => availableLetters(names), [names])
   const attrCount = attrs.letters.length + attrs.length.length + attrs.syllables.length
   const results = useMemo(
-    () => searchNames(names, votes, { query, gender, vote: voteFilter }).filter((n) => matchesAttributes(n, attrs)),
-    [names, votes, query, gender, voteFilter, attrs],
+    () => searchNames(names, votes, { query, gender, vote: voteFilter, sort, latestYear }).filter((n) => matchesAttributes(n, attrs)),
+    [names, votes, query, gender, voteFilter, sort, latestYear, attrs],
   )
 
   return (
@@ -65,6 +66,11 @@ export function AllNamesTab() {
         <div className="flex flex-wrap gap-2" role="group" aria-label="Din vurdering">
           {(Object.keys(VOTE_FILTER_LABEL) as VoteFilter[]).map((k) => (
             <Chip key={k} active={voteFilter === k} onClick={() => { setVoteFilter(k); setLimit(PAGE) }}>{VOTE_FILTER_LABEL[k]}</Chip>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Sortering">
+          {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => (
+            <Chip key={k} active={sort === k} onClick={() => { setSort(k); setLimit(PAGE) }}>{SORT_LABEL[k]}</Chip>
           ))}
         </div>
         <div className="flex items-center gap-2">
