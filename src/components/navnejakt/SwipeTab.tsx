@@ -5,6 +5,7 @@ import { useNavnejaktStore } from '@/store/useNavnejaktStore'
 import { buildDeck } from '@/lib/names/deck'
 import { activeFilterCount, DEFAULT_FILTERS } from '@/lib/names/filters'
 import { countLine, peakLine, rankLine, trendLine } from '@/lib/names/format'
+import { variantLine } from '@/lib/names/variants'
 import { GENDER_LABEL, type NameRow, type Vote } from '@/lib/names/types'
 import { cn } from '@/lib/utils'
 import { FilterDialog } from './FilterDialog'
@@ -96,6 +97,8 @@ function SwipeCard({ name, latestYear, leaving, onSwipe, onInfo }: {
 
         <GenderTag gender={name.gender} />
         <h2 className="mt-3 max-w-full break-words text-5xl font-semibold tracking-tight sm:text-7xl">{name.name}</h2>
+
+        {variantLine(name) && <p className="mt-2 text-sm text-muted-foreground/80">{variantLine(name)}</p>}
 
         <div className="mt-8 space-y-1 text-sm text-muted-foreground">
           <p>{countLine(name, latestYear)}</p>

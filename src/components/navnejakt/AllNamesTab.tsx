@@ -8,6 +8,7 @@ import { searchNames, SORT_LABEL, VOTE_FILTER_LABEL, type SortKey, type VoteFilt
 import { availableLetters, DEFAULT_ATTRIBUTE_FILTERS, matchesAttributes, type AttributeFilters } from '@/lib/names/filters'
 import { rankLine } from '@/lib/names/format'
 import { GENDER_LABEL, GENDER_LABEL_SHORT, type Gender, type NameRow, type Vote, type YearStat } from '@/lib/names/types'
+import { groupYearStats, variantLine } from '@/lib/names/variants'
 import { cn } from '@/lib/utils'
 import { AttributeFilterGroups } from './AttributeFilterGroups'
 import { NameDetailDialog } from './NameDetailDialog'
@@ -38,7 +39,7 @@ export function AllNamesTab() {
   const [voteFilter, setVoteFilter] = useState<VoteFilter>('all')
   const [sort, setSort] = useState<SortKey>('alpha')
   const [year, setYear] = useState<number | null>(null)
-  const [yearStats, setYearStats] = useState<{ year: number; stats: ReadonlyMap<string, YearStat> } | null>(null)
+  const [rawYearStats, setRawYearStats] = useState<{ year: number; stats: ReadonlyMap<string, YearStat> } | null>(null)
   const [yearError, setYearError] = useState(false)
   const [attrs, setAttrs] = useState<AttributeFilters>(DEFAULT_ATTRIBUTE_FILTERS)
   const [showAttrs, setShowAttrs] = useState(false)
@@ -52,11 +53,15 @@ export function AllNamesTab() {
     let cancelled = false
     setYearError(false)
     fetchYearStats(pickedYear)
-      .then((stats) => { if (!cancelled) setYearStats({ year: pickedYear, stats }) })
+      .then((stats) => { if (!cancelled) setRawYearStats({ year: pickedYear, stats }) })
       .catch(() => { if (!cancelled) setYearError(true) })
     return () => { cancelled = true }
   }, [pickedYear])
-  const activeYearStats = pickedYear !== null && yearStats?.year === pickedYear ? yearStats.stats : undefined
+  // Tallene hentes per skrivemåte; summer og rangér per gruppe
+  const activeYearStats = useMemo(
+    () => (pickedYear !== null && rawYearStats?.year === pickedYear ? groupYearStats(names, rawYearStats.stats) : undefined),
+    [pickedYear, rawYearStats, names],
+  )
   const yearLoading = pickedYear !== null && !activeYearStats && !yearError
 
   const letters = useMemo(() => availableLetters(names), [names])
@@ -140,6 +145,7 @@ export function AllNamesTab() {
                 <button type="button" onClick={() => setDetail(n)} className="min-w-0 flex-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Vis detaljer for ${n.name}`}>
                   <GenderTag gender={n.gender} />
                   <p className="truncate text-xl font-semibold tracking-tight">{n.name}</p>
+                  {variantLine(n) && <p className="truncate text-xs text-muted-foreground/80">{variantLine(n)}</p>}
                   <p className="text-xs text-muted-foreground">{activeYearStats
                       ? yearLine(activeYearStats.get(n.id), n.gender, pickedYear!)
                       : rankLine(n, latestYear) ?? `Ikke registrert i ${latestYear}`}</p>

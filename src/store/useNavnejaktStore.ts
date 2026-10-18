@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import * as api from '@/lib/names/api'
 import { DEFAULT_FILTERS, type NameFilters } from '@/lib/names/filters'
+import { dedupeMatches, groupFavorites, groupVariants, groupVotes, variantsOf } from '@/lib/names/variants'
 import { NOTE_MAX_LENGTH, type MatchNote, type MatchRow, type NameRow, type SyncInfo, type Vote } from '@/lib/names/types'
 
 interface HistoryEntry { nameId: string; prev: Vote | null }
@@ -77,9 +78,11 @@ export const useNavnejaktStore = create<NavnejaktState>()(
       async function loadMatches(): Promise<string[]> {
         const { partnershipId } = get()
         if (!partnershipId) return []
-        const fresh = await api.fetchMatches()
-        const known = new Set(get().matches.map((m) => m.nameId))
-        const added = fresh.filter((m) => !known.has(m.nameId)).map((m) => m.nameId)
+        const { namesById } = get()
+        const groupOf = (nameId: string) => namesById.get(nameId)?.id ?? nameId
+        const fresh = dedupeMatches(await api.fetchMatches(), namesById)
+        const known = new Set(get().matches.map((m) => groupOf(m.nameId)))
+        const added = fresh.filter((m) => !known.has(groupOf(m.nameId))).map((m) => m.nameId)
         set({ matches: fresh })
         if (added.length > 0 && get().celebrate === null) {
           const name = get().namesById.get(added[0])
@@ -87,6 +90,14 @@ export const useNavnejaktStore = create<NavnejaktState>()(
         }
         return added
       }
+
+      /** Alle skrivemåtene vurderinger og favoritter skal skrives på (se lib/names/variants.ts). */
+      function variantIds(nameId: string): string[] {
+        const n = get().namesById.get(nameId)
+        return n ? variantsOf(n).map((v) => v.id) : [nameId]
+      }
+      const writeVote = (userId: string, nameId: string, vote: Vote | null) =>
+        Promise.all(variantIds(nameId).map((id) => (vote === null ? api.deleteVote(userId, id) : api.upsertVote(userId, id, vote))))
 
       return {
         status: 'idle',
@@ -118,7 +129,7 @@ export const useNavnejaktStore = create<NavnejaktState>()(
           s._unsubscribe?.()
           set({ status: 'loading', error: null, userId, partnershipId, _unsubscribe: null })
           try {
-            const [names, votes, matches, favorites, syncInfo, notes] = await Promise.all([
+            const [rawNames, rawVotes, rawMatches, rawFavorites, syncInfo, notes] = await Promise.all([
               api.fetchNames(),
               api.fetchMyVotes(),
               partnershipId ? api.fetchMatches() : Promise.resolve([] as MatchRow[]),
@@ -126,10 +137,12 @@ export const useNavnejaktStore = create<NavnejaktState>()(
               api.fetchSyncInfo(),
               partnershipId ? api.fetchNotes().catch(() => [] as MatchNote[]) : Promise.resolve([] as MatchNote[]),
             ])
-            const latestYear = names.reduce((y, n) => Math.max(y, n.latestYear), syncInfo?.latestYear ?? 0)
+            const latestYear = rawNames.reduce((y, n) => Math.max(y, n.latestYear), syncInfo?.latestYear ?? 0)
+            const { names, namesById } = groupVariants(rawNames, latestYear)
             set({
-              status: 'ready', names, namesById: new Map(names.map((n) => [n.id, n])), latestYear,
-              votes, matches, notes, favorites, syncInfo, history: [],
+              status: 'ready', names, namesById, latestYear,
+              votes: groupVotes(names, rawVotes), matches: dedupeMatches(rawMatches, namesById), notes,
+              favorites: groupFavorites(names, rawFavorites), syncInfo, history: [],
               seed: get().seed || Math.floor(Math.random() * 2 ** 31),
             })
             if (partnershipId) {
@@ -159,8 +172,7 @@ export const useNavnejaktStore = create<NavnejaktState>()(
             history: [...s.history, { nameId, prev }].slice(-HISTORY_LIMIT),
           }))
           try {
-            if (vote === null) await api.deleteVote(userId, nameId)
-            else await api.upsertVote(userId, nameId, vote)
+            await writeVote(userId, nameId, vote)
             if (partnershipId && (vote === 'yes' || prev === 'yes')) await loadMatches()
           } catch (err) {
             set((s) => ({
@@ -181,8 +193,7 @@ export const useNavnejaktStore = create<NavnejaktState>()(
           const current = get().votes.get(last.nameId) ?? null
           set((s) => ({ votes: withVote(s.votes, last.nameId, last.prev), history: s.history.slice(0, -1) }))
           try {
-            if (last.prev === null) await api.deleteVote(userId, last.nameId)
-            else await api.upsertVote(userId, last.nameId, last.prev)
+            await writeVote(userId, last.nameId, last.prev)
             if (get().partnershipId && (current === 'yes' || last.prev === 'yes')) await loadMatches()
           } catch (err) {
             set((s) => ({
@@ -198,7 +209,8 @@ export const useNavnejaktStore = create<NavnejaktState>()(
         dismissCelebrate: () => {
           const c = get().celebrate
           set({ celebrate: null })
-          const match = c ? get().matches.find((m) => m.nameId === c.id) : undefined
+          const { matches, namesById } = get()
+          const match = c ? matches.find((m) => namesById.get(m.nameId)?.id === c.id) : undefined
           if (match) get().markMatchesSeen([match.id])
         },
 
@@ -263,7 +275,7 @@ export const useNavnejaktStore = create<NavnejaktState>()(
           else next.delete(nameId)
           set({ favorites: next })
           try {
-            await api.setFavorite(userId, nameId, makeFavorite)
+            await Promise.all(variantIds(nameId).map((id) => api.setFavorite(userId, id, makeFavorite)))
           } catch (err) {
             set({ favorites, error: `Kunne ikke lagre favoritt: ${err instanceof Error ? err.message : String(err)}` })
           }
@@ -279,9 +291,18 @@ export const useNavnejaktStore = create<NavnejaktState>()(
             set({ syncMessage: res.message })
             if (res.ok) {
               // Last navnedata på nytt uten å røre stemmer/matcher
-              const [names, syncInfo] = await Promise.all([api.fetchNames(), api.fetchSyncInfo()])
-              const latestYear = names.reduce((y, n) => Math.max(y, n.latestYear), syncInfo?.latestYear ?? 0)
-              set({ names, namesById: new Map(names.map((n) => [n.id, n])), latestYear, syncInfo })
+              // Hovedvarianten kan bytte med nye tall, og vurderinger/favoritter/matcher hører til gruppens id — hent dem på nytt
+              const [rawNames, syncInfo, rawVotes, rawFavorites, rawMatches] = await Promise.all([
+                api.fetchNames(), api.fetchSyncInfo(), api.fetchMyVotes(), api.fetchFavorites(),
+                get().partnershipId ? api.fetchMatches() : Promise.resolve([] as MatchRow[]),
+              ])
+              const latestYear = rawNames.reduce((y, n) => Math.max(y, n.latestYear), syncInfo?.latestYear ?? 0)
+              const { names, namesById } = groupVariants(rawNames, latestYear)
+              set({
+                names, namesById, latestYear, syncInfo, history: [],
+                votes: groupVotes(names, rawVotes), favorites: groupFavorites(names, rawFavorites),
+                matches: dedupeMatches(rawMatches, namesById),
+              })
             }
           } catch (err) {
             set({ syncMessage: `Synkronisering feilet: ${err instanceof Error ? err.message : String(err)}` })

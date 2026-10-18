@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { fetchNameStats } from '@/lib/names/api'
+import { fetchVariantStats } from '@/lib/names/api'
 import { countLine, peakLine, rankLine, trendLine } from '@/lib/names/format'
 import { GENDER_LABEL, type NameRow, type NameStat } from '@/lib/names/types'
+import { variantLine, variantsOf } from '@/lib/names/variants'
 import { TrendIcon } from './shared'
 import { cn } from '@/lib/utils'
 
@@ -11,15 +12,18 @@ export function NameDetailDialog({ name, latestYear, onClose }: { name: NameRow 
   const [loaded, setLoaded] = useState<{ id: string; stats: NameStat[] | null; error: string | null } | null>(null)
   const [range, setRange] = useState<10 | 'all'>(10)
   const nameId = name?.id
+  const variantIds = name ? variantsOf(name).map((v) => v.id) : []
+  const idsKey = variantIds.join(',')
+  const grouped = variantIds.length > 1
 
   useEffect(() => {
     if (!nameId) return
     let cancelled = false
-    fetchNameStats(nameId)
+    fetchVariantStats(idsKey.split(','))
       .then((s) => { if (!cancelled) setLoaded({ id: nameId, stats: s, error: null }) })
       .catch((e) => { if (!cancelled) setLoaded({ id: nameId, stats: null, error: e instanceof Error ? e.message : String(e) }) })
     return () => { cancelled = true }
-  }, [nameId])
+  }, [nameId, idsKey])
 
   // Resultat gjelder bare hvis det er for navnet som vises nå
   const current = loaded && loaded.id === nameId ? loaded : null
@@ -36,6 +40,7 @@ export function NameDetailDialog({ name, latestYear, onClose }: { name: NameRow 
             <DialogHeader>
               <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">{GENDER_LABEL[name.gender]}</p>
               <DialogTitle className="text-4xl font-semibold tracking-tight">{name.name}</DialogTitle>
+              {variantLine(name) && <p className="text-sm text-muted-foreground">{variantLine(name)} — tallene er lagt sammen</p>}
             </DialogHeader>
             <div className="space-y-1 text-sm text-muted-foreground" aria-describedby={undefined}>
               <p>{countLine(name, latestYear)}</p>
@@ -86,7 +91,7 @@ export function NameDetailDialog({ name, latestYear, onClose }: { name: NameRow 
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="text-muted-foreground text-left">
-                      <th className="py-1 font-medium">År</th><th className="py-1 font-medium text-right">Barn</th><th className="py-1 font-medium text-right">Rang</th>
+                      <th className="py-1 font-medium">År</th><th className="py-1 font-medium text-right">Barn</th>{!grouped && <th className="py-1 font-medium text-right">Rang</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -94,7 +99,7 @@ export function NameDetailDialog({ name, latestYear, onClose }: { name: NameRow 
                       <tr key={s.year} className="border-t border-border/60">
                         <td className="py-1">{s.year}</td>
                         <td className="py-1 text-right tabular-nums">{s.count}</td>
-                        <td className="py-1 text-right tabular-nums">{s.rank ?? '–'}</td>
+                        {!grouped && <td className="py-1 text-right tabular-nums">{s.rank ?? '–'}</td>}
                       </tr>
                     ))}
                   </tbody>

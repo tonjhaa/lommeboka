@@ -20,6 +20,8 @@ export interface NameRow {
   peakFrom: number | null
   peakTo: number | null
   peakYear: number | null
+  /** Alle skrivemåter raden dekker (inkludert seg selv). Bare satt når flere skrivemåter er slått sammen. */
+  variants?: readonly NameRow[]
 }
 
 export interface NameStat {

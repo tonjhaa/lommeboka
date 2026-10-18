@@ -54,6 +54,21 @@ export async function fetchYearStats(year: number): Promise<Map<string, YearStat
   return new Map(rows.map((r) => [r.name_id, { count: r.count, rank: r.rank }]))
 }
 
+/** Historikk for en gruppe skrivemåter: antall og andel summert per år. Rang finnes bare per skrivemåte, så den utelates. */
+export async function fetchVariantStats(nameIds: readonly string[]): Promise<NameStat[]> {
+  if (nameIds.length === 1) return fetchNameStats(nameIds[0])
+  const byYear = new Map<number, NameStat>()
+  for (const stats of await Promise.all(nameIds.map(fetchNameStats))) {
+    for (const s of stats) {
+      const cur = byYear.get(s.year)
+      byYear.set(s.year, cur
+        ? { year: s.year, count: cur.count + s.count, share: cur.share === null && s.share === null ? null : (cur.share ?? 0) + (s.share ?? 0), rank: null }
+        : { ...s, rank: null })
+    }
+  }
+  return [...byYear.values()].sort((a, b) => a.year - b.year)
+}
+
 export async function fetchMyVotes(): Promise<Map<string, Vote>> {
   const rows = await fetchAll<{ name_id: string; vote: Vote }>((from, to) =>
     supabase.from('name_votes').select('name_id, vote').order('name_id').range(from, to))
