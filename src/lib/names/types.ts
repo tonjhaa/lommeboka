@@ -53,3 +53,6 @@ export interface MatchNote {
 }
 
 export const NOTE_MAX_LENGTH = 280
+
+/** Rang (blant samme kjønn) og antall fødte for ett navn i ett bestemt år. */
+export interface YearStat { count: number; rank: number }

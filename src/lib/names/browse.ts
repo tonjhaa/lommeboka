@@ -1,4 +1,4 @@
-import type { Gender, NameRow, Vote } from './types'
+import type { Gender, NameRow, Vote, YearStat } from './types'
 
 export type VoteFilter = 'all' | 'unrated' | Vote
 
@@ -16,12 +16,13 @@ const norm = (s: string) => s.trim().toLocaleLowerCase('nb')
 
 /**
  * Søk blant alle navn, uavhengig av swipe-filtre. Ved A–Å kommer treff på starten av navnet før treff midt i.
- * «Mest populære» sorterer på rang siste år; navn uten tall for siste år havner sist.
+ * «Mest populære» sorterer på rang siste år, eller i `yearStats` (valgt år) når den er gitt;
+ * navn uten tall for året havner sist.
  */
 export function searchNames(
   names: readonly NameRow[],
   votes: ReadonlyMap<string, Vote>,
-  opts: { query: string; gender: Gender | 'all'; vote: VoteFilter; sort?: SortKey; latestYear?: number },
+  opts: { query: string; gender: Gender | 'all'; vote: VoteFilter; sort?: SortKey; latestYear?: number; yearStats?: ReadonlyMap<string, YearStat> },
 ): NameRow[] {
   const q = norm(opts.query)
   const rows = names.filter((n) => {
@@ -32,7 +33,10 @@ export function searchNames(
   })
   const alpha = (a: NameRow, b: NameRow) =>
     a.name.localeCompare(b.name, 'nb') || Number(a.gender === 'boy') - Number(b.gender === 'boy')
-  const rank = (n: NameRow) => (n.latestYear === opts.latestYear && n.latestRank !== null ? n.latestRank : Infinity)
+  const rank = (n: NameRow) => {
+    if (opts.yearStats) return opts.yearStats.get(n.id)?.rank ?? Infinity
+    return n.latestYear === opts.latestYear && n.latestRank !== null ? n.latestRank : Infinity
+  }
   switch (opts.sort ?? 'alpha') {
     case 'alphaDesc': return rows.sort((a, b) => alpha(b, a))
     case 'popular': return rows.sort((a, b) => (rank(a) === rank(b) ? alpha(a, b) : rank(a) - rank(b)))

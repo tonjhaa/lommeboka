@@ -38,4 +38,14 @@ describe('searchNames', () => {
     expect(sorted('shortest')).toEqual(['x', 'z', 'y'])
     expect(sorted('longest')).toEqual(['z', 'y', 'x'])
   })
+  it('rangerer etter valgt år når yearStats er gitt, og legger navn uten tall det året sist', () => {
+    const rows = [
+      makeName({ id: 'x', name: 'Ola', gender: 'boy', latestRank: 1 }),
+      makeName({ id: 'y', name: 'Emil', gender: 'boy', latestRank: 2 }),
+      makeName({ id: 'z', name: 'Abel', gender: 'boy', latestRank: 3 }),
+    ]
+    const yearStats = new Map([['y', { rank: 1, count: 300 }], ['x', { rank: 7, count: 90 }]])
+    const r = searchNames(rows, new Map(), { query: '', gender: 'all', vote: 'all', sort: 'popular', latestYear: 2025, yearStats })
+    expect(ids(r)).toEqual(['y', 'x', 'z'])
+  })
 })

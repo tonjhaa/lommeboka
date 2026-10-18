@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/react'
 import { supabase } from '@/lib/supabase'
-import type { MatchNote, MatchRow, NameRow, NameStat, SyncInfo, Vote } from './types'
+import type { MatchNote, MatchRow, NameRow, NameStat, SyncInfo, Vote, YearStat } from './types'
 import type { Tournament, FinalRank } from './tournament'
 
 // Alle tilgangsregler håndheves av RLS/triggere i databasen (supabase/migrations/20260919000000_navnejakten.sql).
@@ -45,6 +45,13 @@ export async function fetchNameStats(nameId: string): Promise<NameStat[]> {
     .from('name_statistics').select('year, count, share, rank').eq('name_id', nameId).order('year')
   if (error) throw new Error(error.message)
   return (data ?? []).map((r) => ({ year: r.year, count: r.count, share: r.share === null ? null : Number(r.share), rank: r.rank }))
+}
+
+/** Rang og antall for alle navn i ett år, nøklet på navne-id. */
+export async function fetchYearStats(year: number): Promise<Map<string, YearStat>> {
+  const rows = await fetchAll<{ name_id: string; count: number; rank: number }>((from, to) =>
+    supabase.from('name_statistics').select('name_id, count, rank').eq('year', year).order('name_id').range(from, to))
+  return new Map(rows.map((r) => [r.name_id, { count: r.count, rank: r.rank }]))
 }
 
 export async function fetchMyVotes(): Promise<Map<string, Vote>> {
