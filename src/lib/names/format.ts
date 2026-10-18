@@ -27,6 +27,12 @@ export function trendLine(trend: Trend | null): string {
   }
 }
 
+/** «Mest populær ca. 1995–1999» — null til peak-data er synket. */
+export function peakLine(n: Pick<NameRow, 'peakFrom' | 'peakTo'>): string | null {
+  if (n.peakFrom === null || n.peakTo === null) return null
+  return `Mest populær ca. ${n.peakFrom}–${n.peakTo}`
+}
+
 export function formatDate(iso: string): string {
   return new Intl.DateTimeFormat('nb-NO', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso))
 }

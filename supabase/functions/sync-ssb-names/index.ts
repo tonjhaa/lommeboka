@@ -80,7 +80,8 @@ serve(async (req) => {
           part.map((n) => ({
             name: n.name, gender: n.gender, letters: n.letters,
             latest_year: n.latestYear, latest_count: n.latestCount, latest_rank: n.latestRank,
-            latest_share: n.latestShare, trend: n.trend, timeless: n.timeless, updated_at: now,
+            latest_share: n.latestShare, trend: n.trend, timeless: n.timeless,
+            peak_from: n.peakFrom, peak_to: n.peakTo, peak_year: n.peakYear, updated_at: now,
           })),
           { onConflict: 'name,gender' },
         )

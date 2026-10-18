@@ -12,6 +12,7 @@ import { selectUnseenMatchCount, useNavnejaktStore } from '../useNavnejaktStore'
 
 const name = (id: string): NameRow => ({
   id, name: id, gender: 'girl', letters: 5, latestYear: 2025, latestCount: 100, latestRank: 10, latestShare: 0.4, trend: 'stable', timeless: false,
+  peakFrom: 2015, peakTo: 2019, peakYear: 2017,
 })
 
 async function init(opts: { votes?: Array<[string, Vote]>; matches?: MatchRow[]; partnershipId?: string | null } = {}) {

@@ -4,8 +4,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useNavnejaktStore } from '@/store/useNavnejaktStore'
 import { MATCH_SORT_LABEL, sortMatches, type MatchEntry, type MatchSort } from '@/lib/names/matches'
 import { formatDate, rankLine, trendLine } from '@/lib/names/format'
-import { NOTE_MAX_LENGTH, type MatchNote, type NameRow } from '@/lib/names/types'
+import { GENDER_LABEL, NOTE_MAX_LENGTH, type Gender, type MatchNote, type NameRow } from '@/lib/names/types'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { NameDetailDialog } from './NameDetailDialog'
 import { Chip, GenderTag, TrendIcon } from './shared'
@@ -27,6 +28,8 @@ export function MatchesTab({ connected, partnerName }: { connected: boolean; par
   const [editing, setEditing] = useState<string | null>(null)
   const [sort, setSort] = useState<MatchSort>('newest')
   const [onlyFavs, setOnlyFavs] = useState(false)
+  const [query, setQuery] = useState('')
+  const [gender, setGender] = useState<Gender | 'all'>('all')
   const [detail, setDetail] = useState<NameRow | null>(null)
 
   useEffect(() => { void refreshNotes() }, [refreshNotes])
@@ -43,15 +46,23 @@ export function MatchesTab({ connected, partnerName }: { connected: boolean; par
       const name = namesById.get(m.nameId)
       return name ? [{ match: m, name }] : []
     })
-    return sortMatches(onlyFavs ? all.filter((e) => favorites.has(e.name.id)) : all, sort, latestYear)
-  }, [matches, namesById, favorites, sort, onlyFavs, latestYear])
+    const q = query.trim().toLocaleLowerCase('nb')
+    const shown = all.filter((e) =>
+      (!onlyFavs || favorites.has(e.name.id)) &&
+      (gender === 'all' || e.name.gender === gender) &&
+      (q === '' || e.name.name.toLocaleLowerCase('nb').includes(q)))
+    return sortMatches(shown, sort, latestYear)
+  }, [matches, namesById, favorites, sort, onlyFavs, latestYear, query, gender])
+  const filtered = onlyFavs || gender !== 'all' || query.trim() !== ''
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4 px-4 py-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Våre matcher</h2>
-          <p className="text-xs text-muted-foreground">{matches.length} {matches.length === 1 ? 'navn' : 'navn'} dere begge har sagt ja til</p>
+          <p className="text-xs text-muted-foreground">
+            {filtered ? `Viser ${entries.length} av ${matches.length}` : `${matches.length} navn`} dere begge har sagt ja til
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Chip active={onlyFavs} onClick={() => setOnlyFavs((v) => !v)}>Bare favoritter</Chip>
@@ -64,10 +75,19 @@ export function MatchesTab({ connected, partnerName }: { connected: boolean; par
         </div>
       </div>
 
+      <div className="space-y-2">
+        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Søk i matcher" aria-label="Søk i matcher" autoComplete="off" />
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Kjønn">
+          <Chip active={gender === 'all'} onClick={() => setGender('all')}>Alle kjønn</Chip>
+          {(['girl', 'boy'] as const).map((g) => <Chip key={g} active={gender === g} onClick={() => setGender(g)}>{GENDER_LABEL[g]}</Chip>)}
+        </div>
+      </div>
+
       {entries.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border px-6 py-12 text-center text-sm text-muted-foreground">
           {!connected
             ? 'Koble til partneren din i Partner-fanen for å få matcher.'
+            : matches.length > 0 && filtered ? 'Ingen matcher passer søket eller filtrene.'
             : onlyFavs ? 'Ingen favoritter ennå. Trykk på stjernen på en match.'
             : 'Ingen matcher ennå. Når dere begge sier ja til samme navn dukker det opp her.'}
         </div>

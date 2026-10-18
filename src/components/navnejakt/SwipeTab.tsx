@@ -4,12 +4,12 @@ import { Button } from '@/components/ui/button'
 import { useNavnejaktStore } from '@/store/useNavnejaktStore'
 import { buildDeck } from '@/lib/names/deck'
 import { activeFilterCount, DEFAULT_FILTERS } from '@/lib/names/filters'
-import { countLine, rankLine, trendLine } from '@/lib/names/format'
-import type { NameRow, Vote } from '@/lib/names/types'
+import { countLine, peakLine, rankLine, trendLine } from '@/lib/names/format'
+import { GENDER_LABEL, type NameRow, type Vote } from '@/lib/names/types'
 import { cn } from '@/lib/utils'
 import { FilterDialog } from './FilterDialog'
 import { NameDetailDialog } from './NameDetailDialog'
-import { GenderTag, SyncButton, TrendIcon } from './shared'
+import { Chip, GenderTag, SyncButton, TrendIcon } from './shared'
 
 type Dir = 'left' | 'right' | 'up'
 const DIR_TO_VOTE: Record<Dir, Vote> = { left: 'no', right: 'yes', up: 'maybe' }
@@ -33,6 +33,7 @@ function SwipeCard({ name, latestYear, leaving, onSwipe, onInfo }: {
   const moved = useRef(false)
 
   const rank = rankLine(name, latestYear)
+  const peak = peakLine(name)
   const intent = Math.max(-1, Math.min(1, dx / SWIPE_THRESHOLD))
 
   const style: React.CSSProperties = leaving
@@ -103,6 +104,7 @@ function SwipeCard({ name, latestYear, leaving, onSwipe, onInfo }: {
             {rank && <span aria-hidden className="hidden sm:inline">·</span>}
             <span className="inline-flex items-center gap-1 whitespace-nowrap"><TrendIcon trend={name.trend} />{trendLine(name.trend)}</span>
           </p>
+          {peak && <p>{peak}</p>}
         </div>
       </div>
     </div>
@@ -141,6 +143,8 @@ export function SwipeTab() {
   const setFilters = useNavnejaktStore((s) => s.setFilters)
 
   const deck = useMemo(() => buildDeck(names, votes, filters, latestYear, seed), [names, votes, filters, latestYear, seed])
+  const unrated = useMemo(() => names.reduce((n, x) => n + (votes.has(x.id) ? 0 : 1), 0), [names, votes])
+  const hidden = unrated - deck.length
   const top = deck[0]
   const next = deck[1]
 
@@ -148,7 +152,8 @@ export function SwipeTab() {
   const [filterOpen, setFilterOpen] = useState(false)
   const [detail, setDetail] = useState<NameRow | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const filterCount = activeFilterCount(filters)
+  // Kjønn har egne knapper over kortet, så det telles ikke som «skjult» filter i Filtre-knappen
+  const filterCount = activeFilterCount(filters) - (filters.gender !== 'all' ? 1 : 0)
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
 
@@ -182,9 +187,19 @@ export function SwipeTab() {
 
   return (
     <div className="mx-auto flex h-full w-full max-w-md flex-col px-4 pb-4 pt-3">
+      <div className="mb-3 flex gap-2" role="group" aria-label="Kjønn å swipe på">
+        {(['girl', 'boy', 'all'] as const).map((g) => (
+          <Chip key={g} active={filters.gender === g} onClick={() => setFilters({ gender: g })}>
+            {g === 'all' ? 'Begge' : GENDER_LABEL[g]}
+          </Chip>
+        ))}
+      </div>
       <div className="mb-3 flex items-center justify-between">
         <p className="text-xs text-muted-foreground" aria-live="polite">
-          {names.length > 0 ? `${deck.length} ${deck.length === 1 ? 'navn' : 'navn'} igjen` : ''}
+          {names.length > 0 ? `${deck.length} navn igjen` : ''}
+          {hidden > 0 && (
+            <>{' · '}<button type="button" onClick={() => setFilterOpen(true)} className="underline underline-offset-2 hover:text-foreground">{hidden} skjult av filtre</button></>
+          )}
         </p>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="sm" onClick={() => void undo()} disabled={!canUndo} aria-label="Angre forrige vurdering (Z)">

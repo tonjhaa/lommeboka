@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Input } from '@/components/ui/input'
-import { Chip, GenderTag } from './shared'
+import { Chip } from './shared'
 import { useNavnejaktStore } from '@/store/useNavnejaktStore'
-import { buildCombos, FLAG_LABEL } from '@/lib/names/combinations'
-import type { NameRow } from '@/lib/names/types'
+import { buildCombos, FLAG_LABEL, gendersIn } from '@/lib/names/combinations'
+import { GENDER_LABEL, type Gender, type NameRow } from '@/lib/names/types'
 
 export function CombinationsTab() {
   const matches = useNavnejaktStore((s) => s.matches)
@@ -11,8 +11,9 @@ export function CombinationsTab() {
   const surname = useNavnejaktStore((s) => s.surname)
   const setSurname = useNavnejaktStore((s) => s.setSurname)
   const [chosenId, setChosenId] = useState<string | null>(null)
+  const [chosenGender, setChosenGender] = useState<Gender | null>(null)
 
-  const pool = useMemo(() => {
+  const allMatched = useMemo(() => {
     const rows: NameRow[] = []
     for (const m of matches) {
       const n = namesById.get(m.nameId)
@@ -20,6 +21,11 @@ export function CombinationsTab() {
     }
     return rows.sort((a, b) => a.name.localeCompare(b.name, 'nb'))
   }, [matches, namesById])
+
+  // Fornavn og mellomnavn hentes alltid fra samme kjønn
+  const genders = useMemo(() => gendersIn(allMatched), [allMatched])
+  const gender = chosenGender && genders.includes(chosenGender) ? chosenGender : genders[0]
+  const pool = useMemo(() => allMatched.filter((n) => n.gender === gender), [allMatched, gender])
 
   const first = pool.find((n) => n.id === chosenId) ?? pool[0]
   const combos = useMemo(() => (first ? buildCombos(first, pool, surname) : []), [first, pool, surname])
@@ -36,6 +42,14 @@ export function CombinationsTab() {
         <Input id="surname" value={surname} onChange={(e) => setSurname(e.target.value)} placeholder="Etternavn" autoComplete="off" className="max-w-xs" />
         <p className="text-[11px] text-muted-foreground/80">Lagres bare i denne nettleseren — ikke i databasen og ikke hos partneren din.</p>
       </div>
+
+      {genders.length > 1 && (
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Kjønn">
+          {genders.map((g) => (
+            <Chip key={g} active={gender === g} onClick={() => { setChosenGender(g); setChosenId(null) }}>{GENDER_LABEL[g]}</Chip>
+          ))}
+        </div>
+      )}
 
       {pool.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
@@ -65,7 +79,6 @@ export function CombinationsTab() {
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     <span>{c.middle ? 'Med mellomnavn' : 'Uten mellomnavn'}</span>
                     <span>{c.letters} bokstaver</span>
-                    {c.middle && <GenderTag gender={c.middle.gender} className="tracking-[0.12em]" />}
                     {c.flags.map((f) => <span key={f} className="rounded-full border border-border px-2 py-0.5">{FLAG_LABEL[f]}</span>)}
                   </div>
                 </li>

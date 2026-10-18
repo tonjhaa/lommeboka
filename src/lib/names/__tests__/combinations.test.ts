@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildCombo, buildCombos } from '../combinations'
+import { buildCombo, buildCombos, gendersIn } from '../combinations'
 import { makeName } from './helpers'
 
 const n = (name: string) => makeName({ id: name, name })
@@ -35,5 +35,21 @@ describe('buildCombos', () => {
   it('gir «uten mellomnavn» først, deretter alle andre alfabetisk, uten fornavnet selv', () => {
     const list = buildCombos(n('Vilde'), [n('Vilde'), n('Ingrid'), n('Emma')], 'Berg')
     expect(list.map((c) => c.middle?.name ?? null)).toEqual([null, 'Emma', 'Ingrid'])
+  })
+
+  it('bruker bare mellomnavn av samme kjønn som fornavnet', () => {
+    const boy = (name: string) => makeName({ id: name, name, gender: 'boy' })
+    const pool = [n('Vilde'), n('Ingrid'), boy('Emil'), boy('Jonas')]
+    expect(buildCombos(n('Vilde'), pool, 'Berg').map((c) => c.middle?.name ?? null)).toEqual([null, 'Ingrid'])
+    expect(buildCombos(boy('Emil'), pool, 'Berg').map((c) => c.middle?.name ?? null)).toEqual([null, 'Jonas'])
+  })
+})
+
+describe('gendersIn', () => {
+  it('gir kjønnene som finnes, jente først', () => {
+    const boy = makeName({ id: 'Emil', gender: 'boy' })
+    expect(gendersIn([boy, n('Vilde')])).toEqual(['girl', 'boy'])
+    expect(gendersIn([boy])).toEqual(['boy'])
+    expect(gendersIn([])).toEqual([])
   })
 })

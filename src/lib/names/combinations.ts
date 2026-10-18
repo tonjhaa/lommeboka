@@ -1,4 +1,4 @@
-import type { NameRow } from './types'
+import type { Gender, NameRow } from './types'
 
 /** Faktiske, mekaniske observasjoner — ingen «klang»-vurdering. */
 export type ComboFlag = 'sameInitial' | 'repeatedJoin'
@@ -43,10 +43,15 @@ export function buildCombo(first: NameRow, middle: NameRow | null, surname: stri
   }
 }
 
-/** Alle kombinasjoner for et valgt fornavn: uten mellomnavn, og med hver av de andre navnene som mellomnavn. */
+/** Kjønnene som finnes i poolen, jente først. */
+export function gendersIn(pool: readonly NameRow[]): Gender[] {
+  return (['girl', 'boy'] as const).filter((g) => pool.some((n) => n.gender === g))
+}
+
+/** Alle kombinasjoner for et valgt fornavn: uten mellomnavn, og med hvert av de andre navnene av samme kjønn som mellomnavn. */
 export function buildCombos(first: NameRow, pool: readonly NameRow[], surname: string): Combo[] {
   const others = pool
-    .filter((n) => n.id !== first.id)
+    .filter((n) => n.id !== first.id && n.gender === first.gender)
     .sort((a, b) => a.name.localeCompare(b.name, 'nb'))
   return [buildCombo(first, null, surname), ...others.map((m) => buildCombo(first, m, surname))]
 }
