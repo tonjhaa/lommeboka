@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { Plus, Trash2, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Search, X, Pencil, Loader2, TrendingDown, Share2 } from 'lucide-react'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { useSharedUtstyrStore } from '@/store/useSharedUtstyrStore'
+import { useIVFData } from '@/hooks/useIVFData'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -30,6 +31,9 @@ export interface BabyShoppingItem {
   bestPriceNote?: string
   bestPriceUrl?: string
   trackedBestPrice?: number
+  /** Regnskapsposter (type Barneutstyr) som dekker dette kjøpet. Regnskapet er fasit:
+   *  status og faktisk pris hentes derfra, og det lagrede `actual`/`status` overstyres. */
+  ledgerTxIds?: string[]
 }
 
 export interface PriceAlert {
@@ -127,8 +131,20 @@ function useBabyShopping() {
   // Bruk delt data kun etter at migrering er gjort ELLER delt liste allerede har innhold
   const sharedHasData = (shared.data?.length ?? 0) > 0 || shared.migrated
   const useShared = isShared && sharedHasData
-  const items = useShared ? (shared.data ?? []) : personalItems
+  const sharedData = shared.data
+  const rawItems = useMemo(() => (useShared ? (sharedData ?? []) : personalItems), [useShared, sharedData, personalItems])
   const setItems = (next: BabyShoppingItem[]) => { if (useShared) void shared.setData(next); else setPersonalItems(next) }
+
+  // Regnskapet er fasit: koblede varer er «Anskaffet» med faktisk pris fra regnskapsposten(e)
+  const { transactions: ledger } = useIVFData()
+  const ledgerById = useMemo(() => new Map(ledger.map(t => [t.id, t])), [ledger])
+  const items = useMemo(() => rawItems.map((i): BabyShoppingItem => {
+    const linked = (i.ledgerTxIds ?? []).map(id => ledgerById.get(id)).filter((t): t is NonNullable<typeof t> => !!t)
+    if (linked.length === 0) return i
+    return { ...i, status: 'anskaffet', actual: Math.round(linked.reduce((sum, t) => sum - t.amount, 0)) }
+  }), [rawItems, ledgerById])
+  // Barneutstyr-poster i regnskapet som kan kobles til en vare (ikke allerede brukt av en annen vare)
+  const ledgerOptions = useMemo(() => ledger.filter(t => t.type === 'BARNEUTSTYR'), [ledger])
 
   const priceAlerts = useEconomyStore((s) => s.priceAlerts ?? []) as PriceAlert[]
   const addPriceAlerts = useEconomyStore((s) => s.addPriceAlerts)
@@ -136,22 +152,26 @@ function useBabyShopping() {
   const lastGlobalPriceCheckAt = useEconomyStore((s) => s.lastGlobalPriceCheckAt ?? 0)
   const setLastGlobalPriceCheckAt = useEconomyStore((s) => s.setLastGlobalPriceCheckAt)
   return {
-    items, priceAlerts, lastGlobalPriceCheckAt,
+    items, ledgerOptions, priceAlerts, lastGlobalPriceCheckAt,
     addPriceAlerts, dismissPriceAlert, setLastGlobalPriceCheckAt,
     isShared, personalItems, migrated: shared.migrated,
     migrateFrom: () => shared.migrateFrom(personalItems, (d) => d.length === 0),
     init: () => setItems(INITIAL_ITEMS.map(i => ({ ...i, id: newId() }))),
     save: (item: BabyShoppingItem) => {
-      const exists = items.some(i => i.id === item.id)
-      setItems(exists ? items.map(i => i.id === item.id ? item : i) : [...items, item])
+      const prev = rawItems.find(i => i.id === item.id)
+      // Koblede varer viser avledet status/pris — lagre aldri de avledede verdiene
+      const next = item.ledgerTxIds?.length && prev
+        ? { ...item, status: prev.status, actual: prev.actual }
+        : item
+      setItems(prev ? rawItems.map(i => i.id === item.id ? next : i) : [...rawItems, next])
     },
-    remove: (id: string) => setItems(items.filter(i => i.id !== id)),
-    toggleDone: (id: string) => setItems(items.map(i => i.id === id
+    remove: (id: string) => setItems(rawItems.filter(i => i.id !== id)),
+    toggleDone: (id: string) => setItems(rawItems.map(i => i.id === id
       ? { ...i, status: (i.status === 'anskaffet' || i.status === 'arv_gave') ? 'kjøpe' : 'anskaffet' }
       : i)),
-    setStatus: (id: string, status: ItemStatus) => setItems(items.map(i => i.id === id ? { ...i, status } : i)),
+    setStatus: (id: string, status: ItemStatus) => setItems(rawItems.map(i => i.id === id ? { ...i, status } : i)),
     updateTrackedPrice: (id: string, price: number) =>
-      setItems(items.map(i => i.id === id ? { ...i, trackedBestPrice: price } : i)),
+      setItems(rawItems.map(i => i.id === id ? { ...i, trackedBestPrice: price } : i)),
   }
 }
 
@@ -232,7 +252,7 @@ function usePriceChecker(
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function BabyShoppingPage() {
-  const { items, priceAlerts, lastGlobalPriceCheckAt, addPriceAlerts, dismissPriceAlert,
+  const { items, ledgerOptions, priceAlerts, lastGlobalPriceCheckAt, addPriceAlerts, dismissPriceAlert,
           setLastGlobalPriceCheckAt, init, save, remove, toggleDone, setStatus, updateTrackedPrice,
           isShared, personalItems, migrated, migrateFrom } = useBabyShopping()
   const sharedIsEmpty = useSharedUtstyrStore((s) => (s.data?.length ?? 0) === 0 && !s.loading)
@@ -325,6 +345,7 @@ export function BabyShoppingPage() {
           item={editing}
           isNew={isNew}
           categories={categories}
+          ledgerOptions={ledgerOptions.filter(t => !items.some(i => i.id !== editing.id && i.ledgerTxIds?.includes(t.id)))}
           onSave={handleSave}
           onClose={closeDialog}
           onDelete={isNew ? undefined : () => { remove(editing.id); closeDialog() }}
@@ -549,10 +570,11 @@ function Th({ k, label, sortKey, sortDir, onSort, right }: {
 
 // ─── Add / Edit dialog ────────────────────────────────────────────────────────
 
-function ItemDialog({ item, isNew, categories, onSave, onClose, onDelete }: {
+function ItemDialog({ item, isNew, categories, ledgerOptions, onSave, onClose, onDelete }: {
   item: BabyShoppingItem
   isNew: boolean
   categories: string[]
+  ledgerOptions: { id: string; date: string; label: string; amount: number }[]
   onSave: (item: BabyShoppingItem) => void
   onClose: () => void
   onDelete?: () => void
@@ -567,6 +589,7 @@ function ItemDialog({ item, isNew, categories, onSave, onClose, onDelete }: {
   useEffect(() => { setForm(item) }, [item])
 
   function set(patch: Partial<BabyShoppingItem>) { setForm(f => ({ ...f, ...patch })) }
+  const linkedCount = (form.ledgerTxIds ?? []).filter(id => ledgerOptions.some(t => t.id === id)).length
 
   function safeHttpUrl(u: string): string {
     try {
@@ -680,7 +703,7 @@ function ItemDialog({ item, isNew, categories, onSave, onClose, onDelete }: {
           {/* Status */}
           <div className="space-y-1.5">
             <Label className="text-xs">Status</Label>
-            <select value={form.status} onChange={e => set({ status: e.target.value as ItemStatus })} className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs">
+            <select value={form.status} disabled={linkedCount > 0} onChange={e => set({ status: e.target.value as ItemStatus })} className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs">
               {(Object.keys(STATUS_LABELS) as ItemStatus[]).map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
             </select>
           </div>
@@ -752,9 +775,39 @@ function ItemDialog({ item, isNew, categories, onSave, onClose, onDelete }: {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Faktisk betalt (kr)</Label>
-              <Input type="number" value={form.actual || ''} onChange={e => set({ actual: parseInt(e.target.value) || 0 })} placeholder="0" className="text-xs h-8 font-mono" />
+              <Input type="number" value={form.actual || ''} onChange={e => set({ actual: parseInt(e.target.value) || 0 })} placeholder="0" className="text-xs h-8 font-mono" disabled={linkedCount > 0} />
             </div>
           </div>
+          {/* Kobling til Regnskap */}
+          {(ledgerOptions.length > 0 || linkedCount > 0) && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">Koblet regnskapspost</Label>
+              <div className="rounded-md border border-border divide-y divide-border overflow-hidden">
+                {ledgerOptions.map(t => {
+                  const checked = form.ledgerTxIds?.includes(t.id) ?? false
+                  return (
+                    <label key={t.id} className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer hover:bg-muted/40">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => set({
+                          ledgerTxIds: checked
+                            ? (form.ledgerTxIds ?? []).filter(id => id !== t.id)
+                            : [...(form.ledgerTxIds ?? []), t.id],
+                        })}
+                      />
+                      <span className="flex-1 text-foreground">{t.label}</span>
+                      <span className="text-muted-foreground">{t.date.split('-').reverse().join('.')}</span>
+                      <span className="font-mono">{Math.abs(t.amount).toLocaleString('no-NO')} kr</span>
+                    </label>
+                  )
+                })}
+              </div>
+              {linkedCount > 0 && (
+                <p className="text-[11px] text-muted-foreground">Status og faktisk betalt hentes fra regnskapet.</p>
+              )}
+            </div>
+          )}
           {saved(form) > 0 && (
             <p className="text-[11px] text-green-400">
               Du sparer {fmtNOK(saved(form))} ({Math.round((saved(form) / (form.fullPrice ?? 1)) * 100)}%) sammenlignet med fullpris.

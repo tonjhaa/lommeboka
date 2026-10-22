@@ -5,7 +5,7 @@ import { IVFPage } from './IVFPage'
 import { PermisjonPage } from './PermisjonPage'
 import { BabyShoppingPage } from './BabyShoppingPage'
 import { ClothingPage } from './ClothingPage'
-import { FlaskConical, Baby, ShoppingCart, Shirt, Tags } from 'lucide-react'
+import { Receipt, Baby, ShoppingCart, Shirt, Tags } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { selectUnseenMatchCount, useNavnejaktStore } from '@/store/useNavnejaktStore'
@@ -18,7 +18,7 @@ const NavnejaktPage = lazyWithRetry(() =>
 type ProsjektTab = 'behandling' | 'permisjon' | 'utstyr' | 'klær' | 'navnejakten'
 
 const TABS: { id: ProsjektTab; label: string; Icon: React.FC<{ className?: string }> }[] = [
-  { id: 'behandling', label: 'Behandling', Icon: FlaskConical },
+  { id: 'behandling', label: 'Regnskap', Icon: Receipt },
   { id: 'permisjon', label: 'Permisjon', Icon: Baby },
   { id: 'utstyr', label: 'Utstyr', Icon: ShoppingCart },
   { id: 'klær', label: 'Klær', Icon: Shirt },
