@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const APP_ORIGIN = (Deno.env.get('APP_ORIGIN') ?? 'https://tonjhaa.github.io').replace(/\/$/, '')
+const APP_ORIGIN = (Deno.env.get('APP_ORIGIN') ?? 'https://lommeboka.com').replace(/\/$/, '')
 
 serve(async (req) => {
   const corsHeaders = {
