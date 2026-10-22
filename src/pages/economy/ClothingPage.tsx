@@ -1,7 +1,7 @@
 import { useState, useMemo, Fragment } from 'react'
 import {
   Plus, Minus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Search, X, Pencil,
-  Lock, LockOpen, Share2, ChevronRight, ChevronDown,
+  Lock, LockOpen, Share2, ChevronRight, ChevronDown, Tags,
 } from 'lucide-react'
 import { useEconomyStore } from '@/application/useEconomyStore'
 import { useSharedKlaerStore } from '@/store/useSharedKlaerStore'
@@ -9,6 +9,7 @@ import {
   SIZE_SCALES, DEFAULT_SIZE_SCALE, inferSizeScale, totalQty,
   type SizeScaleKey, type ClothingItem,
 } from '@/domain/clothing/clothingTypes'
+import { ClothingCategoryDialog } from './ClothingCategoryDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -88,6 +89,7 @@ function useClothing() {
 
   return {
     items,
+    setAll: setItems,
     isShared, personalItems, migrated: shared.migrated,
     migrateFrom: () => shared.migrateFrom(personalItems, (d) => d.length === 0),
     init: () => setItems(INITIAL_ITEMS.map(i => ({ ...i, id: newId() }))),
@@ -104,12 +106,13 @@ function useClothing() {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function ClothingPage() {
-  const { items, init, save, remove, setSize, isShared, personalItems, migrated, migrateFrom } = useClothing()
+  const { items, setAll, init, save, remove, setSize, isShared, personalItems, migrated, migrateFrom } = useClothing()
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [editing, setEditing] = useState<ClothingItem | null>(null)
   const [isNew, setIsNew] = useState(false)
+  const [managingCategories, setManagingCategories] = useState(false)
   /** Låst som default — hindrer at antall/rader endres ved et uhell når man bare skal se */
   const [editMode, setEditMode] = useState(false)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
@@ -198,6 +201,10 @@ export function ClothingPage() {
         />
       )}
 
+      {managingCategories && (
+        <ClothingCategoryDialog items={items} onChange={setAll} onClose={() => setManagingCategories(false)} />
+      )}
+
       {/* Del med partner */}
       {needsMigration && (
         <div className="mx-5 mt-4 rounded-lg border border-violet-500/40 bg-violet-500/10 px-4 py-3 flex items-center justify-between gap-3 shrink-0">
@@ -252,6 +259,11 @@ export function ClothingPage() {
             className="h-4 w-7 [&>span]:h-3 [&>span]:w-3 [&>span]:data-[state=checked]:translate-x-3"
           />
         </div>
+        {editMode && (
+          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setManagingCategories(true)}>
+            <Tags className="h-3.5 w-3.5" /> Kategorier
+          </Button>
+        )}
         {editMode && (
           <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => openNew()}>
             <Plus className="h-3.5 w-3.5" /> Legg til plagg
